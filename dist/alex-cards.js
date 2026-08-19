@@ -1931,7 +1931,22 @@ class LightCardEditor extends HTMLElement {
   _renderLight(i) {
     const l = this._config.lights[i] || {};
 
-    // Champs principaux
+    this.appendChild(
+      this._backHeader(
+        l.name || l.entity || "Lumière",
+        () => {
+          this._path = [];
+          this._render();
+        }
+      )
+    );
+
+    /*
+     * ----------------------------------------------------------------------
+     * Champs principaux
+     * ----------------------------------------------------------------------
+     */
+
     this.appendChild(
       this._form(
         LIGHT_ITEM_SCHEMA,
@@ -1947,12 +1962,21 @@ class LightCardEditor extends HTMLElement {
         LIGHT_ITEM_LABELS,
         (v) =>
           this._update(
-            (c) => (c.lights[i] = { ...c.lights[i], ...v })
+            (c) =>
+              (c.lights[i] = {
+                ...c.lights[i],
+                ...v,
+              })
           )
       )
     );
 
-    // Couleur de l'icône
+    /*
+     * ----------------------------------------------------------------------
+     * Couleur de l'icône
+     * ----------------------------------------------------------------------
+     */
+
     this.appendChild(
       this._createColorRow(
         "Couleur",
@@ -1965,7 +1989,12 @@ class LightCardEditor extends HTMLElement {
       )
     );
 
-    // Fond du sous-menu
+    /*
+     * ----------------------------------------------------------------------
+     * Fond du sous-menu
+     * ----------------------------------------------------------------------
+     */
+
     this.appendChild(
       this._createColorRow(
         "Fond du sous-menu",
@@ -1973,39 +2002,36 @@ class LightCardEditor extends HTMLElement {
         l.submenu_background,
         (value) =>
           this._update(
-            (c) => (c.lights[i].submenu_background = value)
+            (c) =>
+              (c.lights[i].submenu_background = value)
           )
       )
     );
 
+    /*
+     * ----------------------------------------------------------------------
+     * Membres du groupe
+     * ----------------------------------------------------------------------
+     */
+
     this.appendChild(
-      this._form(
-        LIGHT_ITEM_SCHEMA,
-        {
-          entity: l.entity,
-          name: l.name,
-          icon: l.icon,
-          color: l.color,
-          expand_toggle: l.expand_toggle,
-          submenu_background: l.submenu_background,
-          tap_action: l.tap_action,
-          hold_action: l.hold_action,
-          double_tap_action: l.double_tap_action,
-        },
-        LIGHT_ITEM_LABELS,
-        (v) => this._update((c) => (c.lights[i] = { ...c.lights[i], ...v }))
-      )
+      this._sectionTitle("Membres du groupe")
     );
 
-    this.appendChild(this._sectionTitle("Membres du groupe"));
     const members = l.members || [];
+
     if (members.length && !l.expand_toggle) {
       const hint = document.createElement("div");
+
       hint.textContent =
         "⚠ Renseigne un input_boolean d'affichage ci-dessus pour que le groupe se déploie.";
-      hint.style.cssText = "font-size:12px;color:var(--warning-color,#f4a000);margin:4px 0;";
+
+      hint.style.cssText =
+        "font-size:12px;color:var(--warning-color,#f4a000);margin:4px 0;";
+
       this.appendChild(hint);
     }
+
     members.forEach((m, j) => {
       this.appendChild(
         this._row(
@@ -2017,25 +2043,48 @@ class LightCardEditor extends HTMLElement {
             this._render();
           },
           () => {
-            this._update((c) => c.lights[i].members.splice(j, 1));
+            this._update(
+              (c) =>
+                c.lights[i].members.splice(j, 1)
+            );
+
             this._render();
           }
         )
       );
     });
 
+    /*
+     * ----------------------------------------------------------------------
+     * Ajouter un membre
+     * ----------------------------------------------------------------------
+     */
+
     this.appendChild(
-      this._addRow("light", "Ajouter un membre", (ent) => {
-        let idx;
-        this._update((c) => {
-          const li = c.lights[i];
-          li.members = li.members || [];
-          li.members.push({ entity: ent, name: "", icon: "mdi:lightbulb" });
-          idx = li.members.length - 1;
-        });
-        this._path = [i, idx];
-        this._render();
-      })
+      this._addRow(
+        "light",
+        "Ajouter un membre",
+        (ent) => {
+          let idx;
+
+          this._update((c) => {
+            const li = c.lights[i];
+
+            li.members = li.members || [];
+
+            li.members.push({
+              entity: ent,
+              name: "",
+              icon: "mdi:lightbulb",
+            });
+
+            idx = li.members.length - 1;
+          });
+
+          this._path = [i, idx];
+          this._render();
+        }
+      )
     );
   }
 
