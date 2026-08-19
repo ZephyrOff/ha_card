@@ -33,13 +33,43 @@ const RH_SCHEMA = [
     selector: { entity: { domain: ["binary_sensor", "cover", "group"] } },
   },
   {
+    name: "interactions",
     type: "expandable",
+    flatten: true,
     title: "Interactions",
-    icon: "mdi:gesture-tap",
+    iconPath: "M12,2C6.48,2 2,6.48 2,12C2,17.52 6.48,22 12,22C17.52,22 22,17.52 22,12C22,6.48 17.52,2 12,2ZM11,17H13V11H11V17ZM11,7H13V9H11V7Z",
     schema: [
-      { name: "tap_action", selector: { ui_action: {} } },
-      { name: "hold_action", selector: { ui_action: {} } },
-      { name: "double_tap_action", selector: { ui_action: {} } },
+      {
+        name: "tap_action",
+        selector: {
+          ui_action: {
+            default_action: "more-info",
+          },
+        },
+      },
+      {
+        name: "",
+        type: "optional_actions",
+        flatten: true,
+        schema: [
+          {
+            name: "hold_action",
+            selector: {
+              ui_action: {
+                default_action: "none",
+              },
+            },
+          },
+          {
+            name: "double_tap_action",
+            selector: {
+              ui_action: {
+                default_action: "none",
+              },
+            },
+          },
+        ],
+      },
     ],
   },
 ];
@@ -281,10 +311,54 @@ function colorOr(v, fallback) {
  * Champs d'éditeur communs + exécuteur autonome pour les cartes au rendu
  * "maison" (sans dépendre de custom-card-helpers).
  */
+const ACTION_RELATED_CONTEXT_ALEX = {
+  action_entity: "entity",
+};
+
 const ACTION_SCHEMA = [
-  { name: "tap_action", selector: { ui_action: {} } },
-  { name: "hold_action", selector: { ui_action: {} } },
-  { name: "double_tap_action", selector: { ui_action: {} } },
+  {
+    name: "interactions",
+    type: "expandable",
+    flatten: true,
+    title: "Interactions",
+    iconPath: "M12,2C6.48,2 2,6.48 2,12C2,17.52 6.48,22 12,22C17.52,22 22,17.52 22,12C22,6.48 17.52,2 12,2ZM11,17H13V11H11V17ZM11,7H13V9H11V7Z",
+    schema: [
+      {
+        name: "tap_action",
+        selector: {
+          ui_action: {
+            default_action: "more-info",
+          },
+        },
+        context: ACTION_RELATED_CONTEXT_ALEX,
+      },
+      {
+        name: "",
+        type: "optional_actions",
+        flatten: true,
+        schema: [
+          {
+            name: "hold_action",
+            selector: {
+              ui_action: {
+                default_action: "none",
+              },
+            },
+            context: ACTION_RELATED_CONTEXT_ALEX,
+          },
+          {
+            name: "double_tap_action",
+            selector: {
+              ui_action: {
+                default_action: "none",
+              },
+            },
+            context: ACTION_RELATED_CONTEXT_ALEX,
+          },
+        ],
+      },
+    ],
+  },
 ];
 const ACTION_LABELS = {
   tap_action: "Action au clic",
@@ -295,9 +369,20 @@ const ACTION_LABELS = {
 // Copie les actions définies vers une config de carte (n'ajoute que celles
 // réellement renseignées, pour préserver les valeurs par défaut).
 function applyActions(target, c) {
-  if (c.tap_action) target.tap_action = c.tap_action;
-  if (c.hold_action) target.hold_action = c.hold_action;
-  if (c.double_tap_action) target.double_tap_action = c.double_tap_action;
+  if (!c) return target;
+
+  if (c.tap_action !== undefined) {
+    target.tap_action = c.tap_action;
+  }
+
+  if (c.hold_action !== undefined) {
+    target.hold_action = c.hold_action;
+  }
+
+  if (c.double_tap_action !== undefined) {
+    target.double_tap_action = c.double_tap_action;
+  }
+
   return target;
 }
 
