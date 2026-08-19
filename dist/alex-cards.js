@@ -16,6 +16,15 @@ console.info(
 
 window.customCards = window.customCards || [];
 
+// Charge le composant natif utilisé par Home Assistant
+// pour les panneaux repliables.
+if (!customElements.get("ha-expansion-panel")) {
+  const script = document.createElement("script");
+  script.type = "module";
+  script.src = "/frontend_latest/ha-expansion-panel.js";
+  document.head.appendChild(script);
+}
+
 /* =========================================================================
  * === room-header-card ====================================================
  * Bandeau d'en-tête de pièce : icône + titre/sous-titre + température,
@@ -1823,7 +1832,6 @@ class PillCardEditor extends HTMLElement {
       justify-content: space-between;
       gap: 16px;
       min-height: 48px;
-      padding: 4px 0;
       box-sizing: border-box;
     `;
 
@@ -1843,30 +1851,17 @@ class PillCardEditor extends HTMLElement {
 
     selector.hass = this._hass;
 
-    // Vrai sélecteur RGB de Home Assistant.
-    // Il utilise <ha-input type="color">.
     selector.selector = {
       color_rgb: {},
     };
 
-    // color_rgb attend [R, G, B].
     selector.value = this._normalizeColor(this._config[configKey]);
 
-    // Notre propre label est déjà affiché à gauche.
-    selector.label = "";
-
-    // On laisse suffisamment de place au sélecteur
-    // tout en gardant le label à gauche.
     selector.style.cssText = `
       flex: 0 0 100px;
       width: 100px;
       min-width: 100px;
     `;
-
-    // Le sélecteur RGB est requis par défaut.
-    // On le rend optionnel puisque "vide" signifie
-    // "utiliser la couleur du thème" dans notre carte.
-    selector.required = false;
 
     selector.addEventListener("value-changed", (ev) => {
       ev.stopPropagation();
@@ -1876,36 +1871,33 @@ class PillCardEditor extends HTMLElement {
       });
     });
 
-    row.append(labelElement, selector);
+    row.append(
+      labelElement,
+      selector
+    );
 
     return row;
   }
 
   _createCustomisationSection() {
-    const wrapper = document.createElement("div");
+    const panel = document.createElement("ha-expansion-panel");
 
-    wrapper.style.cssText = `
-      margin-top: 8px;
-      margin-bottom: 16px;
-    `;
+    panel.setAttribute("outlined", "");
 
-    const title = document.createElement("div");
+    // Icône à gauche, comme le panneau Interactions de HA.
+    const icon = document.createElement("ha-icon");
+    icon.setAttribute("slot", "leading-icon");
+    icon.icon = "mdi:palette";
 
-    title.textContent = "Customisation";
-
-    title.style.cssText = `
-      font-size: 16px;
-      font-weight: 500;
-      color: var(--primary-text-color);
-      margin: 12px 0 8px;
-    `;
+    const header = document.createElement("div");
+    header.setAttribute("slot", "header");
+    header.textContent = "Customisation";
 
     const content = document.createElement("div");
 
     content.style.cssText = `
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
+      padding: 0 16px 12px;
+      box-sizing: border-box;
     `;
 
     content.append(
@@ -1915,11 +1907,15 @@ class PillCardEditor extends HTMLElement {
       this._createColorRow("Couleur du sous-titre", "secondary_color")
     );
 
-    wrapper.append(title, content);
+    panel.append(
+      icon,
+      header,
+      content
+    );
 
-    this._customisation = wrapper;
+    this._customisation = panel;
 
-    return wrapper;
+    return panel;
   }
 
   _render() {
