@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.4.0";
+const ALEX_CARDS_VERSION = "0.4.1";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -770,8 +770,12 @@ class LightCard extends AlexWrapperCard {
       cards.push(tile);
 
       if (group) {
-        const submenuBg =
-          l.submenu_background || "rgba(var(--rgb-primary-text-color, 0, 0, 0), 0.12)";
+        const sb = l.submenu_background;
+        const submenuBg = Array.isArray(sb)
+          ? rgba(sb, 0.12)
+          : typeof sb === "string" && sb.trim()
+          ? sb
+          : "rgba(var(--rgb-primary-text-color, 0, 0, 0), 0.12)";
         cards.push({
           type: "conditional",
           conditions: [{ entity: l.expand_toggle, state: "on" }],
@@ -812,7 +816,7 @@ const LIGHT_ITEM_SCHEMA = [
   { name: "icon", selector: { icon: {} } },
   { name: "color", selector: { color_rgb: {} } },
   { name: "expand_toggle", selector: { entity: { domain: "input_boolean" } } },
-  { name: "submenu_background", selector: { text: {} } },
+  { name: "submenu_background", selector: { color_rgb: {} } },
 ];
 const LIGHT_ITEM_LABELS = {
   entity: "Entité",
@@ -820,7 +824,7 @@ const LIGHT_ITEM_LABELS = {
   icon: "Icône",
   color: "Couleur (laisser vide = couleur de l'ampoule)",
   expand_toggle: "input_boolean d'affichage (rend la lumière déployable)",
-  submenu_background: "Fond du sous-menu (CSS, vide = teinte du thème)",
+  submenu_background: "Fond du sous-menu (vide = teinte du thème)",
 };
 const MEMBER_ITEM_SCHEMA = LIGHT_ITEM_SCHEMA.slice(0, 4);
 
