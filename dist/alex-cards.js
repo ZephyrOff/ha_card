@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.3.0";
+const ALEX_CARDS_VERSION = "0.4.0";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -531,12 +531,12 @@ class ShutterCard extends AlexWrapperCard {
       script_open: "",
       script_projection: "",
       script_close: "",
-      btn_open_color: "rgba(255,255,255,.05)",
-      btn_projection_color: "rgba(255,255,255,.05)",
-      btn_close_color: "rgba(255,255,255,.05)",
-      txt_open_color: "#c2bcbc",
-      txt_projection_color: "#c2bcbc",
-      txt_close_color: "#c2bcbc",
+      btn_open_color: "rgba(var(--rgb-primary-text-color, 0, 0, 0), 0.06)",
+      btn_projection_color: "rgba(var(--rgb-primary-text-color, 0, 0, 0), 0.06)",
+      btn_close_color: "rgba(var(--rgb-primary-text-color, 0, 0, 0), 0.06)",
+      txt_open_color: "",
+      txt_projection_color: "",
+      txt_close_color: "",
     };
   }
 
@@ -552,10 +552,10 @@ class ShutterCard extends AlexWrapperCard {
       card_mod: {
         style: {
           ".":
-            "ha-card {\n" +
-            `  --primary-text-color: ${txt};\n` +
+            "ha-card {\n  margin: 0 !important;\n" +
+            (txt ? `  --primary-text-color: ${txt};\n` : "") +
             `  background: ${bg};\n` +
-            "  border: 1px solid rgba(255,255,255,.02);\n" +
+            "  border: 1px solid rgba(var(--rgb-primary-text-color, 0, 0, 0), 0.08);\n" +
             "  border-radius: 999px;\n  box-shadow: none;\n" +
             "  min-height: 28px !important;\n  height: 28px !important;\n" +
             "  padding: 0 10px !important;\n}\n" +
@@ -585,7 +585,8 @@ class ShutterCard extends AlexWrapperCard {
       show_tilt_position_control: false,
       card_mod: {
         style:
-          "ha-card {\n  background-color: rgba(10, 10, 12, 0.05);\n  box-shadow: none;\n" +
+          "ha-card {\n  margin: 0 !important;\n  border-radius: 0 !important;\n" +
+          "  padding-bottom: 0 !important;\n  box-shadow: none;\n  --ha-card-border-width: 0px;\n" +
           coverIconVars +
           "}\n",
       },
@@ -593,15 +594,21 @@ class ShutterCard extends AlexWrapperCard {
     if (c.icon) coverCard.icon = c.icon;
 
     return {
-      type: "custom:vertical-stack-in-card",
-      card_mod: { style: "ha-card {\n  border-radius: 18px;\n  overflow: hidden;\n}\n" },
+      type: "custom:stack-in-card",
+      mode: "vertical",
+      card_mod: {
+        style:
+          "ha-card {\n  border-radius: 18px;\n  overflow: hidden;\n" +
+          "  background: var(--ha-card-background, var(--card-background-color)) !important;\n}\n",
+      },
       cards: [
         coverCard,
         {
           type: "custom:mod-card",
           style:
-            "ha-card {\n  background-color: rgba(10, 10, 12, 0.05);\n  box-shadow: none;\n" +
-            "  padding: 0 14px 14px;\n}\n",
+            "ha-card {\n  background: transparent !important;\n  box-shadow: none !important;\n" +
+            "  border: none !important;\n  --ha-card-border-width: 0px;\n" +
+            "  margin: 0 !important;\n  padding: 0 14px 14px !important;\n}\n",
           card: {
             type: "horizontal-stack",
             cards: [
@@ -763,6 +770,8 @@ class LightCard extends AlexWrapperCard {
       cards.push(tile);
 
       if (group) {
+        const submenuBg =
+          l.submenu_background || "rgba(var(--rgb-primary-text-color, 0, 0, 0), 0.12)";
         cards.push({
           type: "conditional",
           conditions: [{ entity: l.expand_toggle, state: "on" }],
@@ -770,7 +779,7 @@ class LightCard extends AlexWrapperCard {
             type: "custom:vertical-stack-in-card",
             card_mod: {
               style:
-                "ha-card {\n  background-color: rgba(130, 130, 130, 0.1);\n" +
+                `ha-card {\n  background: ${submenuBg};\n` +
                 "  border-radius: 0px !important;\n  box-shadow: none;\n}\n",
             },
             cards: l.members.map((m) => this._lightTile(m)),
@@ -783,9 +792,8 @@ class LightCard extends AlexWrapperCard {
       type: "custom:vertical-stack-in-card",
       card_mod: {
         style:
-          "ha-card {\n  background-color: rgba(0, 0, 0, 0.35);\n" +
-          "  border: 1px solid rgba(80, 80, 80, 0.1);\n" +
-          "  box-shadow: 5px 8px 15px rgba(0, 0, 0, 0.1);\n}\n",
+          "ha-card {\n  background: var(--ha-card-background, var(--card-background-color));\n" +
+          "  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);\n}\n",
       },
       cards,
     };
@@ -804,6 +812,7 @@ const LIGHT_ITEM_SCHEMA = [
   { name: "icon", selector: { icon: {} } },
   { name: "color", selector: { color_rgb: {} } },
   { name: "expand_toggle", selector: { entity: { domain: "input_boolean" } } },
+  { name: "submenu_background", selector: { text: {} } },
 ];
 const LIGHT_ITEM_LABELS = {
   entity: "Entité",
@@ -811,6 +820,7 @@ const LIGHT_ITEM_LABELS = {
   icon: "Icône",
   color: "Couleur (laisser vide = couleur de l'ampoule)",
   expand_toggle: "input_boolean d'affichage (rend la lumière déployable)",
+  submenu_background: "Fond du sous-menu (CSS, vide = teinte du thème)",
 };
 const MEMBER_ITEM_SCHEMA = LIGHT_ITEM_SCHEMA.slice(0, 4);
 
@@ -1023,6 +1033,7 @@ class LightCardEditor extends HTMLElement {
           icon: l.icon,
           color: l.color,
           expand_toggle: l.expand_toggle,
+          submenu_background: l.submenu_background,
         },
         LIGHT_ITEM_LABELS,
         (v) => this._update((c) => (c.lights[i] = { ...c.lights[i], ...v }))
