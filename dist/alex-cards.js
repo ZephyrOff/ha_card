@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.7.0.14";
+const ALEX_CARDS_VERSION = "0.8.0";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -1657,23 +1657,33 @@ const LIGHT_ITEM_SCHEMA = [
   { name: "entity", selector: { entity: { domain: "light" } } },
   { name: "name", selector: { text: {} } },
   { name: "icon", selector: { icon: {} } },
-  { name: "color", selector: { color_rgb: {} } },
   { name: "expand_toggle", selector: { entity: { domain: "input_boolean" } } },
-  { name: "submenu_background", selector: { color_rgb: {} } },
-  { type: "expandable", title: "Interactions", icon: "mdi:gesture-tap", schema: ACTION_SCHEMA },
+  {
+    type: "expandable",
+    title: "Interactions",
+    icon: "mdi:gesture-tap",
+    schema: ACTION_SCHEMA,
+  },
 ];
 const LIGHT_ITEM_LABELS = Object.assign(
   {
     entity: "Entité",
     name: "Nom",
     icon: "Icône",
-    color: "Couleur (laisser vide = couleur de l'ampoule)",
     expand_toggle: "input_boolean d'affichage (rend la lumière déployable)",
-    submenu_background: "Fond du sous-menu (vide = teinte du thème)",
   },
   ACTION_LABELS
 );
-const MEMBER_ITEM_SCHEMA = LIGHT_ITEM_SCHEMA.slice(0, 4);
+const MEMBER_ITEM_LABELS = {
+  entity: "Entité",
+  name: "Nom",
+  icon: "Icône",
+};
+const MEMBER_ITEM_SCHEMA = [
+  { name: "entity", selector: { entity: { domain: "light" } } },
+  { name: "name", selector: { text: {} } },
+  { name: "icon", selector: { icon: {} } },
+];
 
 class LightCardEditor extends HTMLElement {
   setConfig(config) {
@@ -1710,6 +1720,59 @@ class LightCardEditor extends HTMLElement {
     mutator(cfg);
     this._config = cfg;
     this._emit();
+  }
+
+  _createColorRow(label, configKey, value, onChange) {
+    const row = document.createElement("div");
+
+    row.style.cssText = `
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      min-height: 48px;
+      box-sizing: border-box;
+    `;
+
+    const labelElement = document.createElement("div");
+
+    labelElement.textContent = label;
+
+    labelElement.style.cssText = `
+      flex: 1;
+      min-width: 0;
+      color: var(--primary-text-color);
+      font-size: 14px;
+      line-height: 20px;
+    `;
+
+    const selector = document.createElement("ha-selector");
+
+    selector.hass = this._hass;
+
+    selector.selector = {
+      color_rgb: {},
+    };
+
+    selector.value = value;
+
+    selector.style.cssText = `
+      flex: 0 0 100px;
+      width: 100px;
+      min-width: 100px;
+    `;
+
+    selector.addEventListener("value-changed", (ev) => {
+      ev.stopPropagation();
+      onChange(ev.detail.value);
+    });
+
+    row.append(
+      labelElement,
+      selector
+    );
+
+    return row;
   }
 
   /* ---- petits composants DOM ---- */
@@ -1868,11 +1931,51 @@ class LightCardEditor extends HTMLElement {
   _renderLight(i) {
     const l = this._config.lights[i] || {};
 
+    // Champs principaux
     this.appendChild(
-      this._backHeader(l.name || l.entity || "Lumière", () => {
-        this._path = [];
-        this._render();
-      })
+      this._form(
+        LIGHT_ITEM_SCHEMA,
+        {
+          entity: l.entity,
+          name: l.name,
+          icon: l.icon,
+          expand_toggle: l.expand_toggle,
+          tap_action: l.tap_action,
+          hold_action: l.hold_action,
+          double_tap_action: l.double_tap_action,
+        },
+        LIGHT_ITEM_LABELS,
+        (v) =>
+          this._update(
+            (c) => (c.lights[i] = { ...c.lights[i], ...v })
+          )
+      )
+    );
+
+    // Couleur de l'icône
+    this.appendChild(
+      this._createColorRow(
+        "Couleur",
+        "color",
+        l.color,
+        (value) =>
+          this._update(
+            (c) => (c.lights[i].color = value)
+          )
+      )
+    );
+
+    // Fond du sous-menu
+    this.appendChild(
+      this._createColorRow(
+        "Fond du sous-menu",
+        "submenu_background",
+        l.submenu_background,
+        (value) =>
+          this._update(
+            (c) => (c.lights[i].submenu_background = value)
+          )
+      )
     );
 
     this.appendChild(
@@ -1946,13 +2049,38 @@ class LightCardEditor extends HTMLElement {
       })
     );
 
+    // Champs principaux du membre
     this.appendChild(
       this._form(
         MEMBER_ITEM_SCHEMA,
-        { entity: m.entity, name: m.name, icon: m.icon, color: m.color },
-        LIGHT_ITEM_LABELS,
+        {
+          entity: m.entity,
+          name: m.name,
+          icon: m.icon,
+        },
+        MEMBER_ITEM_LABELS,
         (v) =>
-          this._update((c) => (c.lights[i].members[j] = { ...c.lights[i].members[j], ...v }))
+          this._update(
+            (c) =>
+              (c.lights[i].members[j] = {
+                ...c.lights[i].members[j],
+                ...v,
+              })
+          )
+      )
+    );
+
+    // Couleur de l'icône du membre
+    this.appendChild(
+      this._createColorRow(
+        "Couleur",
+        "color",
+        m.color,
+        (value) =>
+          this._update(
+            (c) =>
+              (c.lights[i].members[j].color = value)
+          )
       )
     );
   }
