@@ -1767,21 +1767,41 @@ class PillCardEditor extends AlexFormEditor {
       { name: "name", selector: { text: {} } },
       { name: "secondary", selector: { text: {} } },
       { name: "icon", selector: { icon: {} } },
-      { name: "background", selector: { color_rgb: {} } },
-      { name: "icon_color", selector: { color_rgb: {} } },
-      { name: "name_color", selector: { color_rgb: {} } },
-      { name: "secondary_color", selector: { color_rgb: {} } },
-      { type: "expandable", title: "Interactions", icon: "mdi:gesture-tap", schema: ACTION_SCHEMA },
+
+      {
+        name: "customisation",
+        type: "expandable",
+        title: "Customisation",
+        iconPath:
+          "M12,2C6.48,2 2,6.48 2,12C2,17.52 6.48,22 12,22C17.52,22 22,17.52 22,12C22,6.48 17.52,2 12,2ZM11,17H13V11H11V17ZM11,7H13V9H11V7Z",
+        schema: [
+          { name: "background", selector: { color_rgb: {} } },
+          { name: "icon_color", selector: { color_rgb: {} } },
+          { name: "name_color", selector: { color_rgb: {} } },
+          { name: "secondary_color", selector: { color_rgb: {} } },
+        ],
+      },
+
+      {
+        name: "interactions",
+        type: "expandable",
+        flatten: true,
+        title: "Interactions",
+        iconPath:
+          "M12,2C6.48,2 2,6.48 2,12C2,17.52 6.48,22 12,22C17.52,22 22,17.52 22,17.52,22 22,17.52 17.52,22 12,22ZM11,17H13V11H11V17ZM11,7H13V9H11V7Z",
+        schema: ACTION_SCHEMA,
+      },
     ];
     this._labels = Object.assign(
       {
         name: "Nom",
-        secondary: "Sous-titre (label)",
+        secondary: "Sous-titre",
         icon: "Icône",
-        background: "Fond de la carte (vide = thème)",
-        icon_color: "Couleur de l'icône (vide = thème)",
-        name_color: "Couleur du nom (vide = thème)",
-        secondary_color: "Couleur du sous-titre (vide = thème)",
+
+        background: "Fond de la carte",
+        icon_color: "Couleur de l'icône",
+        name_color: "Couleur du nom",
+        secondary_color: "Couleur du sous-titre",
       },
       ACTION_LABELS
     );
