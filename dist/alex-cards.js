@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.1.0";
+const ALEX_CARDS_VERSION = "0.1.1";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -84,6 +84,11 @@ class RoomHeaderCard extends HTMLElement {
     if (!this._config || !this._hass) return;
     const c = this._config;
 
+    // Un bloc n'est affiché que si son entité est configurée.
+    const hasTemp = !!c.temp_entity;
+    const hasHum = !!c.hum_entity;
+    const hasWin = !!c.window_entity;
+
     const tObj = this._stateObj(c.temp_entity);
     const hObj = this._stateObj(c.hum_entity);
     const wObj = this._stateObj(c.window_entity);
@@ -95,7 +100,14 @@ class RoomHeaderCard extends HTMLElement {
     const closed = wState === "off" || wState === "closed";
 
     // Ne re-render que si un élément affiché a réellement changé.
-    const sig = [c.name, c.secondary, c.icon, t, e, wState].join("|");
+    const sig = [
+      c.name,
+      c.secondary,
+      c.icon,
+      hasTemp ? t : "∅",
+      hasHum ? e : "∅",
+      hasWin ? wState : "∅",
+    ].join("|");
     if (this._built && sig === this._lastSig) return;
     this._lastSig = sig;
 
@@ -103,6 +115,46 @@ class RoomHeaderCard extends HTMLElement {
     const red = "#d13b3b";
     const badgeBg = closed ? "rgba(52,199,89,.15)" : "rgba(255,69,58,.15)";
     const badgeCol = closed ? green : red;
+
+    const blocks = [];
+
+    if (hasTemp) {
+      blocks.push(`
+        <div style="display:flex;align-items:center;gap:8px;">
+          <ha-icon icon="mdi:thermometer" style="--mdc-icon-size:20px;color:#e8a13a;"></ha-icon>
+          <div style="display:flex;flex-direction:column;line-height:1.1;">
+            <span style="font-size:18px;font-weight:700;color:#1c1c1e;">${t}°</span>
+            <span style="font-size:10px;letter-spacing:.5px;color:#8a8a8e;">TEMPÉRATURE</span>
+          </div>
+        </div>`);
+    }
+
+    if (hasHum) {
+      blocks.push(`
+        <div style="display:flex;align-items:center;gap:8px;">
+          <ha-icon icon="mdi:water" style="--mdc-icon-size:20px;color:#4a7fb5;"></ha-icon>
+          <div style="display:flex;flex-direction:column;line-height:1.1;">
+            <span style="font-size:18px;font-weight:700;color:#1c1c1e;">${e}%</span>
+            <span style="font-size:10px;letter-spacing:.5px;color:#8a8a8e;">HUMIDITÉ</span>
+          </div>
+        </div>`);
+    }
+
+    if (hasWin) {
+      blocks.push(`
+        <div style="display:flex;align-items:center;gap:8px;background:${badgeBg};
+                    padding:8px 14px;border-radius:16px;">
+          <ha-icon icon="mdi:window-closed-variant" style="--mdc-icon-size:20px;color:${badgeCol};"></ha-icon>
+          <div style="display:flex;flex-direction:column;line-height:1.1;">
+            <span style="font-size:16px;font-weight:700;color:${badgeCol};">${closed ? "Fermée" : "Ouverte"}</span>
+            <span style="font-size:10px;letter-spacing:.5px;color:${badgeCol};opacity:.8;">OUVRANTS</span>
+          </div>
+        </div>`);
+    }
+
+    const stats = blocks.length
+      ? `<div style="display:flex;align-items:center;gap:28px;">${blocks.join("")}</div>`
+      : "";
 
     this.innerHTML = `
       <ha-card style="border-radius:28px;box-shadow:none;background:rgba(255,255,255,0.55);">
@@ -117,30 +169,7 @@ class RoomHeaderCard extends HTMLElement {
             <span style="font-size:13px;color:#8a8a8e;">${c.secondary || ""}</span>
           </div>
           <div></div>
-          <div style="display:flex;align-items:center;gap:28px;">
-            <div style="display:flex;align-items:center;gap:8px;">
-              <ha-icon icon="mdi:thermometer" style="--mdc-icon-size:20px;color:#e8a13a;"></ha-icon>
-              <div style="display:flex;flex-direction:column;line-height:1.1;">
-                <span style="font-size:18px;font-weight:700;color:#1c1c1e;">${t}°</span>
-                <span style="font-size:10px;letter-spacing:.5px;color:#8a8a8e;">TEMPÉRATURE</span>
-              </div>
-            </div>
-            <div style="display:flex;align-items:center;gap:8px;">
-              <ha-icon icon="mdi:water" style="--mdc-icon-size:20px;color:#4a7fb5;"></ha-icon>
-              <div style="display:flex;flex-direction:column;line-height:1.1;">
-                <span style="font-size:18px;font-weight:700;color:#1c1c1e;">${e}%</span>
-                <span style="font-size:10px;letter-spacing:.5px;color:#8a8a8e;">HUMIDITÉ</span>
-              </div>
-            </div>
-            <div style="display:flex;align-items:center;gap:8px;background:${badgeBg};
-                        padding:8px 14px;border-radius:16px;">
-              <ha-icon icon="mdi:window-closed-variant" style="--mdc-icon-size:20px;color:${badgeCol};"></ha-icon>
-              <div style="display:flex;flex-direction:column;line-height:1.1;">
-                <span style="font-size:16px;font-weight:700;color:${badgeCol};">${closed ? "Fermée" : "Ouverte"}</span>
-                <span style="font-size:10px;letter-spacing:.5px;color:${badgeCol};opacity:.8;">OUVRANTS</span>
-              </div>
-            </div>
-          </div>
+          ${stats}
         </div>
       </ha-card>`;
     this._built = true;
