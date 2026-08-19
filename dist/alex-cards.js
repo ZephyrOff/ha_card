@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.9.1";
+const ALEX_CARDS_VERSION = "0.9.2";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -893,7 +893,7 @@ class PriseCardEditor extends AlexFormEditor {
     this._labels = Object.assign(
       {
         entity: "Interrupteur",
-        power_entity: "Capteur puissance (optionnel)",
+        power_entity: "Capteur puissance",
         name: "Nom",
         icon: "Icône",
         color: "Couleur",
@@ -1223,11 +1223,13 @@ customElements.define("light-card", LightCard);
  * suppression. Le crayon ouvre le détail d'une lumière ; un groupe (avec
  * input_boolean d'affichage) a sa propre liste de membres éditables.
  */
-const LIGHT_ITEM_SCHEMA = [
+const LIGHT_MAIN_SCHEMA = [
   { name: "entity", selector: { entity: { domain: "light" } } },
   { name: "name", selector: { text: {} } },
   { name: "icon", selector: { icon: {} } },
   { name: "expand_toggle", selector: { entity: { domain: "input_boolean" } } },
+];
+const LIGHT_EXTRAS_SCHEMA = [
   {
     name: "customisation",
     type: "expandable",
@@ -1246,9 +1248,9 @@ const LIGHT_ITEM_LABELS = Object.assign(
     entity: "Entité",
     name: "Nom",
     icon: "Icône",
-    expand_toggle: "input_boolean d'affichage (rend la lumière déployable)",
-    color: "Couleur (vide = couleur de l'ampoule)",
-    submenu_background: "Fond du sous-menu (vide = teinte du thème)",
+    expand_toggle: "Affichage groupe",
+    color: "Couleur",
+    submenu_background: "Fond du sous-menu",
   },
   ACTION_LABELS
 );
@@ -1256,7 +1258,7 @@ const MEMBER_ITEM_LABELS = {
   entity: "Entité",
   name: "Nom",
   icon: "Icône",
-  color: "Couleur (vide = couleur de l'ampoule)",
+  color: "Couleur",
 };
 const MEMBER_ITEM_SCHEMA = [
   { name: "entity", selector: { entity: { domain: "light" } } },
@@ -1499,17 +1501,12 @@ class LightCardEditor extends HTMLElement {
 
     this.appendChild(
       this._form(
-        LIGHT_ITEM_SCHEMA,
+        LIGHT_MAIN_SCHEMA,
         {
           entity: l.entity,
           name: l.name,
           icon: l.icon,
           expand_toggle: l.expand_toggle,
-          color: l.color,
-          submenu_background: l.submenu_background,
-          tap_action: l.tap_action,
-          hold_action: l.hold_action,
-          double_tap_action: l.double_tap_action,
         },
         LIGHT_ITEM_LABELS,
         (v) =>
@@ -1598,6 +1595,27 @@ class LightCardEditor extends HTMLElement {
       )
     );
 
+    this.appendChild(
+      this._form(
+        LIGHT_EXTRAS_SCHEMA,
+        {
+          color: l.color,
+          submenu_background: l.submenu_background,
+          tap_action: l.tap_action,
+          hold_action: l.hold_action,
+          double_tap_action: l.double_tap_action,
+        },
+        LIGHT_ITEM_LABELS,
+        (v) =>
+          this._update(
+            (c) =>
+              (c.lights[i] = {
+                ...c.lights[i],
+                ...v,
+              })
+          )
+      )
+    );
   }
 
   _renderMember(i, j) {
