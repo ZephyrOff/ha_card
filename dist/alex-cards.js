@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.6.0";
+const ALEX_CARDS_VERSION = "0.7.0";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -32,6 +32,16 @@ const RH_SCHEMA = [
     name: "window_entity",
     selector: { entity: { domain: ["binary_sensor", "cover", "group"] } },
   },
+  {
+    type: "expandable",
+    title: "Interactions",
+    icon: "mdi:gesture-tap",
+    schema: [
+      { name: "tap_action", selector: { ui_action: {} } },
+      { name: "hold_action", selector: { ui_action: {} } },
+      { name: "double_tap_action", selector: { ui_action: {} } },
+    ],
+  },
 ];
 
 const RH_LABELS = {
@@ -41,6 +51,9 @@ const RH_LABELS = {
   temp_entity: "Capteur température",
   hum_entity: "Capteur humidité",
   window_entity: "Ouvrants (contact / volet / groupe)",
+  tap_action: "Action au clic",
+  hold_action: "Action à l'appui long",
+  double_tap_action: "Action au double-clic",
 };
 
 class RoomHeaderCard extends HTMLElement {
@@ -64,6 +77,17 @@ class RoomHeaderCard extends HTMLElement {
     this._config = config;
     this._built = false;
     this._lastSig = null;
+    if (!this._actionsBound) {
+      bindActions(
+        this,
+        () => this._hass,
+        () => this._config,
+        () =>
+          this._config &&
+          (this._config.temp_entity || this._config.window_entity || this._config.hum_entity)
+      );
+      this._actionsBound = true;
+    }
   }
 
   set hass(hass) {
@@ -251,6 +275,135 @@ function colorOr(v, fallback) {
   if (Array.isArray(v)) return rgbToHex(v);
   if (typeof v === "string" && v.trim()) return v;
   return fallback;
+}
+
+/* ---- Actions (tap / hold / double) --------------------------------------
+ * Champs d'éditeur communs + exécuteur autonome pour les cartes au rendu
+ * "maison" (sans dépendre de custom-card-helpers).
+ */
+const ACTION_SCHEMA = [
+  { name: "tap_action", selector: { ui_action: {} } },
+  { name: "hold_action", selector: { ui_action: {} } },
+  { name: "double_tap_action", selector: { ui_action: {} } },
+];
+const ACTION_LABELS = {
+  tap_action: "Action au clic",
+  hold_action: "Action à l'appui long",
+  double_tap_action: "Action au double-clic",
+};
+
+// Copie les actions définies vers une config de carte (n'ajoute que celles
+// réellement renseignées, pour préserver les valeurs par défaut).
+function applyActions(target, c) {
+  if (c.tap_action) target.tap_action = c.tap_action;
+  if (c.hold_action) target.hold_action = c.hold_action;
+  if (c.double_tap_action) target.double_tap_action = c.double_tap_action;
+  return target;
+}
+
+function fireDomEvent(node, type, detail) {
+  const e = new Event(type, { bubbles: true, composed: true, cancelable: false });
+  e.detail = detail;
+  node.dispatchEvent(e);
+  return e;
+}
+
+// Exécute une action HA (more-info, toggle, navigate, url, call-service, none).
+function fireAction(node, hass, actionConfig, entityId) {
+  const cfg = actionConfig || { action: "more-info" };
+  const action = cfg.action || "more-info";
+  if (action === "none") return;
+  if (action === "more-info") {
+    const eid = cfg.entity || (cfg.data && cfg.data.entity_id) || entityId;
+    if (eid) fireDomEvent(node, "hass-more-info", { entityId: eid });
+    return;
+  }
+  if (action === "toggle") {
+    const eid = cfg.entity || entityId;
+    if (eid && hass) hass.callService("homeassistant", "toggle", { entity_id: eid });
+    return;
+  }
+  if (action === "navigate") {
+    if (cfg.navigation_path) {
+      history.pushState(null, "", cfg.navigation_path);
+      fireDomEvent(window, "location-changed", { replace: false });
+    }
+    return;
+  }
+  if (action === "url") {
+    if (cfg.url_path) window.open(cfg.url_path);
+    return;
+  }
+  if (action === "call-service" || action === "perform-action") {
+    const svc = cfg.perform_action || cfg.service;
+    if (!svc || !hass) return;
+    const dot = svc.indexOf(".");
+    hass.callService(
+      svc.slice(0, dot),
+      svc.slice(dot + 1),
+      cfg.data || cfg.service_data || {},
+      cfg.target
+    );
+    return;
+  }
+}
+
+// Branche tap / double-clic / appui long sur un nœud, et route vers fireAction.
+function bindActions(node, getHass, getConfig, entityId) {
+  let holdTimer = null;
+  let held = false;
+  let clickTimer = null;
+
+  const cfg = () => getConfig() || {};
+  const act = (name) =>
+    fireAction(
+      node,
+      getHass(),
+      cfg()[name],
+      typeof entityId === "function" ? entityId() : entityId
+    );
+
+  node.style.cursor = "pointer";
+
+  node.addEventListener("pointerdown", () => {
+    held = false;
+    holdTimer = window.setTimeout(() => {
+      held = true;
+      if (cfg().hold_action) act("hold_action");
+    }, 500);
+  });
+  const clearHold = () => {
+    if (holdTimer) window.clearTimeout(holdTimer);
+    holdTimer = null;
+  };
+  node.addEventListener("pointerup", clearHold);
+  node.addEventListener("pointercancel", clearHold);
+
+  node.addEventListener("click", () => {
+    if (held) return; // c'était un appui long
+    if (cfg().double_tap_action) {
+      // on attend un éventuel 2e clic
+      if (clickTimer) {
+        window.clearTimeout(clickTimer);
+        clickTimer = null;
+        return;
+      }
+      clickTimer = window.setTimeout(() => {
+        clickTimer = null;
+        act("tap_action");
+      }, 220);
+    } else {
+      act("tap_action");
+    }
+  });
+
+  node.addEventListener("dblclick", () => {
+    if (clickTimer) {
+      window.clearTimeout(clickTimer);
+      clickTimer = null;
+    }
+    if (cfg().double_tap_action) act("double_tap_action");
+  });
 }
 
 /*
@@ -485,16 +638,19 @@ class GraphCard extends AlexWrapperCard {
       type: "custom:stack-in-card",
       card_mod: { style: "ha-card {\n  --ha-card-border-width: 0;\n}\n" },
       cards: [
-        {
-          type: "custom:mushroom-entity-card",
-          entity: c.entity,
-          primary_info: "state",
-          secondary_info: "name",
-          name: c.name || "",
-          icon: c.icon || "mdi:chart-line",
-          icon_color: hex,
-          card_mod: { style: "ha-card {\n  z-index: 1;\n  --ha-card-border-width: 0;\n}\n" },
-        },
+        applyActions(
+          {
+            type: "custom:mushroom-entity-card",
+            entity: c.entity,
+            primary_info: "state",
+            secondary_info: "name",
+            name: c.name || "",
+            icon: c.icon || "mdi:chart-line",
+            icon_color: hex,
+            card_mod: { style: "ha-card {\n  z-index: 1;\n  --ha-card-border-width: 0;\n}\n" },
+          },
+          c
+        ),
         {
           type: "custom:mini-graph-card",
           entities: [{ entity: c.entity, color: line }],
@@ -524,8 +680,12 @@ class GraphCardEditor extends AlexFormEditor {
       { name: "name", selector: { text: {} } },
       { name: "icon", selector: { icon: {} } },
       { name: "color", selector: { color_rgb: {} } },
+      { type: "expandable", title: "Interactions", icon: "mdi:gesture-tap", schema: ACTION_SCHEMA },
     ];
-    this._labels = { entity: "Entité", name: "Nom", icon: "Icône", color: "Couleur" };
+    this._labels = Object.assign(
+      { entity: "Entité", name: "Nom", icon: "Icône", color: "Couleur" },
+      ACTION_LABELS
+    );
   }
 }
 customElements.define("graph-card-editor", GraphCardEditor);
@@ -581,7 +741,10 @@ class PriseCard extends AlexWrapperCard {
         icon,
         icon_color: `{% if is_state('${sw}', 'on') %}${hex}{% endif %}`,
         tap_action: c.tap_action || { action: "toggle" },
-        hold_action: power ? { action: "more-info", entity: power } : { action: "more-info" },
+        hold_action:
+          c.hold_action ||
+          (power ? { action: "more-info", entity: power } : { action: "more-info" }),
+        ...(c.double_tap_action ? { double_tap_action: c.double_tap_action } : {}),
         card_mod: { style: "ha-card {\n  z-index: 1;\n  --ha-card-border-width: 0;\n}\n" },
       },
     ];
@@ -625,16 +788,18 @@ class PriseCardEditor extends AlexFormEditor {
       { name: "name", selector: { text: {} } },
       { name: "icon", selector: { icon: {} } },
       { name: "color", selector: { color_rgb: {} } },
-      { name: "tap_action", selector: { ui_action: {} } },
+      { type: "expandable", title: "Interactions", icon: "mdi:gesture-tap", schema: ACTION_SCHEMA },
     ];
-    this._labels = {
-      entity: "Interrupteur",
-      power_entity: "Capteur puissance (optionnel)",
-      name: "Nom",
-      icon: "Icône",
-      color: "Couleur",
-      tap_action: "Action au clic",
-    };
+    this._labels = Object.assign(
+      {
+        entity: "Interrupteur",
+        power_entity: "Capteur puissance (optionnel)",
+        name: "Nom",
+        icon: "Icône",
+        color: "Couleur",
+      },
+      ACTION_LABELS
+    );
   }
 }
 customElements.define("prise-card-editor", PriseCardEditor);
@@ -727,6 +892,7 @@ class ShutterCard extends AlexWrapperCard {
       },
     };
     if (c.icon) coverCard.icon = c.icon;
+    applyActions(coverCard, c);
 
     return {
       type: "custom:stack-in-card",
@@ -791,23 +957,27 @@ class ShutterCardEditor extends AlexFormEditor {
           { name: "txt_close_color", selector: { text: {} } },
         ],
       },
+      { type: "expandable", title: "Interactions (volet)", icon: "mdi:gesture-tap", schema: ACTION_SCHEMA },
     ];
-    this._labels = {
-      entity: "Volet",
-      name: "Nom",
-      icon: "Icône",
-      icon_color: "Couleur icône (CSS, ex. #d99414)",
-      text_color: "Couleur texte (CSS)",
-      script_open: "Script Open",
-      script_projection: "Script Projection",
-      script_close: "Script Close",
-      btn_open_color: "Fond bouton Open (CSS)",
-      txt_open_color: "Texte bouton Open (CSS)",
-      btn_projection_color: "Fond bouton Projection (CSS)",
-      txt_projection_color: "Texte bouton Projection (CSS)",
-      btn_close_color: "Fond bouton Close (CSS)",
-      txt_close_color: "Texte bouton Close (CSS)",
-    };
+    this._labels = Object.assign(
+      {
+        entity: "Volet",
+        name: "Nom",
+        icon: "Icône",
+        icon_color: "Couleur icône (CSS, ex. #d99414)",
+        text_color: "Couleur texte (CSS)",
+        script_open: "Script Open",
+        script_projection: "Script Projection",
+        script_close: "Script Close",
+        btn_open_color: "Fond bouton Open (CSS)",
+        txt_open_color: "Texte bouton Open (CSS)",
+        btn_projection_color: "Fond bouton Projection (CSS)",
+        txt_projection_color: "Texte bouton Projection (CSS)",
+        btn_close_color: "Fond bouton Close (CSS)",
+        txt_close_color: "Texte bouton Close (CSS)",
+      },
+      ACTION_LABELS
+    );
   }
 }
 customElements.define("shutter-card-editor", ShutterCardEditor);
@@ -874,6 +1044,7 @@ class LightCard extends AlexWrapperCard {
     } else {
       tile.use_light_color = true;
     }
+    applyActions(tile, l);
     return tile;
   }
 
@@ -952,15 +1123,19 @@ const LIGHT_ITEM_SCHEMA = [
   { name: "color", selector: { color_rgb: {} } },
   { name: "expand_toggle", selector: { entity: { domain: "input_boolean" } } },
   { name: "submenu_background", selector: { color_rgb: {} } },
+  { type: "expandable", title: "Interactions", icon: "mdi:gesture-tap", schema: ACTION_SCHEMA },
 ];
-const LIGHT_ITEM_LABELS = {
-  entity: "Entité",
-  name: "Nom",
-  icon: "Icône",
-  color: "Couleur (laisser vide = couleur de l'ampoule)",
-  expand_toggle: "input_boolean d'affichage (rend la lumière déployable)",
-  submenu_background: "Fond du sous-menu (vide = teinte du thème)",
-};
+const LIGHT_ITEM_LABELS = Object.assign(
+  {
+    entity: "Entité",
+    name: "Nom",
+    icon: "Icône",
+    color: "Couleur (laisser vide = couleur de l'ampoule)",
+    expand_toggle: "input_boolean d'affichage (rend la lumière déployable)",
+    submenu_background: "Fond du sous-menu (vide = teinte du thème)",
+  },
+  ACTION_LABELS
+);
 const MEMBER_ITEM_SCHEMA = LIGHT_ITEM_SCHEMA.slice(0, 4);
 
 class LightCardEditor extends HTMLElement {
@@ -1173,6 +1348,9 @@ class LightCardEditor extends HTMLElement {
           color: l.color,
           expand_toggle: l.expand_toggle,
           submenu_background: l.submenu_background,
+          tap_action: l.tap_action,
+          hold_action: l.hold_action,
+          double_tap_action: l.double_tap_action,
         },
         LIGHT_ITEM_LABELS,
         (v) => this._update((c) => (c.lights[i] = { ...c.lights[i], ...v }))
@@ -1289,6 +1467,7 @@ class MultiGraphCard extends AlexWrapperCard {
     };
     if (color) card.line_color = color;
     if (g.icon) card.icon = g.icon;
+    if (g.tap_action) card.tap_action = g.tap_action;
     return card;
   }
 
@@ -1312,6 +1491,7 @@ const MG_SCHEMA = [
   { name: "icon", selector: { icon: {} } },
   { name: "hours_to_show", selector: { number: { min: 1, max: 336, step: 1, mode: "box" } } },
   { name: "points_per_hour", selector: { number: { min: 1, max: 120, step: 1, mode: "box" } } },
+  { name: "tap_action", selector: { ui_action: {} } },
 ];
 const MG_LABELS = {
   entities: "Entité(s)",
@@ -1320,6 +1500,7 @@ const MG_LABELS = {
   icon: "Icône",
   hours_to_show: "Heures affichées (défaut 24)",
   points_per_hour: "Points par heure (défaut 4)",
+  tap_action: "Action au clic (mini-graph : tap uniquement)",
 };
 
 class MultiGraphCardEditor extends AlexListEditor {
@@ -1395,6 +1576,7 @@ class MultiGraphCardEditor extends AlexListEditor {
           icon: g.icon,
           hours_to_show: g.hours_to_show != null ? g.hours_to_show : 24,
           points_per_hour: g.points_per_hour != null ? g.points_per_hour : 4,
+          tap_action: g.tap_action,
         },
         MG_LABELS,
         (v) => this._update((c) => (c.graphs[i] = { ...c.graphs[i], ...v }))
@@ -1438,7 +1620,7 @@ class PillCard extends AlexWrapperCard {
     const nameColor = colorOr(c.name_color, "var(--primary-text-color)");
     const secColor = colorOr(c.secondary_color, "var(--secondary-text-color)");
 
-    return {
+    const cfg = {
       type: "custom:button-card",
       icon: c.icon || "mdi:home",
       name: c.name || "",
@@ -1497,6 +1679,7 @@ class PillCard extends AlexWrapperCard {
         action: '<ha-icon icon="mdi:chevron-right"></ha-icon>',
       },
     };
+    return applyActions(cfg, c);
   }
 }
 customElements.define("pill-card", PillCard);
@@ -1512,16 +1695,20 @@ class PillCardEditor extends AlexFormEditor {
       { name: "icon_color", selector: { color_rgb: {} } },
       { name: "name_color", selector: { color_rgb: {} } },
       { name: "secondary_color", selector: { color_rgb: {} } },
+      { type: "expandable", title: "Interactions", icon: "mdi:gesture-tap", schema: ACTION_SCHEMA },
     ];
-    this._labels = {
-      name: "Nom",
-      secondary: "Sous-titre (label)",
-      icon: "Icône",
-      background: "Fond de la carte (vide = thème)",
-      icon_color: "Couleur de l'icône (vide = thème)",
-      name_color: "Couleur du nom (vide = thème)",
-      secondary_color: "Couleur du sous-titre (vide = thème)",
-    };
+    this._labels = Object.assign(
+      {
+        name: "Nom",
+        secondary: "Sous-titre (label)",
+        icon: "Icône",
+        background: "Fond de la carte (vide = thème)",
+        icon_color: "Couleur de l'icône (vide = thème)",
+        name_color: "Couleur du nom (vide = thème)",
+        secondary_color: "Couleur du sous-titre (vide = thème)",
+      },
+      ACTION_LABELS
+    );
   }
 }
 customElements.define("pill-card-editor", PillCardEditor);
