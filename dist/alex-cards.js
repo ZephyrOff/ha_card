@@ -1017,7 +1017,6 @@ class ShutterCardEditor extends HTMLElement {
     this._config = {};
     this._hass = null;
     this._form = null;
-    this._customisation = null;
   }
 
   setConfig(config) {
@@ -1032,13 +1031,9 @@ class ShutterCardEditor extends HTMLElement {
       this._form.hass = hass;
     }
 
-    if (this._customisation) {
-      this._customisation
-        .querySelectorAll("ha-selector")
-        .forEach((selector) => {
-          selector.hass = hass;
-        });
-    }
+    this.querySelectorAll("ha-selector").forEach((selector) => {
+      selector.hass = hass;
+    });
   }
 
   _emit(changes) {
@@ -1057,6 +1052,12 @@ class ShutterCardEditor extends HTMLElement {
       })
     );
   }
+
+  /*
+   * ----------------------------------------------------------------------
+   * Ligne avec label à gauche + color picker à droite
+   * ----------------------------------------------------------------------
+   */
 
   _createColorRow(label, configKey) {
     const row = document.createElement("div");
@@ -1086,6 +1087,12 @@ class ShutterCardEditor extends HTMLElement {
 
     selector.hass = this._hass;
 
+    /*
+     * IMPORTANT :
+     * color_rgb = vrai color picker précis de Home Assistant.
+     *
+     * Ne surtout pas remplacer par "text" ou "ui_color".
+     */
     selector.selector = {
       color_rgb: {},
     };
@@ -1106,12 +1113,21 @@ class ShutterCardEditor extends HTMLElement {
       });
     });
 
-    row.append(labelElement, selector);
+    row.append(
+      labelElement,
+      selector
+    );
 
     return row;
   }
 
-  _createExpandable(title, icon, content) {
+  /*
+   * ----------------------------------------------------------------------
+   * Sous-menu dépliable
+   * ----------------------------------------------------------------------
+   */
+
+  _createExpandable(title, iconName, content) {
     const wrapper = document.createElement("div");
 
     wrapper.style.cssText = `
@@ -1133,11 +1149,11 @@ class ShutterCardEditor extends HTMLElement {
       user-select: none;
     `;
 
-    const iconElement = document.createElement("ha-icon");
+    const icon = document.createElement("ha-icon");
 
-    iconElement.icon = icon;
+    icon.icon = iconName;
 
-    iconElement.style.cssText = `
+    icon.style.cssText = `
       --mdc-icon-size: 20px;
       margin-right: 12px;
       color: var(--secondary-text-color);
@@ -1165,7 +1181,7 @@ class ShutterCardEditor extends HTMLElement {
     `;
 
     header.append(
-      iconElement,
+      icon,
       titleElement,
       chevron
     );
@@ -1187,15 +1203,25 @@ class ShutterCardEditor extends HTMLElement {
       opened = !opened;
 
       body.style.display = opened ? "block" : "none";
+
       chevron.icon = opened
         ? "mdi:chevron-up"
         : "mdi:chevron-down";
     });
 
-    wrapper.append(header, body);
+    wrapper.append(
+      header,
+      body
+    );
 
     return wrapper;
   }
+
+  /*
+   * ----------------------------------------------------------------------
+   * Customisation
+   * ----------------------------------------------------------------------
+   */
 
   _createCustomisationSection() {
     const content = document.createElement("div");
@@ -1206,27 +1232,34 @@ class ShutterCardEditor extends HTMLElement {
       gap: 4px;
     `;
 
-    // Couleurs générales
+    /*
+     * Couleurs générales du volet
+     */
+
     content.append(
       this._createColorRow(
         "Couleur icône",
         "icon_color"
       ),
+
       this._createColorRow(
         "Couleur texte",
         "text_color"
       )
     );
 
-    // ------------------------------------------------------------
-    // Couleurs des boutons
-    // ------------------------------------------------------------
+    /*
+     * --------------------------------------------------------------
+     * Couleurs des boutons
+     * --------------------------------------------------------------
+     */
 
     const buttonColors = document.createElement("div");
 
     buttonColors.style.cssText = `
-      margin-top: 8px;
-      padding-top: 4px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
     `;
 
     buttonColors.append(
@@ -1234,35 +1267,48 @@ class ShutterCardEditor extends HTMLElement {
         "Fond bouton Open",
         "btn_open_color"
       ),
+
       this._createColorRow(
         "Texte bouton Open",
         "txt_open_color"
       ),
+
       this._createColorRow(
         "Fond bouton Projection",
         "btn_projection_color"
       ),
+
       this._createColorRow(
         "Texte bouton Projection",
         "txt_projection_color"
       ),
+
       this._createColorRow(
         "Fond bouton Close",
         "btn_close_color"
       ),
+
       this._createColorRow(
         "Texte bouton Close",
         "txt_close_color"
       )
     );
 
-    const buttonColorsSection = this._createExpandable(
-      "Couleurs des boutons",
-      "mdi:palette-outline",
-      buttonColors
+    /*
+     * Sous-menu Couleurs des boutons
+     */
+
+    content.append(
+      this._createExpandable(
+        "Couleurs des boutons",
+        "mdi:palette-outline",
+        buttonColors
+      )
     );
 
-    content.append(buttonColorsSection);
+    /*
+     * Menu principal Customisation
+     */
 
     return this._createExpandable(
       "Customisation",
@@ -1270,6 +1316,12 @@ class ShutterCardEditor extends HTMLElement {
       content
     );
   }
+
+  /*
+   * ----------------------------------------------------------------------
+   * Scripts
+   * ----------------------------------------------------------------------
+   */
 
   _createScriptsSection() {
     const form = document.createElement("ha-form");
@@ -1334,6 +1386,12 @@ class ShutterCardEditor extends HTMLElement {
     );
   }
 
+  /*
+   * ----------------------------------------------------------------------
+   * Interactions
+   * ----------------------------------------------------------------------
+   */
+
   _createInteractionsSection() {
     const form = document.createElement("ha-form");
 
@@ -1364,12 +1422,18 @@ class ShutterCardEditor extends HTMLElement {
     return form;
   }
 
+  /*
+   * ----------------------------------------------------------------------
+   * Rendu principal
+   * ----------------------------------------------------------------------
+   */
+
   _render() {
     this.innerHTML = "";
 
-    // ------------------------------------------------------------
-    // Champs principaux
-    // ------------------------------------------------------------
+    /*
+     * Champs principaux
+     */
 
     this._form = document.createElement("ha-form");
 
@@ -1424,25 +1488,25 @@ class ShutterCardEditor extends HTMLElement {
 
     this.appendChild(this._form);
 
-    // ------------------------------------------------------------
-    // Customisation
-    // ------------------------------------------------------------
+    /*
+     * Customisation
+     */
 
-    this._customisation = this._createCustomisationSection();
+    this.appendChild(
+      this._createCustomisationSection()
+    );
 
-    this.appendChild(this._customisation);
-
-    // ------------------------------------------------------------
-    // Scripts
-    // ------------------------------------------------------------
+    /*
+     * Scripts
+     */
 
     this.appendChild(
       this._createScriptsSection()
     );
 
-    // ------------------------------------------------------------
-    // Interactions
-    // ------------------------------------------------------------
+    /*
+     * Interactions
+     */
 
     this.appendChild(
       this._createInteractionsSection()
