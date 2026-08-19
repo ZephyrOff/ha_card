@@ -1843,14 +1843,22 @@ class PillCardEditor extends HTMLElement {
 
     selector.hass = this._hass;
 
+    // IMPORTANT :
+    // ui_color utilise le vrai composant ha-color-picker de Home Assistant.
     selector.selector = {
-      color_rgb: {},
+      ui_color: {
+        include_none: true,
+      },
     };
 
+    // ui_color attend une couleur CSS / hexadécimale.
     selector.value = this._normalizeColor(this._config[configKey]);
 
+    // Pas de label interne : notre label est affiché à gauche.
+    selector.label = "";
+
     selector.style.cssText = `
-      flex: 0 0 auto;
+      flex: 0 0 120px;
       width: 120px;
       min-width: 120px;
     `;
