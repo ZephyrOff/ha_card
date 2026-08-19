@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.8.1";
+const ALEX_CARDS_VERSION = "0.8.2";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -1657,9 +1657,21 @@ const LIGHT_ITEM_SCHEMA = [
   { name: "entity", selector: { entity: { domain: "light" } } },
   { name: "name", selector: { text: {} } },
   { name: "icon", selector: { icon: {} } },
-  { name: "expand_toggle", selector: { entity: { domain: "input_boolean" } } },
   {
+    name: "expand_toggle",
+    selector: {
+      entity: {
+        domain: "input_boolean",
+      },
+    },
+  },
+];
+
+const LIGHT_INTERACTIONS_SCHEMA = [
+  {
+    name: "interactions",
     type: "expandable",
+    flatten: true,
     title: "Interactions",
     icon: "mdi:gesture-tap",
     schema: ACTION_SCHEMA,
@@ -1720,6 +1732,135 @@ class LightCardEditor extends HTMLElement {
     mutator(cfg);
     this._config = cfg;
     this._emit();
+  }
+
+  _createExpandable(title, iconName, content) {
+    const wrapper = document.createElement("div");
+
+    wrapper.style.cssText = `
+      margin: 8px 0;
+      border: 1px solid var(--divider-color);
+      border-radius: 8px;
+      overflow: hidden;
+    `;
+
+    const header = document.createElement("div");
+
+    header.style.cssText = `
+      display: flex;
+      align-items: center;
+      min-height: 48px;
+      padding: 0 12px;
+      box-sizing: border-box;
+      cursor: pointer;
+      user-select: none;
+    `;
+
+    const icon = document.createElement("ha-icon");
+
+    icon.icon = iconName;
+
+    icon.style.cssText = `
+      --mdc-icon-size: 20px;
+      margin-right: 12px;
+      color: var(--secondary-text-color);
+    `;
+
+    const titleElement = document.createElement("div");
+
+    titleElement.textContent = title;
+
+    titleElement.style.cssText = `
+      flex: 1;
+      min-width: 0;
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--primary-text-color);
+    `;
+
+    const chevron = document.createElement("ha-icon");
+
+    chevron.icon = "mdi:chevron-down";
+
+    chevron.style.cssText = `
+      --mdc-icon-size: 20px;
+      color: var(--secondary-text-color);
+    `;
+
+    header.append(
+      icon,
+      titleElement,
+      chevron
+    );
+
+    const body = document.createElement("div");
+
+    body.style.cssText = `
+      display: none;
+      padding: 4px 12px 10px;
+      box-sizing: border-box;
+      border-top: 1px solid var(--divider-color);
+    `;
+
+    body.appendChild(content);
+
+    let opened = false;
+
+    header.addEventListener("click", () => {
+      opened = !opened;
+
+      body.style.display = opened ? "block" : "none";
+
+      chevron.icon = opened
+        ? "mdi:chevron-up"
+        : "mdi:chevron-down";
+    });
+
+    wrapper.append(
+      header,
+      body
+    );
+
+    return wrapper;
+  }
+
+  _createCustomisationSection(i, l) {
+    const content = document.createElement("div");
+
+    content.style.cssText = `
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    `;
+
+    content.append(
+      this._createColorRow(
+        "Couleur",
+        "color",
+        l.color,
+        (value) =>
+          this._update(
+            (c) => (c.lights[i].color = value)
+          )
+      ),
+
+      this._createColorRow(
+        "Fond du sous-menu",
+        "submenu_background",
+        l.submenu_background,
+        (value) =>
+          this._update(
+            (c) =>
+              (c.lights[i].submenu_background = value)
+          )
+      )
+    );
+
+    return this._createExpandable(
+      "Customisation",
+      "mdi:palette",
+      content
+    );
   }
 
   _createColorRow(label, configKey, value, onChange) {
@@ -1931,6 +2072,12 @@ class LightCardEditor extends HTMLElement {
   _renderLight(i) {
     const l = this._config.lights[i] || {};
 
+    /*
+     * ----------------------------------------------------------------------
+     * Retour
+     * ----------------------------------------------------------------------
+     */
+
     this.appendChild(
       this._backHeader(
         l.name || l.entity || "Lumière",
@@ -1944,6 +2091,11 @@ class LightCardEditor extends HTMLElement {
     /*
      * ----------------------------------------------------------------------
      * Champs principaux
+     *
+     * Entité
+     * Nom
+     * Icône
+     * input_boolean d'affichage
      * ----------------------------------------------------------------------
      */
 
@@ -1955,9 +2107,6 @@ class LightCardEditor extends HTMLElement {
           name: l.name,
           icon: l.icon,
           expand_toggle: l.expand_toggle,
-          tap_action: l.tap_action,
-          hold_action: l.hold_action,
-          double_tap_action: l.double_tap_action,
         },
         LIGHT_ITEM_LABELS,
         (v) =>
@@ -1973,44 +2122,9 @@ class LightCardEditor extends HTMLElement {
 
     /*
      * ----------------------------------------------------------------------
-     * Couleur de l'icône
-     * ----------------------------------------------------------------------
-     */
-
-    this.appendChild(
-      this._createColorRow(
-        "Couleur",
-        "color",
-        l.color,
-        (value) =>
-          this._update(
-            (c) => (c.lights[i].color = value)
-          )
-      )
-    );
-
-    /*
-     * ----------------------------------------------------------------------
-     * Fond du sous-menu
-     * ----------------------------------------------------------------------
-     */
-
-    this.appendChild(
-      this._createColorRow(
-        "Fond du sous-menu",
-        "submenu_background",
-        l.submenu_background,
-        (value) =>
-          this._update(
-            (c) =>
-              (c.lights[i].submenu_background = value)
-          )
-      )
-    );
-
-    /*
-     * ----------------------------------------------------------------------
      * Membres du groupe
+     *
+     * Placé immédiatement sous le input_boolean d'affichage.
      * ----------------------------------------------------------------------
      */
 
@@ -2054,12 +2168,6 @@ class LightCardEditor extends HTMLElement {
       );
     });
 
-    /*
-     * ----------------------------------------------------------------------
-     * Ajouter un membre
-     * ----------------------------------------------------------------------
-     */
-
     this.appendChild(
       this._addRow(
         "light",
@@ -2086,6 +2194,51 @@ class LightCardEditor extends HTMLElement {
         }
       )
     );
+
+    /*
+     * ----------------------------------------------------------------------
+     * Customisation
+     *
+     * Couleur + Fond du sous-menu dans un sous-menu repliable.
+     * ----------------------------------------------------------------------
+     */
+
+    this.appendChild(
+      this._createCustomisationSection(i, l)
+    );
+
+    /*
+     * ----------------------------------------------------------------------
+     * Interactions
+     * ----------------------------------------------------------------------
+     */
+
+    const interactions = document.createElement("ha-form");
+
+    interactions.schema = LIGHT_INTERACTIONS_SCHEMA;
+
+    interactions.data = this._config;
+
+    interactions.computeLabel = (schema) => {
+      return (
+        ACTION_LABELS[schema.name] ||
+        schema.name
+      );
+    };
+
+    if (this._hass) {
+      interactions.hass = this._hass;
+    }
+
+    interactions.addEventListener("value-changed", (ev) => {
+      ev.stopPropagation();
+
+      this._emit();
+    });
+
+    this._forms.push(interactions);
+
+    this.appendChild(interactions);
   }
 
   _renderMember(i, j) {
