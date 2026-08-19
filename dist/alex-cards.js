@@ -1017,32 +1017,83 @@ class ShutterCardEditor extends AlexFormEditor {
       { name: "entity", selector: { entity: { domain: "cover" } } },
       { name: "name", selector: { text: {} } },
       { name: "icon", selector: { icon: {} } },
-      { name: "icon_color", selector: { text: {} } },
-      { name: "text_color", selector: { text: {} } },
+
+      {
+        name: "customisation",
+        type: "expandable",
+        title: "Customisation",
+        icon: "mdi:palette",
+        schema: [
+          {
+            name: "icon_color",
+            selector: { text: {} },
+          },
+          {
+            name: "text_color",
+            selector: { text: {} },
+          },
+
+          {
+            name: "button_colors",
+            type: "expandable",
+            title: "Couleurs des boutons",
+            icon: "mdi:palette-outline",
+            schema: [
+              {
+                name: "btn_open_color",
+                selector: { text: {} },
+              },
+              {
+                name: "txt_open_color",
+                selector: { text: {} },
+              },
+              {
+                name: "btn_projection_color",
+                selector: { text: {} },
+              },
+              {
+                name: "txt_projection_color",
+                selector: { text: {} },
+              },
+              {
+                name: "btn_close_color",
+                selector: { text: {} },
+              },
+              {
+                name: "txt_close_color",
+                selector: { text: {} },
+              },
+            ],
+          },
+        ],
+      },
+
       {
         type: "expandable",
         title: "Scripts",
         icon: "mdi:script-text",
         schema: [
-          { name: "script_open", selector: { entity: { domain: "script" } } },
-          { name: "script_projection", selector: { entity: { domain: "script" } } },
-          { name: "script_close", selector: { entity: { domain: "script" } } },
+          {
+            name: "script_open",
+            selector: { entity: { domain: "script" } },
+          },
+          {
+            name: "script_projection",
+            selector: { entity: { domain: "script" } },
+          },
+          {
+            name: "script_close",
+            selector: { entity: { domain: "script" } },
+          },
         ],
       },
+
       {
         type: "expandable",
-        title: "Couleurs des boutons",
-        icon: "mdi:palette",
-        schema: [
-          { name: "btn_open_color", selector: { text: {} } },
-          { name: "txt_open_color", selector: { text: {} } },
-          { name: "btn_projection_color", selector: { text: {} } },
-          { name: "txt_projection_color", selector: { text: {} } },
-          { name: "btn_close_color", selector: { text: {} } },
-          { name: "txt_close_color", selector: { text: {} } },
-        ],
+        title: "Interactions (volet)",
+        icon: "mdi:gesture-tap",
+        schema: ACTION_SCHEMA,
       },
-      { type: "expandable", title: "Interactions (volet)", icon: "mdi:gesture-tap", schema: ACTION_SCHEMA },
     ];
     this._labels = Object.assign(
       {
