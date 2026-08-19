@@ -12,6 +12,7 @@ Collection de cartes Lovelace custom pour Home Assistant, distribuée en **plugi
 | `custom:prise-card`        | oui        | Interrupteur avec puissance + mini-graphe (masqué à l'arrêt).     |
 | `custom:shutter-card`      | oui        | Volet (position) + boutons Open / Projection / Close scriptés.    |
 | `custom:light-card`        | oui        | Liste de lumières, groupes déployables au double-clic.            |
+| `custom:multi-graph-card`  | oui        | Pile de mini-graphes configurables (fond de card du thème).      |
 
 Toutes les cartes apparaissent dans le sélecteur « Ajouter une carte » avec un éditeur
 visuel. La `light-card` a un éditeur type « chips » (liste + crayon pour éditer chaque

@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.4.1";
+const ALEX_CARDS_VERSION = "0.5.0";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -326,6 +326,133 @@ class AlexFormEditor extends HTMLElement {
     this._form.schema = this._schema;
     this._form.data = this._config;
     if (this._hass) this._form.hass = this._hass;
+  }
+}
+
+/*
+ * Base pour les éditeurs "liste" (façon mushroom-chips) : une liste d'items
+ * avec ajout / crayon / suppression, et un détail par item. La sous-classe
+ * implémente _normalize() (garantir les tableaux) et _render() (les vues).
+ * Fournit la garde d'écho setConfig (pas de re-render à chaque tick hass =>
+ * pas de perte de focus) et les briques DOM communes.
+ */
+class AlexListEditor extends HTMLElement {
+  setConfig(config) {
+    const incoming = JSON.stringify(config || {});
+    if (incoming === this._configStr) return;
+    this._config = JSON.parse(incoming);
+    this._normalize();
+    this._configStr = incoming;
+    if (!Array.isArray(this._path)) this._path = [];
+    this._render();
+  }
+
+  _normalize() {}
+
+  set hass(hass) {
+    this._hass = hass;
+    (this._forms || []).forEach((f) => (f.hass = hass));
+  }
+
+  _emit() {
+    this._configStr = JSON.stringify(this._config);
+    this.dispatchEvent(
+      new CustomEvent("config-changed", {
+        detail: { config: this._config },
+        bubbles: true,
+        composed: true,
+      })
+    );
+  }
+
+  _update(mutator) {
+    const cfg = JSON.parse(JSON.stringify(this._config));
+    mutator(cfg);
+    this._config = cfg;
+    this._emit();
+  }
+
+  _iconButton(icon, title, onClick) {
+    const btn = document.createElement("ha-icon-button");
+    btn.title = title;
+    const ic = document.createElement("ha-icon");
+    ic.icon = icon;
+    btn.appendChild(ic);
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      onClick();
+    });
+    return btn;
+  }
+
+  _form(schema, data, labels, onChange) {
+    const f = document.createElement("ha-form");
+    f.schema = schema;
+    f.data = data || {};
+    f.computeLabel = (s) => (labels && labels[s.name]) || s.name;
+    if (this._hass) f.hass = this._hass;
+    f.addEventListener("value-changed", (ev) => {
+      ev.stopPropagation();
+      onChange(ev.detail.value);
+    });
+    this._forms.push(f);
+    return f;
+  }
+
+  _row(icon, text, subtitle, onEdit, onDelete) {
+    const row = document.createElement("div");
+    row.style.cssText =
+      "display:flex;align-items:center;gap:10px;padding:8px 4px;" +
+      "border-bottom:1px solid var(--divider-color,#e0e0e0);";
+    const ic = document.createElement("ha-icon");
+    ic.icon = icon || "mdi:chart-line";
+    ic.style.color = "var(--secondary-text-color)";
+    const lab = document.createElement("div");
+    lab.style.cssText = "flex:1;min-width:0;";
+    lab.innerHTML =
+      `<div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(text)}</div>` +
+      (subtitle
+        ? `<div style="font-size:12px;color:var(--secondary-text-color);overflow:hidden;` +
+          `text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(subtitle)}</div>`
+        : "");
+    row.append(
+      ic,
+      lab,
+      this._iconButton("mdi:pencil", "Éditer", onEdit),
+      this._iconButton("mdi:delete", "Supprimer", onDelete)
+    );
+    return row;
+  }
+
+  _sectionTitle(txt) {
+    const d = document.createElement("div");
+    d.textContent = txt;
+    d.style.cssText = "font-weight:600;margin:16px 0 4px;";
+    return d;
+  }
+
+  _backHeader(title, onBack) {
+    const h = document.createElement("div");
+    h.style.cssText = "display:flex;align-items:center;gap:8px;margin-bottom:8px;";
+    h.appendChild(this._iconButton("mdi:arrow-left", "Retour", onBack));
+    const t = document.createElement("div");
+    t.textContent = title;
+    t.style.cssText = "font-weight:600;";
+    h.appendChild(t);
+    return h;
+  }
+
+  _addButton(label, onClick) {
+    const b = document.createElement("button");
+    b.textContent = "+ " + label;
+    b.style.cssText =
+      "width:100%;margin-top:12px;padding:10px;border:1px dashed var(--divider-color,#9e9e9e);" +
+      "border-radius:8px;background:transparent;color:var(--primary-color);cursor:pointer;font:inherit;";
+    b.addEventListener("click", (e) => {
+      e.stopPropagation();
+      onClick();
+    });
+    return b;
   }
 }
 
@@ -1118,8 +1245,169 @@ window.customCards.push({
 });
 
 /* =========================================================================
+ * === multi-graph-card ====================================================
+ * Pile de mini-graphes (fond de card du thème). L'éditeur est une liste de
+ * graphes ; chaque graphe : entité(s), nom, couleur de ligne, icône,
+ * hours_to_show (défaut 24), points_per_hour (défaut 4).
+ * ========================================================================= */
+
+class MultiGraphCard extends AlexWrapperCard {
+  static getConfigElement() {
+    return document.createElement("multi-graph-card-editor");
+  }
+  static getStubConfig() {
+    return {
+      graphs: [{ entities: [], name: "", hours_to_show: 24, points_per_hour: 4 }],
+    };
+  }
+
+  _graphCard(g) {
+    const color = Array.isArray(g.line_color)
+      ? rgbToHex(g.line_color)
+      : typeof g.line_color === "string" && g.line_color.trim()
+      ? g.line_color
+      : null;
+    const card = {
+      type: "custom:mini-graph-card",
+      name: g.name || "",
+      entities: g.entities || [],
+      hours_to_show: g.hours_to_show || 24,
+      points_per_hour: g.points_per_hour || 4,
+      line_width: 3,
+      smoothing: true,
+      animate: true,
+      show: { state: true, extrema: true, fill: "fade", labels: true, icon: !!g.icon },
+      card_mod: { style: "ha-card { border-radius: 24px; }\n" },
+    };
+    if (color) card.line_color = color;
+    if (g.icon) card.icon = g.icon;
+    return card;
+  }
+
+  _innerConfig(c) {
+    return {
+      type: "custom:vertical-stack-in-card",
+      card_mod: {
+        style:
+          "ha-card {\n  background: var(--ha-card-background, var(--card-background-color));\n}\n",
+      },
+      cards: (c.graphs || []).map((g) => this._graphCard(g)),
+    };
+  }
+}
+customElements.define("multi-graph-card", MultiGraphCard);
+
+const MG_SCHEMA = [
+  { name: "entities", selector: { entity: { multiple: true } } },
+  { name: "name", selector: { text: {} } },
+  { name: "line_color", selector: { color_rgb: {} } },
+  { name: "icon", selector: { icon: {} } },
+  { name: "hours_to_show", selector: { number: { min: 1, max: 336, step: 1, mode: "box" } } },
+  { name: "points_per_hour", selector: { number: { min: 1, max: 120, step: 1, mode: "box" } } },
+];
+const MG_LABELS = {
+  entities: "Entité(s)",
+  name: "Nom",
+  line_color: "Couleur de la ligne",
+  icon: "Icône",
+  hours_to_show: "Heures affichées (défaut 24)",
+  points_per_hour: "Points par heure (défaut 4)",
+};
+
+class MultiGraphCardEditor extends AlexListEditor {
+  _normalize() {
+    if (!Array.isArray(this._config.graphs)) this._config.graphs = [];
+  }
+
+  _validPath() {
+    const p = this._path || [];
+    if (p.length >= 1 && !this._config.graphs[p[0]]) return [];
+    return p;
+  }
+
+  _render() {
+    this._forms = [];
+    this.innerHTML = "";
+    const p = this._validPath();
+    if (p.length === 0) this._renderRoot();
+    else this._renderGraph(p[0]);
+    if (this._hass) this._forms.forEach((f) => (f.hass = this._hass));
+  }
+
+  _renderRoot() {
+    this.appendChild(this._sectionTitle("Graphes"));
+    (this._config.graphs || []).forEach((g, i) => {
+      const n = (g.entities || []).length;
+      this.appendChild(
+        this._row(
+          g.icon || "mdi:chart-line",
+          g.name || (g.entities && g.entities[0]) || "(vide)",
+          n > 1 ? `${n} entités` : g.entities && g.entities[0],
+          () => {
+            this._path = [i];
+            this._render();
+          },
+          () => {
+            this._update((c) => c.graphs.splice(i, 1));
+            this._render();
+          }
+        )
+      );
+    });
+
+    this.appendChild(
+      this._addButton("Ajouter un graphe", () => {
+        let idx;
+        this._update((c) => {
+          c.graphs = c.graphs || [];
+          c.graphs.push({ entities: [], name: "", hours_to_show: 24, points_per_hour: 4 });
+          idx = c.graphs.length - 1;
+        });
+        this._path = [idx];
+        this._render();
+      })
+    );
+  }
+
+  _renderGraph(i) {
+    const g = this._config.graphs[i] || {};
+    this.appendChild(
+      this._backHeader(g.name || (g.entities && g.entities[0]) || "Graphe", () => {
+        this._path = [];
+        this._render();
+      })
+    );
+    this.appendChild(
+      this._form(
+        MG_SCHEMA,
+        {
+          entities: g.entities || [],
+          name: g.name,
+          line_color: g.line_color,
+          icon: g.icon,
+          hours_to_show: g.hours_to_show != null ? g.hours_to_show : 24,
+          points_per_hour: g.points_per_hour != null ? g.points_per_hour : 4,
+        },
+        MG_LABELS,
+        (v) => this._update((c) => (c.graphs[i] = { ...c.graphs[i], ...v }))
+      )
+    );
+  }
+}
+customElements.define("multi-graph-card-editor", MultiGraphCardEditor);
+
+window.customCards.push({
+  type: "multi-graph-card",
+  name: "Multi Graph Card",
+  description: "Pile de mini-graphes configurables (fond de card du thème).",
+  preview: false,
+  documentationURL: "https://github.com/<user>/alex-cards",
+});
+
+/* =========================================================================
  * === ma-prochaine-carte ==================================================
  * Wrapper : étendre AlexWrapperCard + implémenter _innerConfig(config),
- * éditeur : étendre AlexFormEditor + définir this._schema / this._labels.
+ * éditeur simple : étendre AlexFormEditor (this._schema / this._labels),
+ * éditeur liste : étendre AlexListEditor (_normalize / _render).
  * Puis customElements.define(...) x2 + window.customCards.push(...).
  * ========================================================================= */
