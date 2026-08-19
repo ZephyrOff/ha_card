@@ -1871,33 +1871,98 @@ class PillCardEditor extends HTMLElement {
       });
     });
 
-    row.append(
-      labelElement,
-      selector
-    );
+    row.append(labelElement, selector);
 
     return row;
   }
 
   _createCustomisationSection() {
-    const panel = document.createElement("ha-expansion-panel");
+    const wrapper = document.createElement("div");
 
-    panel.setAttribute("outlined", "");
+    wrapper.style.cssText = `
+      margin: 8px 0;
+      border: 1px solid var(--divider-color);
+      border-radius: 8px;
+      overflow: hidden;
+    `;
 
-    // Icône à gauche, comme le panneau Interactions de HA.
-    const icon = document.createElement("ha-icon");
-    icon.setAttribute("slot", "leading-icon");
-    icon.icon = "mdi:palette";
+    /*
+     * ----------------------------------------------------------------------
+     * Header
+     * ----------------------------------------------------------------------
+     */
 
     const header = document.createElement("div");
-    header.setAttribute("slot", "header");
-    header.textContent = "Customisation";
+
+    header.style.cssText = `
+      display: flex;
+      align-items: center;
+      min-height: 48px;
+      padding: 0 12px;
+      box-sizing: border-box;
+      cursor: pointer;
+      user-select: none;
+    `;
+
+    /*
+     * Icône
+     */
+
+    const icon = document.createElement("ha-icon");
+
+    icon.icon = "mdi:palette";
+
+    icon.style.cssText = `
+      --mdc-icon-size: 20px;
+      margin-right: 12px;
+      color: var(--secondary-text-color);
+    `;
+
+    /*
+     * Titre
+     */
+
+    const title = document.createElement("div");
+
+    title.textContent = "Customisation";
+
+    title.style.cssText = `
+      flex: 1;
+      min-width: 0;
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--primary-text-color);
+    `;
+
+    /*
+     * Chevron
+     */
+
+    const chevron = document.createElement("ha-icon");
+
+    chevron.icon = "mdi:chevron-down";
+
+    chevron.style.cssText = `
+      --mdc-icon-size: 20px;
+      color: var(--secondary-text-color);
+      transition: transform 150ms ease;
+    `;
+
+    header.append(icon, title, chevron);
+
+    /*
+     * ----------------------------------------------------------------------
+     * Contenu
+     * ----------------------------------------------------------------------
+     */
 
     const content = document.createElement("div");
 
     content.style.cssText = `
-      padding: 0 16px 12px;
+      display: none;
+      padding: 4px 12px 10px;
       box-sizing: border-box;
+      border-top: 1px solid var(--divider-color);
     `;
 
     content.append(
@@ -1907,15 +1972,29 @@ class PillCardEditor extends HTMLElement {
       this._createColorRow("Couleur du sous-titre", "secondary_color")
     );
 
-    panel.append(
-      icon,
-      header,
-      content
-    );
+    /*
+     * ----------------------------------------------------------------------
+     * Ouverture / fermeture
+     * ----------------------------------------------------------------------
+     */
 
-    this._customisation = panel;
+    let opened = false;
 
-    return panel;
+    header.addEventListener("click", () => {
+      opened = !opened;
+
+      content.style.display = opened ? "block" : "none";
+
+      chevron.icon = opened
+        ? "mdi:chevron-up"
+        : "mdi:chevron-down";
+    });
+
+    wrapper.append(header, content);
+
+    this._customisation = wrapper;
+
+    return wrapper;
   }
 
   _render() {
