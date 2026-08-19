@@ -1763,6 +1763,7 @@ customElements.define("pill-card", PillCard);
 class PillCardEditor extends AlexFormEditor {
   constructor() {
     super();
+
     this._schema = [
       { name: "name", selector: { text: {} } },
       { name: "secondary", selector: { text: {} } },
@@ -1771,14 +1772,43 @@ class PillCardEditor extends AlexFormEditor {
       {
         name: "customisation",
         type: "expandable",
+        flatten: true,
         title: "Customisation",
         iconPath:
           "M12,2C6.48,2 2,6.48 2,12C2,17.52 6.48,22 12,22C17.52,22 22,17.52 22,12C22,6.48 17.52,2 12,2ZM11,17H13V11H11V17ZM11,7H13V9H11V7Z",
         schema: [
-          { name: "background", selector: { color_rgb: {} } },
-          { name: "icon_color", selector: { color_rgb: {} } },
-          { name: "name_color", selector: { color_rgb: {} } },
-          { name: "secondary_color", selector: { color_rgb: {} } },
+          {
+            name: "background",
+            selector: {
+              ui_color: {
+                include_none: true,
+              },
+            },
+          },
+          {
+            name: "icon_color",
+            selector: {
+              ui_color: {
+                include_none: true,
+              },
+            },
+          },
+          {
+            name: "name_color",
+            selector: {
+              ui_color: {
+                include_none: true,
+              },
+            },
+          },
+          {
+            name: "secondary_color",
+            selector: {
+              ui_color: {
+                include_none: true,
+              },
+            },
+          },
         ],
       },
 
@@ -1788,16 +1818,16 @@ class PillCardEditor extends AlexFormEditor {
         flatten: true,
         title: "Interactions",
         iconPath:
-          "M12,2C6.48,2 2,6.48 2,12C2,17.52 6.48,22 12,22C17.52,22 22,17.52 22,17.52,22 22,17.52 17.52,22 12,22ZM11,17H13V11H11V17ZM11,7H13V9H11V7Z",
+          "M12,2C6.48,2 2,6.48 2,12C2,17.52 6.48,22 12,22C17.52,22 22,17.52 22,12 22,6.48 17.52,2 12,2ZM11,17H13V11H11V17ZM11,7H13V9H11V7Z",
         schema: ACTION_SCHEMA,
       },
     ];
+
     this._labels = Object.assign(
       {
         name: "Nom",
         secondary: "Sous-titre",
         icon: "Icône",
-
         background: "Fond de la carte",
         icon_color: "Couleur de l'icône",
         name_color: "Couleur du nom",
@@ -1805,6 +1835,33 @@ class PillCardEditor extends AlexFormEditor {
       },
       ACTION_LABELS
     );
+  }
+
+  setConfig(config) {
+    // Le sélecteur ui_color travaille avec des chaînes CSS/hexadécimales.
+    // On convertit donc les anciennes valeurs RGB [r,g,b] uniquement
+    // pour l'affichage dans l'éditeur.
+    this._config = {
+      ...(config || {}),
+      background: this._normalizeColor(config?.background),
+      icon_color: this._normalizeColor(config?.icon_color),
+      name_color: this._normalizeColor(config?.name_color),
+      secondary_color: this._normalizeColor(config?.secondary_color),
+    };
+
+    this._render();
+  }
+
+  _normalizeColor(value) {
+    if (Array.isArray(value)) {
+      return rgbToHex(value);
+    }
+
+    if (typeof value === "string" && value.trim()) {
+      return value;
+    }
+
+    return undefined;
   }
 }
 customElements.define("pill-card-editor", PillCardEditor);
