@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.9.0";
+const ALEX_CARDS_VERSION = "0.9.1";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -631,6 +631,8 @@ class AlexListEditor extends HTMLElement {
   _iconButton(icon, title, onClick) {
     const btn = document.createElement("ha-icon-button");
     btn.title = title;
+    btn.style.cssText =
+      "--mdc-icon-button-size:40px;--mdc-icon-size:20px;color:var(--secondary-text-color);flex:0 0 auto;";
     const ic = document.createElement("ha-icon");
     ic.icon = icon;
     btn.appendChild(ic);
@@ -658,15 +660,16 @@ class AlexListEditor extends HTMLElement {
   _row(icon, text, subtitle, onEdit, onDelete) {
     const row = document.createElement("div");
     row.style.cssText =
-      "display:flex;align-items:center;gap:10px;padding:8px 4px;" +
-      "border-bottom:1px solid var(--divider-color,#e0e0e0);";
+      "display:flex;align-items:center;gap:12px;padding:6px 6px 6px 12px;" +
+      "margin-bottom:8px;border:1px solid var(--divider-color);border-radius:8px;" +
+      "background:var(--card-background-color,var(--ha-card-background));box-sizing:border-box;";
     const ic = document.createElement("ha-icon");
     ic.icon = icon || "mdi:chart-line";
-    ic.style.color = "var(--secondary-text-color)";
+    ic.style.cssText = "color:var(--secondary-text-color);flex:0 0 auto;--mdc-icon-size:22px;";
     const lab = document.createElement("div");
     lab.style.cssText = "flex:1;min-width:0;";
     lab.innerHTML =
-      `<div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(text)}</div>` +
+      `<div style="font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(text)}</div>` +
       (subtitle
         ? `<div style="font-size:12px;color:var(--secondary-text-color);overflow:hidden;` +
           `text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(subtitle)}</div>`
@@ -683,7 +686,9 @@ class AlexListEditor extends HTMLElement {
   _sectionTitle(txt) {
     const d = document.createElement("div");
     d.textContent = txt;
-    d.style.cssText = "font-weight:600;margin:16px 0 4px;";
+    d.style.cssText =
+      "text-transform:uppercase;font-size:12px;font-weight:500;letter-spacing:.5px;" +
+      "color:var(--secondary-text-color);margin:18px 0 8px;";
     return d;
   }
 
@@ -1309,6 +1314,8 @@ class LightCardEditor extends HTMLElement {
   _iconButton(icon, title, onClick) {
     const btn = document.createElement("ha-icon-button");
     btn.title = title;
+    btn.style.cssText =
+      "--mdc-icon-button-size:40px;--mdc-icon-size:20px;color:var(--secondary-text-color);flex:0 0 auto;";
     const ic = document.createElement("ha-icon");
     ic.icon = icon;
     btn.appendChild(ic);
@@ -1336,15 +1343,16 @@ class LightCardEditor extends HTMLElement {
   _row(icon, text, subtitle, onEdit, onDelete) {
     const row = document.createElement("div");
     row.style.cssText =
-      "display:flex;align-items:center;gap:10px;padding:8px 4px;" +
-      "border-bottom:1px solid var(--divider-color,#e0e0e0);";
+      "display:flex;align-items:center;gap:12px;padding:6px 6px 6px 12px;" +
+      "margin-bottom:8px;border:1px solid var(--divider-color);border-radius:8px;" +
+      "background:var(--card-background-color,var(--ha-card-background));box-sizing:border-box;";
     const ic = document.createElement("ha-icon");
     ic.icon = icon || "mdi:lightbulb";
-    ic.style.color = "var(--secondary-text-color)";
+    ic.style.cssText = "color:var(--secondary-text-color);flex:0 0 auto;--mdc-icon-size:22px;";
     const lab = document.createElement("div");
     lab.style.cssText = "flex:1;min-width:0;";
     lab.innerHTML =
-      `<div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(text)}</div>` +
+      `<div style="font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(text)}</div>` +
       (subtitle
         ? `<div style="font-size:12px;color:var(--secondary-text-color);overflow:hidden;` +
           `text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(subtitle)}</div>`
@@ -1361,7 +1369,9 @@ class LightCardEditor extends HTMLElement {
   _sectionTitle(txt) {
     const d = document.createElement("div");
     d.textContent = txt;
-    d.style.cssText = "font-weight:600;margin:16px 0 4px;";
+    d.style.cssText =
+      "text-transform:uppercase;font-size:12px;font-weight:500;letter-spacing:.5px;" +
+      "color:var(--secondary-text-color);margin:18px 0 8px;";
     return d;
   }
 
