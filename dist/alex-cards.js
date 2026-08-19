@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.9.4";
+const ALEX_CARDS_VERSION = "0.9.5";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -1224,9 +1224,26 @@ customElements.define("light-card", LightCard);
  * input_boolean d'affichage) a sa propre liste de membres éditables.
  */
 const LIGHT_MAIN_SCHEMA = [
-  { name: "entity", selector: { entity: { domain: "light" } } },
-  { name: "name", selector: { text: {} } },
-  { name: "icon", selector: { icon: {} } },
+  {
+    name: "entity",
+    selector: {
+      entity: {
+        domain: "light",
+      },
+    },
+  },
+  {
+    name: "name",
+    selector: {
+      text: {},
+    },
+  },
+  {
+    name: "icon",
+    selector: {
+      icon: {},
+    },
+  },
 ];
 const LIGHT_ITEM_LABELS = Object.assign(
   {
@@ -1476,11 +1493,6 @@ class LightCardEditor extends HTMLElement {
     /*
      * ----------------------------------------------------------------------
      * Champs principaux
-     *
-     * Entité
-     * Nom
-     * Icône
-     * input_boolean d'affichage
      * ----------------------------------------------------------------------
      */
 
@@ -1505,7 +1517,9 @@ class LightCardEditor extends HTMLElement {
     );
 
     /*
+     * ----------------------------------------------------------------------
      * Groupe
+     * ----------------------------------------------------------------------
      */
 
     this.appendChild(
@@ -1513,7 +1527,9 @@ class LightCardEditor extends HTMLElement {
     );
 
     /*
+     * ----------------------------------------------------------------------
      * Customisation
+     * ----------------------------------------------------------------------
      */
 
     this.appendChild(
@@ -1521,13 +1537,22 @@ class LightCardEditor extends HTMLElement {
     );
 
     /*
+     * ----------------------------------------------------------------------
      * Interactions
+     * ----------------------------------------------------------------------
      */
 
     this.appendChild(
       this._createInteractionsPanel(i, l)
     );
   }
+
+
+  /*
+   * ==========================================================================
+   * Panneau générique
+   * ==========================================================================
+   */
 
   _createSectionPanel(title, iconName, content) {
     const panel = document.createElement("ha-expansion-panel");
@@ -1571,13 +1596,18 @@ class LightCardEditor extends HTMLElement {
     return panel;
   }
 
+
+  /*
+   * ==========================================================================
+   * Groupe
+   * ==========================================================================
+   */
+
   _groupPanel(i, l) {
     const content = document.createElement("div");
 
     /*
-     * ----------------------------------------------------------------------
      * Input_boolean d'affichage
-     * ----------------------------------------------------------------------
      */
 
     content.appendChild(
@@ -1609,9 +1639,7 @@ class LightCardEditor extends HTMLElement {
     );
 
     /*
-     * ----------------------------------------------------------------------
      * Membres du groupe
-     * ----------------------------------------------------------------------
      */
 
     content.appendChild(
@@ -1657,100 +1685,8 @@ class LightCardEditor extends HTMLElement {
       );
     });
 
-    _createCustomisationPanel(i, l) {
-      const content = document.createElement("div");
-
-      content.style.cssText = `
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
-      `;
-
-      content.append(
-        this._createColorRow(
-          "Couleur",
-          "color",
-          l.color,
-          (value) =>
-            this._update(
-              (c) =>
-                (c.lights[i].color = value)
-            )
-        ),
-
-        this._createColorRow(
-          "Fond du sous-menu",
-          "submenu_background",
-          l.submenu_background,
-          (value) =>
-            this._update(
-              (c) =>
-                (c.lights[i].submenu_background = value)
-            )
-        )
-      );
-
-      return this._createSectionPanel(
-        "Customisation",
-        "mdi:palette",
-        content
-      );
-    }
-
-    _createInteractionsPanel(i, l) {
-      const form = document.createElement("ha-form");
-
-      form.schema = [
-        {
-          name: "interactions",
-          type: "expandable",
-          flatten: true,
-          title: "Actions",
-          icon: "mdi:gesture-tap",
-          schema: ACTION_SCHEMA,
-        },
-      ];
-
-      form.data = {
-        interactions: {
-          tap_action: l.tap_action,
-          hold_action: l.hold_action,
-          double_tap_action: l.double_tap_action,
-        },
-      };
-
-      if (this._hass) {
-        form.hass = this._hass;
-      }
-
-      form.addEventListener("value-changed", (ev) => {
-        ev.stopPropagation();
-
-        const value = ev.detail.value || {};
-        const actions = value.interactions || {};
-
-        this._update(
-          (c) =>
-            (c.lights[i] = {
-              ...c.lights[i],
-              ...actions,
-            })
-        );
-      });
-
-      this._forms.push(form);
-
-      return this._createSectionPanel(
-        "Interactions",
-        "mdi:gesture-tap",
-        form
-      );
-    }
-
     /*
-     * ----------------------------------------------------------------------
      * Ajouter un membre
-     * ----------------------------------------------------------------------
      */
 
     content.appendChild(
@@ -1784,6 +1720,108 @@ class LightCardEditor extends HTMLElement {
       "Groupe",
       "mdi:account-group",
       content
+    );
+  }
+
+
+  /*
+   * ==========================================================================
+   * Customisation
+   * ==========================================================================
+   */
+
+  _createCustomisationPanel(i, l) {
+    const content = document.createElement("div");
+
+    content.style.cssText = `
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    `;
+
+    content.append(
+      this._createColorRow(
+        "Couleur",
+        "color",
+        l.color,
+        (value) =>
+          this._update(
+            (c) =>
+              (c.lights[i].color = value)
+          )
+      ),
+
+      this._createColorRow(
+        "Fond du sous-menu",
+        "submenu_background",
+        l.submenu_background,
+        (value) =>
+          this._update(
+            (c) =>
+              (c.lights[i].submenu_background = value)
+          )
+      )
+    );
+
+    return this._createSectionPanel(
+      "Customisation",
+      "mdi:palette",
+      content
+    );
+  }
+
+
+  /*
+   * ==========================================================================
+   * Interactions
+   * ==========================================================================
+   */
+
+  _createInteractionsPanel(i, l) {
+    const form = document.createElement("ha-form");
+
+    /*
+     * IMPORTANT :
+     * Ici on utilise directement ACTION_SCHEMA.
+     *
+     * On ne remet PAS INTERACTIONS_FIELD / un expandable ici,
+     * sinon on aurait un deuxième menu "Interactions" à l'intérieur
+     * du panneau "Interactions".
+     */
+
+    form.schema = ACTION_SCHEMA;
+
+    form.data = {
+      tap_action: l.tap_action,
+      hold_action: l.hold_action,
+      double_tap_action: l.double_tap_action,
+    };
+
+    form.computeLabel = (schema) =>
+      ACTION_LABELS[schema.name] || schema.name;
+
+    if (this._hass) {
+      form.hass = this._hass;
+    }
+
+    form.addEventListener("value-changed", (ev) => {
+      ev.stopPropagation();
+
+      this._update(
+        (c) =>
+          (c.lights[i] = {
+            ...c.lights[i],
+            ...ev.detail.value,
+          })
+      );
+    });
+
+    this._forms.push(form);
+
+    return this._createSectionPanel(
+      "Interactions",
+      "mdi:gesture-tap",
+      form
     );
   }
 
