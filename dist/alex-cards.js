@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.9.2";
+const ALEX_CARDS_VERSION = "0.9.3";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -1227,7 +1227,6 @@ const LIGHT_MAIN_SCHEMA = [
   { name: "entity", selector: { entity: { domain: "light" } } },
   { name: "name", selector: { text: {} } },
   { name: "icon", selector: { icon: {} } },
-  { name: "expand_toggle", selector: { entity: { domain: "input_boolean" } } },
 ];
 const LIGHT_EXTRAS_SCHEMA = [
   {
@@ -1506,7 +1505,6 @@ class LightCardEditor extends HTMLElement {
           entity: l.entity,
           name: l.name,
           icon: l.icon,
-          expand_toggle: l.expand_toggle,
         },
         LIGHT_ITEM_LABELS,
         (v) =>
@@ -1520,80 +1518,7 @@ class LightCardEditor extends HTMLElement {
       )
     );
 
-    /*
-     * ----------------------------------------------------------------------
-     * Membres du groupe
-     *
-     * Placé immédiatement sous le input_boolean d'affichage.
-     * ----------------------------------------------------------------------
-     */
-
-    this.appendChild(
-      this._sectionTitle("Membres du groupe")
-    );
-
-    const members = l.members || [];
-
-    if (members.length && !l.expand_toggle) {
-      const hint = document.createElement("div");
-
-      hint.textContent =
-        "⚠ Renseigne un input_boolean d'affichage ci-dessus pour que le groupe se déploie.";
-
-      hint.style.cssText =
-        "font-size:12px;color:var(--warning-color,#f4a000);margin:4px 0;";
-
-      this.appendChild(hint);
-    }
-
-    members.forEach((m, j) => {
-      this.appendChild(
-        this._row(
-          m.icon,
-          m.name || m.entity || "(vide)",
-          m.entity,
-          () => {
-            this._path = [i, j];
-            this._render();
-          },
-          () => {
-            this._update(
-              (c) =>
-                c.lights[i].members.splice(j, 1)
-            );
-
-            this._render();
-          }
-        )
-      );
-    });
-
-    this.appendChild(
-      this._addRow(
-        "light",
-        "Ajouter un membre",
-        (ent) => {
-          let idx;
-
-          this._update((c) => {
-            const li = c.lights[i];
-
-            li.members = li.members || [];
-
-            li.members.push({
-              entity: ent,
-              name: "",
-              icon: "mdi:lightbulb",
-            });
-
-            idx = li.members.length - 1;
-          });
-
-          this._path = [i, idx];
-          this._render();
-        }
-      )
-    );
+    this.appendChild(this._groupPanel(i, l));
 
     this.appendChild(
       this._form(
@@ -1616,6 +1541,78 @@ class LightCardEditor extends HTMLElement {
           )
       )
     );
+  }
+
+  _groupPanel(i, l) {
+    const panel = document.createElement("ha-expansion-panel");
+    panel.outlined = true;
+    panel.header = "Groupe";
+    panel.style.cssText = "display:block;margin:8px 0;";
+
+    const licon = document.createElement("ha-icon");
+    licon.icon = "mdi:account-group";
+    licon.setAttribute("slot", "leading-icon");
+    licon.style.cssText = "--mdc-icon-size:20px;color:var(--secondary-text-color);";
+    panel.appendChild(licon);
+
+    const content = document.createElement("div");
+    content.style.cssText = "padding:4px 8px 8px;";
+
+    // Affichage groupe (input_boolean)
+    content.appendChild(
+      this._form(
+        [{ name: "expand_toggle", selector: { entity: { domain: "input_boolean" } } }],
+        { expand_toggle: l.expand_toggle },
+        { expand_toggle: "Affichage groupe" },
+        (v) => this._update((c) => (c.lights[i].expand_toggle = v.expand_toggle))
+      )
+    );
+
+    content.appendChild(this._sectionTitle("Membres du groupe"));
+
+    const members = l.members || [];
+    if (members.length && !l.expand_toggle) {
+      const hint = document.createElement("div");
+      hint.textContent =
+        "⚠ Renseigne un « Affichage groupe » ci-dessus pour que le groupe se déploie.";
+      hint.style.cssText = "font-size:12px;color:var(--warning-color,#f4a000);margin:4px 0;";
+      content.appendChild(hint);
+    }
+
+    members.forEach((m, j) => {
+      content.appendChild(
+        this._row(
+          m.icon,
+          m.name || m.entity || "(vide)",
+          m.entity,
+          () => {
+            this._path = [i, j];
+            this._render();
+          },
+          () => {
+            this._update((c) => c.lights[i].members.splice(j, 1));
+            this._render();
+          }
+        )
+      );
+    });
+
+    content.appendChild(
+      this._addRow("light", "Ajouter un membre", (ent) => {
+        let idx;
+        this._update((c) => {
+          const li = c.lights[i];
+          li.members = li.members || [];
+          li.members.push({ entity: ent, name: "", icon: "mdi:lightbulb" });
+          idx = li.members.length - 1;
+        });
+        this._path = [i, idx];
+        this._render();
+      })
+    );
+
+    panel.appendChild(content);
+    return panel;
   }
 
   _renderMember(i, j) {
