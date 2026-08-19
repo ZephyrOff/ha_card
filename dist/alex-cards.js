@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.9.5";
+const ALEX_CARDS_VERSION = "0.9.6";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -1224,26 +1224,24 @@ customElements.define("light-card", LightCard);
  * input_boolean d'affichage) a sa propre liste de membres éditables.
  */
 const LIGHT_MAIN_SCHEMA = [
+  { name: "entity", selector: { entity: { domain: "light" } } },
+  { name: "name", selector: { text: {} } },
+  { name: "icon", selector: { icon: {} } },
+  { name: "expand_toggle", selector: { entity: { domain: "input_boolean" } } },
+];
+const LIGHT_EXTRAS_SCHEMA = [
   {
-    name: "entity",
-    selector: {
-      entity: {
-        domain: "light",
-      },
-    },
+    name: "customisation",
+    type: "expandable",
+    flatten: true,
+    title: "Customisation",
+    icon: "mdi:palette",
+    schema: [
+      { name: "color", selector: { color_rgb: {} } },
+      { name: "submenu_background", selector: { color_rgb: {} } },
+    ],
   },
-  {
-    name: "name",
-    selector: {
-      text: {},
-    },
-  },
-  {
-    name: "icon",
-    selector: {
-      icon: {},
-    },
-  },
+  INTERACTIONS_FIELD,
 ];
 const LIGHT_ITEM_LABELS = Object.assign(
   {
@@ -1276,213 +1274,547 @@ const MEMBER_ITEM_SCHEMA = [
   },
 ];
 
+
 class LightCardEditor extends HTMLElement {
   setConfig(config) {
     const incoming = JSON.stringify(config || {});
+
     // Garde d'écho : ignore le setConfig renvoyé par HA après notre propre édition
-    // (sinon re-render => perte de focus en cours de saisie).
     if (incoming === this._configStr) return;
+
     this._config = JSON.parse(incoming);
-    if (!Array.isArray(this._config.lights)) this._config.lights = [];
+
+    if (!Array.isArray(this._config.lights)) {
+      this._config.lights = [];
+    }
+
     this._configStr = incoming;
-    if (!Array.isArray(this._path)) this._path = [];
+
+    if (!Array.isArray(this._path)) {
+      this._path = [];
+    }
+
     this._render();
   }
 
   set hass(hass) {
     this._hass = hass;
-    (this._forms || []).forEach((f) => (f.hass = hass));
+
+    (this._forms || []).forEach(
+      (f) => (f.hass = hass)
+    );
   }
 
   _emit() {
     this._configStr = JSON.stringify(this._config);
+
     this.dispatchEvent(
       new CustomEvent("config-changed", {
-        detail: { config: this._config },
+        detail: {
+          config: this._config,
+        },
         bubbles: true,
         composed: true,
       })
     );
   }
 
-  // Applique une mutation sur une copie de la config puis notifie HA.
   _update(mutator) {
-    const cfg = JSON.parse(JSON.stringify(this._config));
+    const cfg = JSON.parse(
+      JSON.stringify(this._config)
+    );
+
     mutator(cfg);
+
     this._config = cfg;
+
     this._emit();
   }
 
-  /* ---- petits composants DOM ---- */
+  /* -----------------------------------------------------------------------
+   * Petits composants
+   * --------------------------------------------------------------------- */
 
   _iconButton(icon, title, onClick) {
-    const btn = document.createElement("ha-icon-button");
+    const btn = document.createElement(
+      "ha-icon-button"
+    );
+
     btn.title = title;
-    btn.style.cssText =
-      "--mdc-icon-button-size:40px;--mdc-icon-size:20px;color:var(--secondary-text-color);flex:0 0 auto;";
+
+    btn.style.cssText = `
+      --mdc-icon-button-size: 40px;
+      --mdc-icon-size: 20px;
+      color: var(--secondary-text-color);
+      flex: 0 0 auto;
+    `;
+
     const ic = document.createElement("ha-icon");
+
     ic.icon = icon;
+
     btn.appendChild(ic);
+
     btn.addEventListener("click", (e) => {
       e.stopPropagation();
       onClick();
     });
+
     return btn;
   }
 
   _form(schema, data, labels, onChange) {
     const f = document.createElement("ha-form");
+
     f.schema = schema;
     f.data = data || {};
-    f.computeLabel = (s) => (labels && labels[s.name]) || s.name;
-    if (this._hass) f.hass = this._hass;
+
+    f.computeLabel = (s) =>
+      (labels && labels[s.name]) || s.name;
+
+    if (this._hass) {
+      f.hass = this._hass;
+    }
+
     f.addEventListener("value-changed", (ev) => {
       ev.stopPropagation();
       onChange(ev.detail.value);
     });
+
     this._forms.push(f);
+
     return f;
   }
 
   _row(icon, text, subtitle, onEdit, onDelete) {
     const row = document.createElement("div");
+
     row.style.cssText =
-      "display:flex;align-items:center;gap:12px;padding:6px 6px 6px 12px;" +
-      "margin-bottom:8px;border:1px solid var(--divider-color);border-radius:8px;" +
-      "background:var(--card-background-color,var(--ha-card-background));box-sizing:border-box;";
+      "display:flex;align-items:center;gap:10px;padding:8px 4px;" +
+      "border-bottom:1px solid var(--divider-color,#e0e0e0);";
+
     const ic = document.createElement("ha-icon");
+
     ic.icon = icon || "mdi:lightbulb";
-    ic.style.cssText = "color:var(--secondary-text-color);flex:0 0 auto;--mdc-icon-size:22px;";
+    ic.style.color =
+      "var(--secondary-text-color)";
+
     const lab = document.createElement("div");
-    lab.style.cssText = "flex:1;min-width:0;";
+
+    lab.style.cssText =
+      "flex:1;min-width:0;";
+
     lab.innerHTML =
-      `<div style="font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(text)}</div>` +
+      `<div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(
+        text
+      )}</div>` +
       (subtitle
-        ? `<div style="font-size:12px;color:var(--secondary-text-color);overflow:hidden;` +
-          `text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(subtitle)}</div>`
+        ? `<div style="font-size:12px;color:var(--secondary-text-color);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(
+            subtitle
+          )}</div>`
         : "");
+
     row.append(
       ic,
       lab,
-      this._iconButton("mdi:pencil", "Éditer", onEdit),
-      this._iconButton("mdi:delete", "Supprimer", onDelete)
+      this._iconButton(
+        "mdi:pencil",
+        "Éditer",
+        onEdit
+      ),
+      this._iconButton(
+        "mdi:delete",
+        "Supprimer",
+        onDelete
+      )
     );
+
     return row;
   }
 
   _sectionTitle(txt) {
     const d = document.createElement("div");
+
     d.textContent = txt;
+
     d.style.cssText =
-      "text-transform:uppercase;font-size:12px;font-weight:500;letter-spacing:.5px;" +
-      "color:var(--secondary-text-color);margin:18px 0 8px;";
+      "text-transform:uppercase;font-size:12px;font-weight:500;" +
+      "letter-spacing:.5px;color:var(--secondary-text-color);" +
+      "margin:18px 0 8px;";
+
     return d;
   }
 
   _backHeader(title, onBack) {
     const h = document.createElement("div");
-    h.style.cssText = "display:flex;align-items:center;gap:8px;margin-bottom:8px;";
-    h.appendChild(this._iconButton("mdi:arrow-left", "Retour", onBack));
+
+    h.style.cssText =
+      "display:flex;align-items:center;gap:8px;margin-bottom:8px;";
+
+    h.appendChild(
+      this._iconButton(
+        "mdi:arrow-left",
+        "Retour",
+        onBack
+      )
+    );
+
     const t = document.createElement("div");
+
     t.textContent = title;
-    t.style.cssText = "font-weight:600;";
+
+    t.style.cssText =
+      "font-weight:600;";
+
     h.appendChild(t);
+
     return h;
   }
 
   _addRow(domain, label, onPick) {
     return this._form(
-      [{ name: "entity", selector: { entity: { domain } } }],
+      [
+        {
+          name: "entity",
+          selector: {
+            entity: {
+              domain,
+            },
+          },
+        },
+      ],
       {},
-      { entity: label },
+      {
+        entity: label,
+      },
       (v) => {
-        if (v && v.entity) onPick(v.entity);
+        if (v && v.entity) {
+          onPick(v.entity);
+        }
       }
     );
   }
 
-  /* ---- vues ---- */
+  /* -----------------------------------------------------------------------
+   * Color picker
+   * --------------------------------------------------------------------- */
+
+  _createColorRow(
+    label,
+    configKey,
+    value,
+    onChange
+  ) {
+    const row = document.createElement("div");
+
+    row.style.cssText = `
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      width: 100%;
+      min-height: 48px;
+      box-sizing: border-box;
+      padding: 4px 0;
+    `;
+
+    const text = document.createElement("div");
+
+    text.textContent = label;
+
+    text.style.cssText = `
+      flex: 1;
+      min-width: 0;
+      font-size: 14px;
+      color: var(--primary-text-color);
+    `;
+
+    const picker = document.createElement(
+      "ha-selector"
+    );
+
+    picker.hass = this._hass;
+
+    picker.selector = {
+      color_rgb: {},
+    };
+
+    picker.value = value || undefined;
+
+    picker.style.cssText = `
+      flex: 0 0 auto;
+      width: 180px;
+    `;
+
+    picker.addEventListener(
+      "value-changed",
+      (ev) => {
+        ev.stopPropagation();
+        onChange(ev.detail.value);
+      }
+    );
+
+    row.append(
+      text,
+      picker
+    );
+
+    return row;
+  }
+
+  /* -----------------------------------------------------------------------
+   * Panneau commun
+   *
+   * Les trois sections utilisent EXACTEMENT ce composant.
+   * --------------------------------------------------------------------- */
+
+  _createSectionPanel(
+    title,
+    iconName,
+    content
+  ) {
+    const panel = document.createElement(
+      "ha-expansion-panel"
+    );
+
+    panel.outlined = true;
+
+    /*
+     * Important :
+     * même marge pour les 3 panneaux.
+     */
+    panel.style.cssText = `
+      display: block;
+      width: 100%;
+      box-sizing: border-box;
+      margin: 8px 0;
+    `;
+
+    const icon = document.createElement(
+      "ha-icon"
+    );
+
+    icon.icon = iconName;
+
+    icon.setAttribute(
+      "slot",
+      "leading-icon"
+    );
+
+    icon.style.cssText = `
+      --mdc-icon-size: 20px;
+      color: var(--secondary-text-color);
+    `;
+
+    panel.appendChild(icon);
+
+    /*
+     * Le header natif est utilisé par ha-expansion-panel.
+     */
+    panel.header = title;
+
+    /*
+     * Contenu
+     */
+    const body = document.createElement("div");
+
+    body.style.cssText = `
+      width: 100%;
+      box-sizing: border-box;
+      padding: 4px 12px 10px;
+    `;
+
+    body.appendChild(content);
+
+    panel.appendChild(body);
+
+    return panel;
+  }
+
+  /* -----------------------------------------------------------------------
+   * Vues
+   * --------------------------------------------------------------------- */
 
   _validPath() {
     const p = this._path || [];
-    const lights = this._config.lights || [];
-    if (p.length >= 1 && !lights[p[0]]) return [];
-    if (p.length >= 2) {
-      const m = lights[p[0]] && lights[p[0]].members;
-      if (!m || !m[p[1]]) return [p[0]];
+
+    const lights =
+      this._config.lights || [];
+
+    if (
+      p.length >= 1 &&
+      !lights[p[0]]
+    ) {
+      return [];
     }
+
+    if (p.length >= 2) {
+      const members =
+        lights[p[0]] &&
+        lights[p[0]].members;
+
+      if (
+        !members ||
+        !members[p[1]]
+      ) {
+        return [p[0]];
+      }
+    }
+
     return p;
   }
 
   _render() {
     this._forms = [];
+
     this.innerHTML = "";
+
     const p = this._validPath();
-    if (p.length === 0) this._renderRoot();
-    else if (p.length === 1) this._renderLight(p[0]);
-    else this._renderMember(p[0], p[1]);
-    if (this._hass) this._forms.forEach((f) => (f.hass = this._hass));
+
+    if (p.length === 0) {
+      this._renderRoot();
+    } else if (p.length === 1) {
+      this._renderLight(p[0]);
+    } else {
+      this._renderMember(
+        p[0],
+        p[1]
+      );
+    }
+
+    if (this._hass) {
+      this._forms.forEach(
+        (f) => (f.hass = this._hass)
+      );
+    }
   }
+
+  /* -----------------------------------------------------------------------
+   * Vue racine
+   * --------------------------------------------------------------------- */
 
   _renderRoot() {
     const cfg = this._config;
 
-    this.appendChild(this._sectionTitle("Ligne « All » (optionnel)"));
     this.appendChild(
-      this._form(
-        [{ name: "all_entity", selector: { entity: { domain: "light" } } }],
-        { all_entity: cfg.all_entity || "" },
-        { all_entity: "Entité groupe (All)" },
-        (v) => this._update((c) => (c.all_entity = v.all_entity))
+      this._sectionTitle(
+        "Ligne « All » (optionnel)"
       )
     );
 
-    this.appendChild(this._sectionTitle("Lumières"));
-    (cfg.lights || []).forEach((l, i) => {
-      const isGroup = l.members && l.members.length;
-      this.appendChild(
-        this._row(
-          l.icon,
-          l.name || l.entity || "(vide)",
-          isGroup ? `groupe · ${l.members.length} membre(s)` : l.entity,
-          () => {
-            this._path = [i];
-            this._render();
+    this.appendChild(
+      this._form(
+        [
+          {
+            name: "all_entity",
+            selector: {
+              entity: {
+                domain: "light",
+              },
+            },
           },
-          () => {
-            this._update((c) => c.lights.splice(i, 1));
-            this._render();
-          }
-        )
-      );
-    });
+        ],
+        {
+          all_entity:
+            cfg.all_entity || "",
+        },
+        {
+          all_entity:
+            "Entité groupe (All)",
+        },
+        (v) =>
+          this._update(
+            (c) =>
+              (c.all_entity =
+                v.all_entity)
+          )
+      )
+    );
 
     this.appendChild(
-      this._addRow("light", "Ajouter une lumière", (ent) => {
-        let idx;
-        this._update((c) => {
-          c.lights = c.lights || [];
-          c.lights.push({ entity: ent, name: "", icon: "mdi:lightbulb" });
-          idx = c.lights.length - 1;
-        });
-        this._path = [idx];
-        this._render();
-      })
+      this._sectionTitle(
+        "Lumières"
+      )
+    );
+
+    (cfg.lights || []).forEach(
+      (l, i) => {
+        const isGroup =
+          l.members &&
+          l.members.length;
+
+        this.appendChild(
+          this._row(
+            l.icon,
+            l.name ||
+              l.entity ||
+              "(vide)",
+            isGroup
+              ? `groupe · ${l.members.length} membre(s)`
+              : l.entity,
+            () => {
+              this._path = [i];
+              this._render();
+            },
+            () => {
+              this._update(
+                (c) =>
+                  c.lights.splice(
+                    i,
+                    1
+                  )
+              );
+
+              this._render();
+            }
+          )
+        );
+      }
+    );
+
+    this.appendChild(
+      this._addRow(
+        "light",
+        "Ajouter une lumière",
+        (ent) => {
+          let idx;
+
+          this._update((c) => {
+            c.lights =
+              c.lights || [];
+
+            c.lights.push({
+              entity: ent,
+              name: "",
+              icon: "mdi:lightbulb",
+              members: [],
+            });
+
+            idx =
+              c.lights.length - 1;
+          });
+
+          this._path = [idx];
+
+          this._render();
+        }
+      )
     );
   }
 
-  _renderLight(i) {
-    const l = this._config.lights[i] || {};
+  /* -----------------------------------------------------------------------
+   * Vue d'une lumière
+   * --------------------------------------------------------------------- */
 
-    /*
-     * ----------------------------------------------------------------------
-     * Retour
-     * ----------------------------------------------------------------------
-     */
+  _renderLight(i) {
+    const l =
+      this._config.lights[i] || {};
 
     this.appendChild(
       this._backHeader(
-        l.name || l.entity || "Lumière",
+        l.name ||
+          l.entity ||
+          "Lumière",
         () => {
           this._path = [];
           this._render();
@@ -1491,11 +1823,11 @@ class LightCardEditor extends HTMLElement {
     );
 
     /*
-     * ----------------------------------------------------------------------
      * Champs principaux
-     * ----------------------------------------------------------------------
+     *
+     * IMPORTANT :
+     * les couleurs et interactions ne sont plus ici.
      */
-
     this.appendChild(
       this._form(
         LIGHT_MAIN_SCHEMA,
@@ -1517,99 +1849,47 @@ class LightCardEditor extends HTMLElement {
     );
 
     /*
-     * ----------------------------------------------------------------------
      * Groupe
-     * ----------------------------------------------------------------------
      */
-
     this.appendChild(
-      this._groupPanel(i, l)
+      this._createGroupPanel(
+        i,
+        l
+      )
     );
 
     /*
-     * ----------------------------------------------------------------------
      * Customisation
-     * ----------------------------------------------------------------------
      */
-
     this.appendChild(
-      this._createCustomisationPanel(i, l)
+      this._createCustomisationPanel(
+        i,
+        l
+      )
     );
 
     /*
-     * ----------------------------------------------------------------------
      * Interactions
-     * ----------------------------------------------------------------------
      */
-
     this.appendChild(
-      this._createInteractionsPanel(i, l)
+      this._createInteractionsPanel(
+        i,
+        l
+      )
     );
   }
 
-
-  /*
-   * ==========================================================================
-   * Panneau générique
-   * ==========================================================================
-   */
-
-  _createSectionPanel(title, iconName, content) {
-    const panel = document.createElement("ha-expansion-panel");
-
-    panel.outlined = true;
-    panel.header = title;
-
-    panel.style.cssText = `
-      display: block;
-      width: 100%;
-      box-sizing: border-box;
-      margin: 8px 0;
-      border-radius: 12px;
-      overflow: hidden;
-    `;
-
-    const icon = document.createElement("ha-icon");
-
-    icon.icon = iconName;
-    icon.setAttribute("slot", "leading-icon");
-
-    icon.style.cssText = `
-      --mdc-icon-size: 20px;
-      color: var(--secondary-text-color);
-    `;
-
-    panel.appendChild(icon);
-
-    const body = document.createElement("div");
-
-    body.style.cssText = `
-      width: 100%;
-      box-sizing: border-box;
-      padding: 4px 12px 10px;
-    `;
-
-    body.appendChild(content);
-
-    panel.appendChild(body);
-
-    return panel;
-  }
-
-
-  /*
-   * ==========================================================================
+  /* -----------------------------------------------------------------------
    * Groupe
-   * ==========================================================================
-   */
+   * --------------------------------------------------------------------- */
 
-  _groupPanel(i, l) {
-    const content = document.createElement("div");
+  _createGroupPanel(i, l) {
+    const content =
+      document.createElement("div");
 
     /*
      * Input_boolean d'affichage
      */
-
     content.appendChild(
       this._form(
         [
@@ -1617,13 +1897,15 @@ class LightCardEditor extends HTMLElement {
             name: "expand_toggle",
             selector: {
               entity: {
-                domain: "input_boolean",
+                domain:
+                  "input_boolean",
               },
             },
           },
         ],
         {
-          expand_toggle: l.expand_toggle,
+          expand_toggle:
+            l.expand_toggle,
         },
         {
           expand_toggle:
@@ -1639,17 +1921,25 @@ class LightCardEditor extends HTMLElement {
     );
 
     /*
-     * Membres du groupe
+     * Membres
      */
-
     content.appendChild(
-      this._sectionTitle("Membres du groupe")
+      this._sectionTitle(
+        "Membres du groupe"
+      )
     );
 
-    const members = l.members || [];
+    const members =
+      l.members || [];
 
-    if (members.length && !l.expand_toggle) {
-      const hint = document.createElement("div");
+    if (
+      members.length &&
+      !l.expand_toggle
+    ) {
+      const hint =
+        document.createElement(
+          "div"
+        );
 
       hint.textContent =
         "⚠ Renseigne un input_boolean d'affichage ci-dessus pour que le groupe se déploie.";
@@ -1663,32 +1953,42 @@ class LightCardEditor extends HTMLElement {
       content.appendChild(hint);
     }
 
-    members.forEach((m, j) => {
-      content.appendChild(
-        this._row(
-          m.icon,
-          m.name || m.entity || "(vide)",
-          m.entity,
-          () => {
-            this._path = [i, j];
-            this._render();
-          },
-          () => {
-            this._update(
-              (c) =>
-                c.lights[i].members.splice(j, 1)
-            );
+    members.forEach(
+      (m, j) => {
+        content.appendChild(
+          this._row(
+            m.icon,
+            m.name ||
+              m.entity ||
+              "(vide)",
+            m.entity,
+            () => {
+              this._path = [
+                i,
+                j,
+              ];
 
-            this._render();
-          }
-        )
-      );
-    });
+              this._render();
+            },
+            () => {
+              this._update(
+                (c) =>
+                  c.lights[i].members.splice(
+                    j,
+                    1
+                  )
+              );
+
+              this._render();
+            }
+          )
+        );
+      }
+    );
 
     /*
      * Ajouter un membre
      */
-
     content.appendChild(
       this._addRow(
         "light",
@@ -1697,9 +1997,11 @@ class LightCardEditor extends HTMLElement {
           let idx;
 
           this._update((c) => {
-            const li = c.lights[i];
+            const li =
+              c.lights[i];
 
-            li.members = li.members || [];
+            li.members =
+              li.members || [];
 
             li.members.push({
               entity: ent,
@@ -1707,10 +2009,15 @@ class LightCardEditor extends HTMLElement {
               icon: "mdi:lightbulb",
             });
 
-            idx = li.members.length - 1;
+            idx =
+              li.members.length - 1;
           });
 
-          this._path = [i, idx];
+          this._path = [
+            i,
+            idx,
+          ];
+
           this._render();
         }
       )
@@ -1723,20 +2030,21 @@ class LightCardEditor extends HTMLElement {
     );
   }
 
-
-  /*
-   * ==========================================================================
+  /* -----------------------------------------------------------------------
    * Customisation
-   * ==========================================================================
-   */
+   * --------------------------------------------------------------------- */
 
-  _createCustomisationPanel(i, l) {
-    const content = document.createElement("div");
+  _createCustomisationPanel(
+    i,
+    l
+  ) {
+    const content =
+      document.createElement("div");
 
     content.style.cssText = `
       display: flex;
       flex-direction: column;
-      gap: 4px;
+      width: 100%;
     `;
 
     content.append(
@@ -1747,7 +2055,8 @@ class LightCardEditor extends HTMLElement {
         (value) =>
           this._update(
             (c) =>
-              (c.lights[i].color = value)
+              (c.lights[i].color =
+                value)
           )
       ),
 
@@ -1758,7 +2067,8 @@ class LightCardEditor extends HTMLElement {
         (value) =>
           this._update(
             (c) =>
-              (c.lights[i].submenu_background = value)
+              (c.lights[i].submenu_background =
+                value)
           )
       )
     );
@@ -1770,51 +2080,88 @@ class LightCardEditor extends HTMLElement {
     );
   }
 
-
-  /*
-   * ==========================================================================
+  /* -----------------------------------------------------------------------
    * Interactions
-   * ==========================================================================
-   */
+   * --------------------------------------------------------------------- */
 
-  _createInteractionsPanel(i, l) {
-    const form = document.createElement("ha-form");
+  _createInteractionsPanel(
+    i,
+    l
+  ) {
+    const form =
+      document.createElement(
+        "ha-form"
+      );
 
     /*
-     * IMPORTANT :
-     * Ici on utilise directement ACTION_SCHEMA.
+     * ACTION_SCHEMA de ta version contient déjà
+     * le expandable "Interactions".
      *
-     * On ne remet PAS INTERACTIONS_FIELD / un expandable ici,
-     * sinon on aurait un deuxième menu "Interactions" à l'intérieur
-     * du panneau "Interactions".
+     * Ici on récupère UNIQUEMENT son contenu.
+     *
+     * Cela évite :
+     *
+     * Interactions
+     *   └── Interactions
      */
+    const actionSchema =
+      Array.isArray(
+        ACTION_SCHEMA
+      )
+        ? ACTION_SCHEMA
+        : [];
 
-    form.schema = ACTION_SCHEMA;
+    const interactionField =
+      actionSchema.find(
+        (schema) =>
+          schema.name ===
+          "interactions"
+      );
+
+    form.schema =
+      interactionField &&
+      Array.isArray(
+        interactionField.schema
+      )
+        ? interactionField.schema
+        : actionSchema;
 
     form.data = {
-      tap_action: l.tap_action,
-      hold_action: l.hold_action,
-      double_tap_action: l.double_tap_action,
+      tap_action:
+        l.tap_action,
+      hold_action:
+        l.hold_action,
+      double_tap_action:
+        l.double_tap_action,
     };
 
-    form.computeLabel = (schema) =>
-      ACTION_LABELS[schema.name] || schema.name;
+    form.computeLabel = (
+      schema
+    ) =>
+      ACTION_LABELS[
+        schema.name
+      ] ||
+      schema.name;
 
     if (this._hass) {
-      form.hass = this._hass;
+      form.hass =
+        this._hass;
     }
 
-    form.addEventListener("value-changed", (ev) => {
-      ev.stopPropagation();
+    form.addEventListener(
+      "value-changed",
+      (ev) => {
+        ev.stopPropagation();
 
-      this._update(
-        (c) =>
-          (c.lights[i] = {
-            ...c.lights[i],
-            ...ev.detail.value,
-          })
-      );
-    });
+        this._update(
+          (c) =>
+            (c.lights[i] = {
+              ...c.lights[i],
+              ...ev.detail.value,
+            })
+        );
+      }
+    );
 
     this._forms.push(form);
 
@@ -1825,14 +2172,25 @@ class LightCardEditor extends HTMLElement {
     );
   }
 
+  /* -----------------------------------------------------------------------
+   * Vue membre
+   * --------------------------------------------------------------------- */
+
   _renderMember(i, j) {
-    const m = (this._config.lights[i].members || [])[j] || {};
+    const m =
+      (this._config.lights[i]
+        .members || [])[j] || {};
 
     this.appendChild(
-      this._backHeader(m.name || m.entity || "Membre", () => {
-        this._path = [i];
-        this._render();
-      })
+      this._backHeader(
+        m.name ||
+          m.entity ||
+          "Membre",
+        () => {
+          this._path = [i];
+          this._render();
+        }
+      )
     );
 
     this.appendChild(
@@ -1849,7 +2207,8 @@ class LightCardEditor extends HTMLElement {
           this._update(
             (c) =>
               (c.lights[i].members[j] = {
-                ...c.lights[i].members[j],
+                ...c.lights[i]
+                  .members[j],
                 ...v,
               })
           )
