@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.9.0";
+const ALEX_CARDS_VERSION = "0.9.1";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -631,27 +631,7 @@ class AlexListEditor extends HTMLElement {
     return btn;
   }
 
-  _sectionSpacing(element, top = 8, bottom = 8) {
-    element.style.marginTop = `${top}px`;
-    element.style.marginBottom = `${bottom}px`;
-    element.style.width = "100%";
-    element.style.boxSizing = "border-box";
-
-    return element;
-  }
-
   _form(schema, data, labels, onChange) {
-    const wrapper = document.createElement("div");
-
-    wrapper.className = "alex-form-section";
-
-    wrapper.style.cssText = `
-      width: 100%;
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    `;
-
     const f = document.createElement("ha-form");
 
     f.schema = schema;
@@ -670,22 +650,20 @@ class AlexListEditor extends HTMLElement {
     });
 
     /*
-     * On garde le ha-form natif pour ses composants,
-     * mais on uniformise son espacement externe.
+     * Harmonisation légère du conteneur sans modifier
+     * le fonctionnement interne de ha-form.
      */
     f.style.cssText = `
       display: block;
       width: 100%;
+      box-sizing: border-box;
       margin: 0;
       padding: 0;
-      box-sizing: border-box;
     `;
-
-    wrapper.appendChild(f);
 
     this._forms.push(f);
 
-    return wrapper;
+    return f;
   }
 
   _row(icon, text, subtitle, onEdit, onDelete) {
