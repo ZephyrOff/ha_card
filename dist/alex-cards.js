@@ -1010,113 +1010,450 @@ class ShutterCard extends AlexWrapperCard {
 }
 customElements.define("shutter-card", ShutterCard);
 
-class ShutterCardEditor extends AlexFormEditor {
+class ShutterCardEditor extends HTMLElement {
   constructor() {
     super();
-    this._schema = [
-      { name: "entity", selector: { entity: { domain: "cover" } } },
-      { name: "name", selector: { text: {} } },
-      { name: "icon", selector: { icon: {} } },
 
+    this._config = {};
+    this._hass = null;
+    this._form = null;
+    this._customisation = null;
+  }
+
+  setConfig(config) {
+    this._config = { ...(config || {}) };
+    this._render();
+  }
+
+  set hass(hass) {
+    this._hass = hass;
+
+    if (this._form) {
+      this._form.hass = hass;
+    }
+
+    if (this._customisation) {
+      this._customisation
+        .querySelectorAll("ha-selector")
+        .forEach((selector) => {
+          selector.hass = hass;
+        });
+    }
+  }
+
+  _emit(changes) {
+    this._config = {
+      ...this._config,
+      ...changes,
+    };
+
+    this.dispatchEvent(
+      new CustomEvent("config-changed", {
+        detail: {
+          config: this._config,
+        },
+        bubbles: true,
+        composed: true,
+      })
+    );
+  }
+
+  _createColorRow(label, configKey) {
+    const row = document.createElement("div");
+
+    row.style.cssText = `
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      min-height: 48px;
+      box-sizing: border-box;
+    `;
+
+    const labelElement = document.createElement("div");
+
+    labelElement.textContent = label;
+
+    labelElement.style.cssText = `
+      flex: 1;
+      min-width: 0;
+      color: var(--primary-text-color);
+      font-size: 14px;
+      line-height: 20px;
+    `;
+
+    const selector = document.createElement("ha-selector");
+
+    selector.hass = this._hass;
+
+    selector.selector = {
+      color_rgb: {},
+    };
+
+    selector.value = this._config[configKey];
+
+    selector.style.cssText = `
+      flex: 0 0 100px;
+      width: 100px;
+      min-width: 100px;
+    `;
+
+    selector.addEventListener("value-changed", (ev) => {
+      ev.stopPropagation();
+
+      this._emit({
+        [configKey]: ev.detail.value,
+      });
+    });
+
+    row.append(labelElement, selector);
+
+    return row;
+  }
+
+  _createExpandable(title, icon, content) {
+    const wrapper = document.createElement("div");
+
+    wrapper.style.cssText = `
+      margin: 8px 0;
+      border: 1px solid var(--divider-color);
+      border-radius: 8px;
+      overflow: hidden;
+    `;
+
+    const header = document.createElement("div");
+
+    header.style.cssText = `
+      display: flex;
+      align-items: center;
+      min-height: 48px;
+      padding: 0 12px;
+      box-sizing: border-box;
+      cursor: pointer;
+      user-select: none;
+    `;
+
+    const iconElement = document.createElement("ha-icon");
+
+    iconElement.icon = icon;
+
+    iconElement.style.cssText = `
+      --mdc-icon-size: 20px;
+      margin-right: 12px;
+      color: var(--secondary-text-color);
+    `;
+
+    const titleElement = document.createElement("div");
+
+    titleElement.textContent = title;
+
+    titleElement.style.cssText = `
+      flex: 1;
+      min-width: 0;
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--primary-text-color);
+    `;
+
+    const chevron = document.createElement("ha-icon");
+
+    chevron.icon = "mdi:chevron-down";
+
+    chevron.style.cssText = `
+      --mdc-icon-size: 20px;
+      color: var(--secondary-text-color);
+    `;
+
+    header.append(
+      iconElement,
+      titleElement,
+      chevron
+    );
+
+    const body = document.createElement("div");
+
+    body.style.cssText = `
+      display: none;
+      padding: 4px 12px 10px;
+      box-sizing: border-box;
+      border-top: 1px solid var(--divider-color);
+    `;
+
+    body.appendChild(content);
+
+    let opened = false;
+
+    header.addEventListener("click", () => {
+      opened = !opened;
+
+      body.style.display = opened ? "block" : "none";
+      chevron.icon = opened
+        ? "mdi:chevron-up"
+        : "mdi:chevron-down";
+    });
+
+    wrapper.append(header, body);
+
+    return wrapper;
+  }
+
+  _createCustomisationSection() {
+    const content = document.createElement("div");
+
+    content.style.cssText = `
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    `;
+
+    // Couleurs générales
+    content.append(
+      this._createColorRow(
+        "Couleur icône",
+        "icon_color"
+      ),
+      this._createColorRow(
+        "Couleur texte",
+        "text_color"
+      )
+    );
+
+    // ------------------------------------------------------------
+    // Couleurs des boutons
+    // ------------------------------------------------------------
+
+    const buttonColors = document.createElement("div");
+
+    buttonColors.style.cssText = `
+      margin-top: 8px;
+      padding-top: 4px;
+    `;
+
+    buttonColors.append(
+      this._createColorRow(
+        "Fond bouton Open",
+        "btn_open_color"
+      ),
+      this._createColorRow(
+        "Texte bouton Open",
+        "txt_open_color"
+      ),
+      this._createColorRow(
+        "Fond bouton Projection",
+        "btn_projection_color"
+      ),
+      this._createColorRow(
+        "Texte bouton Projection",
+        "txt_projection_color"
+      ),
+      this._createColorRow(
+        "Fond bouton Close",
+        "btn_close_color"
+      ),
+      this._createColorRow(
+        "Texte bouton Close",
+        "txt_close_color"
+      )
+    );
+
+    const buttonColorsSection = this._createExpandable(
+      "Couleurs des boutons",
+      "mdi:palette-outline",
+      buttonColors
+    );
+
+    content.append(buttonColorsSection);
+
+    return this._createExpandable(
+      "Customisation",
+      "mdi:palette",
+      content
+    );
+  }
+
+  _createScriptsSection() {
+    const form = document.createElement("ha-form");
+
+    form.schema = [
       {
-        name: "customisation",
-        type: "expandable",
-        title: "Customisation",
-        icon: "mdi:palette",
-        schema: [
-          {
-            name: "icon_color",
-            selector: { text: {} },
+        name: "script_open",
+        selector: {
+          entity: {
+            domain: "script",
           },
-          {
-            name: "text_color",
-            selector: { text: {} },
-          },
-
-          {
-            name: "button_colors",
-            type: "expandable",
-            title: "Couleurs des boutons",
-            icon: "mdi:palette-outline",
-            schema: [
-              {
-                name: "btn_open_color",
-                selector: { text: {} },
-              },
-              {
-                name: "txt_open_color",
-                selector: { text: {} },
-              },
-              {
-                name: "btn_projection_color",
-                selector: { text: {} },
-              },
-              {
-                name: "txt_projection_color",
-                selector: { text: {} },
-              },
-              {
-                name: "btn_close_color",
-                selector: { text: {} },
-              },
-              {
-                name: "txt_close_color",
-                selector: { text: {} },
-              },
-            ],
-          },
-        ],
+        },
       },
-
       {
-        type: "expandable",
-        title: "Scripts",
-        icon: "mdi:script-text",
-        schema: [
-          {
-            name: "script_open",
-            selector: { entity: { domain: "script" } },
+        name: "script_projection",
+        selector: {
+          entity: {
+            domain: "script",
           },
-          {
-            name: "script_projection",
-            selector: { entity: { domain: "script" } },
-          },
-          {
-            name: "script_close",
-            selector: { entity: { domain: "script" } },
-          },
-        ],
+        },
       },
-
       {
-        type: "expandable",
-        title: "Interactions (volet)",
-        icon: "mdi:gesture-tap",
-        schema: ACTION_SCHEMA,
+        name: "script_close",
+        selector: {
+          entity: {
+            domain: "script",
+          },
+        },
       },
     ];
-    this._labels = Object.assign(
-      {
-        entity: "Volet",
-        name: "Nom",
-        icon: "Icône",
-        icon_color: "Couleur icône (CSS, ex. #d99414)",
-        text_color: "Couleur texte (CSS)",
+
+    form.data = {
+      script_open: this._config.script_open,
+      script_projection: this._config.script_projection,
+      script_close: this._config.script_close,
+    };
+
+    form.computeLabel = (schema) => {
+      const labels = {
         script_open: "Script Open",
         script_projection: "Script Projection",
         script_close: "Script Close",
-        btn_open_color: "Fond bouton Open (CSS)",
-        txt_open_color: "Texte bouton Open (CSS)",
-        btn_projection_color: "Fond bouton Projection (CSS)",
-        txt_projection_color: "Texte bouton Projection (CSS)",
-        btn_close_color: "Fond bouton Close (CSS)",
-        txt_close_color: "Texte bouton Close (CSS)",
+      };
+
+      return labels[schema.name] || schema.name;
+    };
+
+    if (this._hass) {
+      form.hass = this._hass;
+    }
+
+    form.addEventListener("value-changed", (ev) => {
+      ev.stopPropagation();
+
+      this._emit(ev.detail.value);
+    });
+
+    return this._createExpandable(
+      "Scripts",
+      "mdi:script-text",
+      form
+    );
+  }
+
+  _createInteractionsSection() {
+    const form = document.createElement("ha-form");
+
+    form.schema = [
+      {
+        name: "interactions",
+        type: "expandable",
+        flatten: true,
+        title: "Interactions",
+        iconPath:
+          "M12,2C6.48,2 2,6.48 2,12C2,17.52 6.48,22 12,22C17.52,22 22,17.52 22,12C22,6.48 17.52,2 17.52,2 22,17.52 17.52,22 12,22ZM11,17H13V11H11V17ZM11,7H13V9H11V7Z",
+        schema: ACTION_SCHEMA,
       },
-      ACTION_LABELS
+    ];
+
+    form.data = this._config;
+
+    if (this._hass) {
+      form.hass = this._hass;
+    }
+
+    form.addEventListener("value-changed", (ev) => {
+      ev.stopPropagation();
+
+      this._emit(ev.detail.value);
+    });
+
+    return form;
+  }
+
+  _render() {
+    this.innerHTML = "";
+
+    // ------------------------------------------------------------
+    // Champs principaux
+    // ------------------------------------------------------------
+
+    this._form = document.createElement("ha-form");
+
+    this._form.schema = [
+      {
+        name: "entity",
+        selector: {
+          entity: {
+            domain: "cover",
+          },
+        },
+      },
+      {
+        name: "name",
+        selector: {
+          text: {},
+        },
+      },
+      {
+        name: "icon",
+        selector: {
+          icon: {},
+        },
+      },
+    ];
+
+    this._form.data = {
+      entity: this._config.entity,
+      name: this._config.name,
+      icon: this._config.icon,
+    };
+
+    this._form.computeLabel = (schema) => {
+      const labels = {
+        entity: "Volet",
+        name: "Nom",
+        icon: "Icône",
+      };
+
+      return labels[schema.name] || schema.name;
+    };
+
+    if (this._hass) {
+      this._form.hass = this._hass;
+    }
+
+    this._form.addEventListener("value-changed", (ev) => {
+      ev.stopPropagation();
+
+      this._emit(ev.detail.value);
+    });
+
+    this.appendChild(this._form);
+
+    // ------------------------------------------------------------
+    // Customisation
+    // ------------------------------------------------------------
+
+    this._customisation = this._createCustomisationSection();
+
+    this.appendChild(this._customisation);
+
+    // ------------------------------------------------------------
+    // Scripts
+    // ------------------------------------------------------------
+
+    this.appendChild(
+      this._createScriptsSection()
+    );
+
+    // ------------------------------------------------------------
+    // Interactions
+    // ------------------------------------------------------------
+
+    this.appendChild(
+      this._createInteractionsSection()
     );
   }
 }
-customElements.define("shutter-card-editor", ShutterCardEditor);
+
+customElements.define(
+  "shutter-card-editor",
+  ShutterCardEditor
+);
 
 window.customCards.push({
   type: "shutter-card",
