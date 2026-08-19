@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.9.1";
+const ALEX_CARDS_VERSION = "0.8.2";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -633,173 +633,58 @@ class AlexListEditor extends HTMLElement {
 
   _form(schema, data, labels, onChange) {
     const f = document.createElement("ha-form");
-
     f.schema = schema;
     f.data = data || {};
-
-    f.computeLabel = (s) =>
-      (labels && labels[s.name]) || s.name;
-
-    if (this._hass) {
-      f.hass = this._hass;
-    }
-
+    f.computeLabel = (s) => (labels && labels[s.name]) || s.name;
+    if (this._hass) f.hass = this._hass;
     f.addEventListener("value-changed", (ev) => {
       ev.stopPropagation();
       onChange(ev.detail.value);
     });
-
-    /*
-     * Harmonisation légère du conteneur sans modifier
-     * le fonctionnement interne de ha-form.
-     */
-    f.style.cssText = `
-      display: block;
-      width: 100%;
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    `;
-
     this._forms.push(f);
-
     return f;
   }
 
   _row(icon, text, subtitle, onEdit, onDelete) {
     const row = document.createElement("div");
-
-    row.style.cssText = `
-      display: flex;
-      align-items: center;
-      gap: 12px;
-
-      width: 100%;
-      min-height: 48px;
-
-      padding: 6px 4px;
-      box-sizing: border-box;
-
-      border-bottom: 1px solid var(--divider-color);
-    `;
-
+    row.style.cssText =
+      "display:flex;align-items:center;gap:10px;padding:8px 4px;" +
+      "border-bottom:1px solid var(--divider-color,#e0e0e0);";
     const ic = document.createElement("ha-icon");
-
-    ic.icon = icon || "mdi:lightbulb";
-
-    ic.style.cssText = `
-      flex: 0 0 24px;
-      color: var(--secondary-text-color);
-    `;
-
+    ic.icon = icon || "mdi:chart-line";
+    ic.style.color = "var(--secondary-text-color)";
     const lab = document.createElement("div");
-
-    lab.style.cssText = `
-      flex: 1;
-      min-width: 0;
-
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-
-      gap: 2px;
-    `;
-
+    lab.style.cssText = "flex:1;min-width:0;";
     lab.innerHTML =
-      `<div style="
-        overflow:hidden;
-        text-overflow:ellipsis;
-        white-space:nowrap;
-        line-height:20px;
-      ">${escapeHtml(text)}</div>` +
+      `<div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(text)}</div>` +
       (subtitle
-        ? `<div style="
-            font-size:12px;
-            line-height:16px;
-            color:var(--secondary-text-color);
-            overflow:hidden;
-            text-overflow:ellipsis;
-            white-space:nowrap;
-          ">${escapeHtml(subtitle)}</div>`
+        ? `<div style="font-size:12px;color:var(--secondary-text-color);overflow:hidden;` +
+          `text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(subtitle)}</div>`
         : "");
-
     row.append(
       ic,
       lab,
       this._iconButton("mdi:pencil", "Éditer", onEdit),
       this._iconButton("mdi:delete", "Supprimer", onDelete)
     );
-
     return row;
   }
 
   _sectionTitle(txt) {
     const d = document.createElement("div");
-
     d.textContent = txt;
-
-    d.style.cssText = `
-      width: 100%;
-      box-sizing: border-box;
-      margin: 20px 0 8px;
-      padding: 0 4px;
-
-      font-size: 14px;
-      font-weight: 600;
-      line-height: 20px;
-
-      color: var(--primary-text-color);
-    `;
-
+    d.style.cssText = "font-weight:600;margin:16px 0 4px;";
     return d;
   }
 
   _backHeader(title, onBack) {
     const h = document.createElement("div");
-
-    h.style.cssText = `
-      display: flex;
-      align-items: center;
-      gap: 8px;
-
-      width: 100%;
-      min-height: 48px;
-
-      margin: 0 0 8px;
-      padding: 0 4px;
-
-      box-sizing: border-box;
-    `;
-
-    h.appendChild(
-      this._iconButton(
-        "mdi:arrow-left",
-        "Retour",
-        onBack
-      )
-    );
-
+    h.style.cssText = "display:flex;align-items:center;gap:8px;margin-bottom:8px;";
+    h.appendChild(this._iconButton("mdi:arrow-left", "Retour", onBack));
     const t = document.createElement("div");
-
     t.textContent = title;
-
-    t.style.cssText = `
-      flex: 1;
-      min-width: 0;
-
-      font-size: 16px;
-      font-weight: 600;
-      line-height: 20px;
-
-      color: var(--primary-text-color);
-
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    `;
-
+    t.style.cssText = "font-weight:600;";
     h.appendChild(t);
-
     return h;
   }
 
@@ -2105,24 +1990,11 @@ class LightCardEditor extends HTMLElement {
 
   _addRow(domain, label, onPick) {
     return this._form(
-      [
-        {
-          name: "entity",
-          selector: {
-            entity: {
-              domain,
-            },
-          },
-        },
-      ],
+      [{ name: "entity", selector: { entity: { domain } } }],
       {},
-      {
-        entity: label,
-      },
+      { entity: label },
       (v) => {
-        if (v && v.entity) {
-          onPick(v.entity);
-        }
+        if (v && v.entity) onPick(v.entity);
       }
     );
   }
@@ -2228,27 +2100,23 @@ class LightCardEditor extends HTMLElement {
      */
 
     this.appendChild(
-      this._sectionSpacing(
-        this._form(
-          LIGHT_ITEM_SCHEMA,
-          {
-            entity: l.entity,
-            name: l.name,
-            icon: l.icon,
-            expand_toggle: l.expand_toggle,
-          },
-          LIGHT_ITEM_LABELS,
-          (v) =>
-            this._update(
-              (c) =>
-                (c.lights[i] = {
-                  ...c.lights[i],
-                  ...v,
-                })
-            )
-        ),
-        0,
-        4
+      this._form(
+        LIGHT_ITEM_SCHEMA,
+        {
+          entity: l.entity,
+          name: l.name,
+          icon: l.icon,
+          expand_toggle: l.expand_toggle,
+        },
+        LIGHT_ITEM_LABELS,
+        (v) =>
+          this._update(
+            (c) =>
+              (c.lights[i] = {
+                ...c.lights[i],
+                ...v,
+              })
+          )
       )
     );
 
@@ -2261,11 +2129,7 @@ class LightCardEditor extends HTMLElement {
      */
 
     this.appendChild(
-      this._sectionSpacing(
-        this._sectionTitle("Membres du groupe"),
-        8,
-        4
-      )
+      this._sectionTitle("Membres du groupe")
     );
 
     const members = l.members || [];
