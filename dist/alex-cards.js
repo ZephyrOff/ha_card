@@ -1843,25 +1843,30 @@ class PillCardEditor extends HTMLElement {
 
     selector.hass = this._hass;
 
-    // IMPORTANT :
-    // ui_color utilise le vrai composant ha-color-picker de Home Assistant.
+    // Vrai sélecteur RGB de Home Assistant.
+    // Il utilise <ha-input type="color">.
     selector.selector = {
-      ui_color: {
-        include_none: true,
-      },
+      color_rgb: {},
     };
 
-    // ui_color attend une couleur CSS / hexadécimale.
+    // color_rgb attend [R, G, B].
     selector.value = this._normalizeColor(this._config[configKey]);
 
-    // Pas de label interne : notre label est affiché à gauche.
+    // Notre propre label est déjà affiché à gauche.
     selector.label = "";
 
+    // On laisse suffisamment de place au sélecteur
+    // tout en gardant le label à gauche.
     selector.style.cssText = `
-      flex: 0 0 120px;
-      width: 120px;
-      min-width: 120px;
+      flex: 0 0 100px;
+      width: 100px;
+      min-width: 100px;
     `;
+
+    // Le sélecteur RGB est requis par défaut.
+    // On le rend optionnel puisque "vide" signifie
+    // "utiliser la couleur du thème" dans notre carte.
+    selector.required = false;
 
     selector.addEventListener("value-changed", (ev) => {
       ev.stopPropagation();
