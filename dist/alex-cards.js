@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.8.2";
+const ALEX_CARDS_VERSION = "0.9.0";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -46,7 +46,7 @@ const RH_SCHEMA = [
     type: "expandable",
     flatten: true,
     title: "Interactions",
-    iconPath: "M12,2C6.48,2 2,6.48 2,12C2,17.52 6.48,22 12,22C17.52,22 22,17.52 22,12C22,6.48 17.52,2 12,2ZM11,17H13V11H11V17ZM11,7H13V9H11V7Z",
+    icon: "mdi:gesture-tap",
     schema: [
       {
         name: "tap_action",
@@ -364,6 +364,16 @@ const ACTION_LABELS = {
   tap_action: "Action au clic",
   hold_action: "Action à l'appui long",
   double_tap_action: "Action au double-clic",
+};
+
+// Section "Interactions" homogène (repliable) réutilisée par tous les éditeurs.
+const INTERACTIONS_FIELD = {
+  name: "interactions",
+  type: "expandable",
+  flatten: true,
+  title: "Interactions",
+  icon: "mdi:gesture-tap",
+  schema: ACTION_SCHEMA,
 };
 
 // Copie les actions définies vers une config de carte (n'ajoute que celles
@@ -765,7 +775,7 @@ class GraphCardEditor extends AlexFormEditor {
       { name: "name", selector: { text: {} } },
       { name: "icon", selector: { icon: {} } },
       { name: "color", selector: { color_rgb: {} } },
-      { type: "expandable", title: "Interactions", icon: "mdi:gesture-tap", schema: ACTION_SCHEMA },
+      INTERACTIONS_FIELD,
     ];
     this._labels = Object.assign(
       { entity: "Entité", name: "Nom", icon: "Icône", color: "Couleur" },
@@ -873,7 +883,7 @@ class PriseCardEditor extends AlexFormEditor {
       { name: "name", selector: { text: {} } },
       { name: "icon", selector: { icon: {} } },
       { name: "color", selector: { color_rgb: {} } },
-      { type: "expandable", title: "Interactions", icon: "mdi:gesture-tap", schema: ACTION_SCHEMA },
+      INTERACTIONS_FIELD,
     ];
     this._labels = Object.assign(
       {
@@ -916,9 +926,9 @@ class ShutterCard extends AlexWrapperCard {
       script_open: "",
       script_projection: "",
       script_close: "",
-      btn_open_color: "rgba(var(--rgb-primary-text-color, 0, 0, 0), 0.06)",
-      btn_projection_color: "rgba(var(--rgb-primary-text-color, 0, 0, 0), 0.06)",
-      btn_close_color: "rgba(var(--rgb-primary-text-color, 0, 0, 0), 0.06)",
+      btn_open_color: "",
+      btn_projection_color: "",
+      btn_close_color: "",
       txt_open_color: "",
       txt_projection_color: "",
       txt_close_color: "",
@@ -957,9 +967,12 @@ class ShutterCard extends AlexWrapperCard {
   }
 
   _innerConfig(c) {
+    const BTN_BG_DEFAULT = "rgba(var(--rgb-primary-text-color, 0, 0, 0), 0.06)";
+    const iconColor = colorOr(c.icon_color, "");
+    const textColor = colorOr(c.text_color, "");
     const coverIconVars =
-      (c.icon_color ? `  --icon-color: ${c.icon_color};\n` : "") +
-      (c.text_color ? `  --primary-text-color: ${c.text_color};\n` : "");
+      (iconColor ? `  --icon-color: ${iconColor};\n` : "") +
+      (textColor ? `  --primary-text-color: ${textColor};\n` : "");
     const coverCard = {
       type: "custom:mushroom-cover-card",
       entity: c.entity,
@@ -998,9 +1011,9 @@ class ShutterCard extends AlexWrapperCard {
           card: {
             type: "horizontal-stack",
             cards: [
-              this._button("Open", c.script_open, c.btn_open_color, c.txt_open_color),
-              this._button("Projection", c.script_projection, c.btn_projection_color, c.txt_projection_color),
-              this._button("Close", c.script_close, c.btn_close_color, c.txt_close_color),
+              this._button("Open", c.script_open, colorOr(c.btn_open_color, BTN_BG_DEFAULT), colorOr(c.txt_open_color, "")),
+              this._button("Projection", c.script_projection, colorOr(c.btn_projection_color, BTN_BG_DEFAULT), colorOr(c.txt_projection_color, "")),
+              this._button("Close", c.script_close, colorOr(c.btn_close_color, BTN_BG_DEFAULT), colorOr(c.txt_close_color, "")),
             ],
           },
         },
@@ -1010,514 +1023,66 @@ class ShutterCard extends AlexWrapperCard {
 }
 customElements.define("shutter-card", ShutterCard);
 
-class ShutterCardEditor extends HTMLElement {
+class ShutterCardEditor extends AlexFormEditor {
   constructor() {
     super();
-
-    this._config = {};
-    this._hass = null;
-    this._form = null;
-  }
-
-  setConfig(config) {
-    this._config = { ...(config || {}) };
-    this._render();
-  }
-
-  set hass(hass) {
-    this._hass = hass;
-
-    if (this._form) {
-      this._form.hass = hass;
-    }
-
-    this.querySelectorAll("ha-selector").forEach((selector) => {
-      selector.hass = hass;
-    });
-  }
-
-  _emit(changes) {
-    this._config = {
-      ...this._config,
-      ...changes,
-    };
-
-    this.dispatchEvent(
-      new CustomEvent("config-changed", {
-        detail: {
-          config: this._config,
-        },
-        bubbles: true,
-        composed: true,
-      })
-    );
-  }
-
-  /*
-   * ----------------------------------------------------------------------
-   * Ligne avec label à gauche + color picker à droite
-   * ----------------------------------------------------------------------
-   */
-
-  _createColorRow(label, configKey) {
-    const row = document.createElement("div");
-
-    row.style.cssText = `
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 16px;
-      min-height: 48px;
-      box-sizing: border-box;
-    `;
-
-    const labelElement = document.createElement("div");
-
-    labelElement.textContent = label;
-
-    labelElement.style.cssText = `
-      flex: 1;
-      min-width: 0;
-      color: var(--primary-text-color);
-      font-size: 14px;
-      line-height: 20px;
-    `;
-
-    const selector = document.createElement("ha-selector");
-
-    selector.hass = this._hass;
-
-    /*
-     * IMPORTANT :
-     * color_rgb = vrai color picker précis de Home Assistant.
-     *
-     * Ne surtout pas remplacer par "text" ou "ui_color".
-     */
-    selector.selector = {
-      color_rgb: {},
-    };
-
-    selector.value = this._config[configKey];
-
-    selector.style.cssText = `
-      flex: 0 0 100px;
-      width: 100px;
-      min-width: 100px;
-    `;
-
-    selector.addEventListener("value-changed", (ev) => {
-      ev.stopPropagation();
-
-      this._emit({
-        [configKey]: ev.detail.value,
-      });
-    });
-
-    row.append(
-      labelElement,
-      selector
-    );
-
-    return row;
-  }
-
-  /*
-   * ----------------------------------------------------------------------
-   * Sous-menu dépliable
-   * ----------------------------------------------------------------------
-   */
-
-  _createExpandable(title, iconName, content) {
-    const wrapper = document.createElement("div");
-
-    wrapper.style.cssText = `
-      margin: 8px 0;
-      border: 1px solid var(--divider-color);
-      border-radius: 8px;
-      overflow: hidden;
-    `;
-
-    const header = document.createElement("div");
-
-    header.style.cssText = `
-      display: flex;
-      align-items: center;
-      min-height: 48px;
-      padding: 0 12px;
-      box-sizing: border-box;
-      cursor: pointer;
-      user-select: none;
-    `;
-
-    const icon = document.createElement("ha-icon");
-
-    icon.icon = iconName;
-
-    icon.style.cssText = `
-      --mdc-icon-size: 20px;
-      margin-right: 12px;
-      color: var(--secondary-text-color);
-    `;
-
-    const titleElement = document.createElement("div");
-
-    titleElement.textContent = title;
-
-    titleElement.style.cssText = `
-      flex: 1;
-      min-width: 0;
-      font-size: 14px;
-      font-weight: 500;
-      color: var(--primary-text-color);
-    `;
-
-    const chevron = document.createElement("ha-icon");
-
-    chevron.icon = "mdi:chevron-down";
-
-    chevron.style.cssText = `
-      --mdc-icon-size: 20px;
-      color: var(--secondary-text-color);
-    `;
-
-    header.append(
-      icon,
-      titleElement,
-      chevron
-    );
-
-    const body = document.createElement("div");
-
-    body.style.cssText = `
-      display: none;
-      padding: 4px 12px 10px;
-      box-sizing: border-box;
-      border-top: 1px solid var(--divider-color);
-    `;
-
-    body.appendChild(content);
-
-    let opened = false;
-
-    header.addEventListener("click", () => {
-      opened = !opened;
-
-      body.style.display = opened ? "block" : "none";
-
-      chevron.icon = opened
-        ? "mdi:chevron-up"
-        : "mdi:chevron-down";
-    });
-
-    wrapper.append(
-      header,
-      body
-    );
-
-    return wrapper;
-  }
-
-  /*
-   * ----------------------------------------------------------------------
-   * Customisation
-   * ----------------------------------------------------------------------
-   */
-
-  _createCustomisationSection() {
-    const content = document.createElement("div");
-
-    content.style.cssText = `
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-    `;
-
-    /*
-     * Couleurs générales du volet
-     */
-
-    content.append(
-      this._createColorRow(
-        "Couleur icône",
-        "icon_color"
-      ),
-
-      this._createColorRow(
-        "Couleur texte",
-        "text_color"
-      )
-    );
-
-    /*
-     * --------------------------------------------------------------
-     * Couleurs des boutons
-     * --------------------------------------------------------------
-     */
-
-    const buttonColors = document.createElement("div");
-
-    buttonColors.style.cssText = `
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-    `;
-
-    buttonColors.append(
-      this._createColorRow(
-        "Fond bouton Open",
-        "btn_open_color"
-      ),
-
-      this._createColorRow(
-        "Texte bouton Open",
-        "txt_open_color"
-      ),
-
-      this._createColorRow(
-        "Fond bouton Projection",
-        "btn_projection_color"
-      ),
-
-      this._createColorRow(
-        "Texte bouton Projection",
-        "txt_projection_color"
-      ),
-
-      this._createColorRow(
-        "Fond bouton Close",
-        "btn_close_color"
-      ),
-
-      this._createColorRow(
-        "Texte bouton Close",
-        "txt_close_color"
-      )
-    );
-
-    /*
-     * Sous-menu Couleurs des boutons
-     */
-
-    content.append(
-      this._createExpandable(
-        "Couleurs des boutons",
-        "mdi:palette-outline",
-        buttonColors
-      )
-    );
-
-    /*
-     * Menu principal Customisation
-     */
-
-    return this._createExpandable(
-      "Customisation",
-      "mdi:palette",
-      content
-    );
-  }
-
-  /*
-   * ----------------------------------------------------------------------
-   * Scripts
-   * ----------------------------------------------------------------------
-   */
-
-  _createScriptsSection() {
-    const form = document.createElement("ha-form");
-
-    form.schema = [
+    this._schema = [
+      { name: "entity", selector: { entity: { domain: "cover" } } },
+      { name: "name", selector: { text: {} } },
+      { name: "icon", selector: { icon: {} } },
       {
-        name: "script_open",
-        selector: {
-          entity: {
-            domain: "script",
-          },
-        },
-      },
-      {
-        name: "script_projection",
-        selector: {
-          entity: {
-            domain: "script",
-          },
-        },
-      },
-      {
-        name: "script_close",
-        selector: {
-          entity: {
-            domain: "script",
-          },
-        },
-      },
-    ];
-
-    form.data = {
-      script_open: this._config.script_open,
-      script_projection: this._config.script_projection,
-      script_close: this._config.script_close,
-    };
-
-    form.computeLabel = (schema) => {
-      const labels = {
-        script_open: "Script Open",
-        script_projection: "Script Projection",
-        script_close: "Script Close",
-      };
-
-      return labels[schema.name] || schema.name;
-    };
-
-    if (this._hass) {
-      form.hass = this._hass;
-    }
-
-    form.addEventListener("value-changed", (ev) => {
-      ev.stopPropagation();
-
-      this._emit(ev.detail.value);
-    });
-
-    return this._createExpandable(
-      "Scripts",
-      "mdi:script-text",
-      form
-    );
-  }
-
-  /*
-   * ----------------------------------------------------------------------
-   * Interactions
-   * ----------------------------------------------------------------------
-   */
-
-  _createInteractionsSection() {
-    const form = document.createElement("ha-form");
-
-    form.schema = [
-      {
-        name: "interactions",
+        name: "scripts",
         type: "expandable",
         flatten: true,
-        title: "Interactions",
-        iconPath:
-          "M12,2C6.48,2 2,6.48 2,12C2,17.52 6.48,22 12,22C17.52,22 22,17.52 22,12C22,6.48 17.52,2 17.52,2 22,17.52 17.52,22 12,22ZM11,17H13V11H11V17ZM11,7H13V9H11V7Z",
-        schema: ACTION_SCHEMA,
+        title: "Scripts",
+        icon: "mdi:script-text",
+        schema: [
+          { name: "script_open", selector: { entity: { domain: "script" } } },
+          { name: "script_projection", selector: { entity: { domain: "script" } } },
+          { name: "script_close", selector: { entity: { domain: "script" } } },
+        ],
       },
+      {
+        name: "customisation",
+        type: "expandable",
+        flatten: true,
+        title: "Customisation",
+        icon: "mdi:palette",
+        schema: [
+          { name: "icon_color", selector: { color_rgb: {} } },
+          { name: "text_color", selector: { color_rgb: {} } },
+          { name: "btn_open_color", selector: { color_rgb: {} } },
+          { name: "txt_open_color", selector: { color_rgb: {} } },
+          { name: "btn_projection_color", selector: { color_rgb: {} } },
+          { name: "txt_projection_color", selector: { color_rgb: {} } },
+          { name: "btn_close_color", selector: { color_rgb: {} } },
+          { name: "txt_close_color", selector: { color_rgb: {} } },
+        ],
+      },
+      INTERACTIONS_FIELD,
     ];
-
-    form.data = this._config;
-
-    if (this._hass) {
-      form.hass = this._hass;
-    }
-
-    form.addEventListener("value-changed", (ev) => {
-      ev.stopPropagation();
-
-      this._emit(ev.detail.value);
-    });
-
-    return form;
-  }
-
-  /*
-   * ----------------------------------------------------------------------
-   * Rendu principal
-   * ----------------------------------------------------------------------
-   */
-
-  _render() {
-    this.innerHTML = "";
-
-    /*
-     * Champs principaux
-     */
-
-    this._form = document.createElement("ha-form");
-
-    this._form.schema = [
+    this._labels = Object.assign(
       {
-        name: "entity",
-        selector: {
-          entity: {
-            domain: "cover",
-          },
-        },
-      },
-      {
-        name: "name",
-        selector: {
-          text: {},
-        },
-      },
-      {
-        name: "icon",
-        selector: {
-          icon: {},
-        },
-      },
-    ];
-
-    this._form.data = {
-      entity: this._config.entity,
-      name: this._config.name,
-      icon: this._config.icon,
-    };
-
-    this._form.computeLabel = (schema) => {
-      const labels = {
         entity: "Volet",
         name: "Nom",
         icon: "Icône",
-      };
-
-      return labels[schema.name] || schema.name;
-    };
-
-    if (this._hass) {
-      this._form.hass = this._hass;
-    }
-
-    this._form.addEventListener("value-changed", (ev) => {
-      ev.stopPropagation();
-
-      this._emit(ev.detail.value);
-    });
-
-    this.appendChild(this._form);
-
-    /*
-     * Customisation
-     */
-
-    this.appendChild(
-      this._createCustomisationSection()
-    );
-
-    /*
-     * Scripts
-     */
-
-    this.appendChild(
-      this._createScriptsSection()
-    );
-
-    /*
-     * Interactions
-     */
-
-    this.appendChild(
-      this._createInteractionsSection()
+        script_open: "Script Open",
+        script_projection: "Script Projection",
+        script_close: "Script Close",
+        icon_color: "Couleur icône",
+        text_color: "Couleur texte",
+        btn_open_color: "Fond bouton Open",
+        txt_open_color: "Texte bouton Open",
+        btn_projection_color: "Fond bouton Projection",
+        txt_projection_color: "Texte bouton Projection",
+        btn_close_color: "Fond bouton Close",
+        txt_close_color: "Texte bouton Close",
+      },
+      ACTION_LABELS
     );
   }
 }
-
-customElements.define(
-  "shutter-card-editor",
-  ShutterCardEditor
-);
+customElements.define("shutter-card-editor", ShutterCardEditor);
 
 window.customCards.push({
   type: "shutter-card",
@@ -1657,25 +1222,19 @@ const LIGHT_ITEM_SCHEMA = [
   { name: "entity", selector: { entity: { domain: "light" } } },
   { name: "name", selector: { text: {} } },
   { name: "icon", selector: { icon: {} } },
+  { name: "expand_toggle", selector: { entity: { domain: "input_boolean" } } },
   {
-    name: "expand_toggle",
-    selector: {
-      entity: {
-        domain: "input_boolean",
-      },
-    },
-  },
-];
-
-const LIGHT_INTERACTIONS_SCHEMA = [
-  {
-    name: "interactions",
+    name: "customisation",
     type: "expandable",
     flatten: true,
-    title: "Interactions",
-    icon: "mdi:gesture-tap",
-    schema: ACTION_SCHEMA,
+    title: "Customisation",
+    icon: "mdi:palette",
+    schema: [
+      { name: "color", selector: { color_rgb: {} } },
+      { name: "submenu_background", selector: { color_rgb: {} } },
+    ],
   },
+  INTERACTIONS_FIELD,
 ];
 const LIGHT_ITEM_LABELS = Object.assign(
   {
@@ -1683,6 +1242,8 @@ const LIGHT_ITEM_LABELS = Object.assign(
     name: "Nom",
     icon: "Icône",
     expand_toggle: "input_boolean d'affichage (rend la lumière déployable)",
+    color: "Couleur (vide = couleur de l'ampoule)",
+    submenu_background: "Fond du sous-menu (vide = teinte du thème)",
   },
   ACTION_LABELS
 );
@@ -1690,11 +1251,20 @@ const MEMBER_ITEM_LABELS = {
   entity: "Entité",
   name: "Nom",
   icon: "Icône",
+  color: "Couleur (vide = couleur de l'ampoule)",
 };
 const MEMBER_ITEM_SCHEMA = [
   { name: "entity", selector: { entity: { domain: "light" } } },
   { name: "name", selector: { text: {} } },
   { name: "icon", selector: { icon: {} } },
+  {
+    name: "customisation",
+    type: "expandable",
+    flatten: true,
+    title: "Customisation",
+    icon: "mdi:palette",
+    schema: [{ name: "color", selector: { color_rgb: {} } }],
+  },
 ];
 
 class LightCardEditor extends HTMLElement {
@@ -1732,188 +1302,6 @@ class LightCardEditor extends HTMLElement {
     mutator(cfg);
     this._config = cfg;
     this._emit();
-  }
-
-  _createExpandable(title, iconName, content) {
-    const wrapper = document.createElement("div");
-
-    wrapper.style.cssText = `
-      margin: 8px 0;
-      border: 1px solid var(--divider-color);
-      border-radius: 8px;
-      overflow: hidden;
-    `;
-
-    const header = document.createElement("div");
-
-    header.style.cssText = `
-      display: flex;
-      align-items: center;
-      min-height: 48px;
-      padding: 0 12px;
-      box-sizing: border-box;
-      cursor: pointer;
-      user-select: none;
-    `;
-
-    const icon = document.createElement("ha-icon");
-
-    icon.icon = iconName;
-
-    icon.style.cssText = `
-      --mdc-icon-size: 20px;
-      margin-right: 12px;
-      color: var(--secondary-text-color);
-    `;
-
-    const titleElement = document.createElement("div");
-
-    titleElement.textContent = title;
-
-    titleElement.style.cssText = `
-      flex: 1;
-      min-width: 0;
-      font-size: 14px;
-      font-weight: 500;
-      color: var(--primary-text-color);
-    `;
-
-    const chevron = document.createElement("ha-icon");
-
-    chevron.icon = "mdi:chevron-down";
-
-    chevron.style.cssText = `
-      --mdc-icon-size: 20px;
-      color: var(--secondary-text-color);
-    `;
-
-    header.append(
-      icon,
-      titleElement,
-      chevron
-    );
-
-    const body = document.createElement("div");
-
-    body.style.cssText = `
-      display: none;
-      padding: 4px 12px 10px;
-      box-sizing: border-box;
-      border-top: 1px solid var(--divider-color);
-    `;
-
-    body.appendChild(content);
-
-    let opened = false;
-
-    header.addEventListener("click", () => {
-      opened = !opened;
-
-      body.style.display = opened ? "block" : "none";
-
-      chevron.icon = opened
-        ? "mdi:chevron-up"
-        : "mdi:chevron-down";
-    });
-
-    wrapper.append(
-      header,
-      body
-    );
-
-    return wrapper;
-  }
-
-  _createCustomisationSection(i, l) {
-    const content = document.createElement("div");
-
-    content.style.cssText = `
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-    `;
-
-    content.append(
-      this._createColorRow(
-        "Couleur",
-        "color",
-        l.color,
-        (value) =>
-          this._update(
-            (c) => (c.lights[i].color = value)
-          )
-      ),
-
-      this._createColorRow(
-        "Fond du sous-menu",
-        "submenu_background",
-        l.submenu_background,
-        (value) =>
-          this._update(
-            (c) =>
-              (c.lights[i].submenu_background = value)
-          )
-      )
-    );
-
-    return this._createExpandable(
-      "Customisation",
-      "mdi:palette",
-      content
-    );
-  }
-
-  _createColorRow(label, configKey, value, onChange) {
-    const row = document.createElement("div");
-
-    row.style.cssText = `
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 16px;
-      min-height: 48px;
-      box-sizing: border-box;
-    `;
-
-    const labelElement = document.createElement("div");
-
-    labelElement.textContent = label;
-
-    labelElement.style.cssText = `
-      flex: 1;
-      min-width: 0;
-      color: var(--primary-text-color);
-      font-size: 14px;
-      line-height: 20px;
-    `;
-
-    const selector = document.createElement("ha-selector");
-
-    selector.hass = this._hass;
-
-    selector.selector = {
-      color_rgb: {},
-    };
-
-    selector.value = value;
-
-    selector.style.cssText = `
-      flex: 0 0 100px;
-      width: 100px;
-      min-width: 100px;
-    `;
-
-    selector.addEventListener("value-changed", (ev) => {
-      ev.stopPropagation();
-      onChange(ev.detail.value);
-    });
-
-    row.append(
-      labelElement,
-      selector
-    );
-
-    return row;
   }
 
   /* ---- petits composants DOM ---- */
@@ -2107,6 +1495,11 @@ class LightCardEditor extends HTMLElement {
           name: l.name,
           icon: l.icon,
           expand_toggle: l.expand_toggle,
+          color: l.color,
+          submenu_background: l.submenu_background,
+          tap_action: l.tap_action,
+          hold_action: l.hold_action,
+          double_tap_action: l.double_tap_action,
         },
         LIGHT_ITEM_LABELS,
         (v) =>
@@ -2195,50 +1588,6 @@ class LightCardEditor extends HTMLElement {
       )
     );
 
-    /*
-     * ----------------------------------------------------------------------
-     * Customisation
-     *
-     * Couleur + Fond du sous-menu dans un sous-menu repliable.
-     * ----------------------------------------------------------------------
-     */
-
-    this.appendChild(
-      this._createCustomisationSection(i, l)
-    );
-
-    /*
-     * ----------------------------------------------------------------------
-     * Interactions
-     * ----------------------------------------------------------------------
-     */
-
-    const interactions = document.createElement("ha-form");
-
-    interactions.schema = LIGHT_INTERACTIONS_SCHEMA;
-
-    interactions.data = this._config;
-
-    interactions.computeLabel = (schema) => {
-      return (
-        ACTION_LABELS[schema.name] ||
-        schema.name
-      );
-    };
-
-    if (this._hass) {
-      interactions.hass = this._hass;
-    }
-
-    interactions.addEventListener("value-changed", (ev) => {
-      ev.stopPropagation();
-
-      this._emit();
-    });
-
-    this._forms.push(interactions);
-
-    this.appendChild(interactions);
   }
 
   _renderMember(i, j) {
@@ -2251,7 +1600,6 @@ class LightCardEditor extends HTMLElement {
       })
     );
 
-    // Champs principaux du membre
     this.appendChild(
       this._form(
         MEMBER_ITEM_SCHEMA,
@@ -2259,6 +1607,7 @@ class LightCardEditor extends HTMLElement {
           entity: m.entity,
           name: m.name,
           icon: m.icon,
+          color: m.color,
         },
         MEMBER_ITEM_LABELS,
         (v) =>
@@ -2268,20 +1617,6 @@ class LightCardEditor extends HTMLElement {
                 ...c.lights[i].members[j],
                 ...v,
               })
-          )
-      )
-    );
-
-    // Couleur de l'icône du membre
-    this.appendChild(
-      this._createColorRow(
-        "Couleur",
-        "color",
-        m.color,
-        (value) =>
-          this._update(
-            (c) =>
-              (c.lights[i].members[j].color = value)
           )
       )
     );
@@ -2334,7 +1669,7 @@ class MultiGraphCard extends AlexWrapperCard {
     };
     if (color) card.line_color = color;
     if (g.icon) card.icon = g.icon;
-    if (g.tap_action) card.tap_action = g.tap_action;
+    applyActions(card, g);
     return card;
   }
 
@@ -2358,17 +1693,19 @@ const MG_SCHEMA = [
   { name: "icon", selector: { icon: {} } },
   { name: "hours_to_show", selector: { number: { min: 1, max: 336, step: 1, mode: "box" } } },
   { name: "points_per_hour", selector: { number: { min: 1, max: 120, step: 1, mode: "box" } } },
-  { name: "tap_action", selector: { ui_action: {} } },
+  INTERACTIONS_FIELD,
 ];
-const MG_LABELS = {
-  entities: "Entité(s)",
-  name: "Nom",
-  line_color: "Couleur de la ligne",
-  icon: "Icône",
-  hours_to_show: "Heures affichées (défaut 24)",
-  points_per_hour: "Points par heure (défaut 4)",
-  tap_action: "Action au clic (mini-graph : tap uniquement)",
-};
+const MG_LABELS = Object.assign(
+  {
+    entities: "Entité(s)",
+    name: "Nom",
+    line_color: "Couleur de la ligne",
+    icon: "Icône",
+    hours_to_show: "Heures affichées (défaut 24)",
+    points_per_hour: "Points par heure (défaut 4)",
+  },
+  ACTION_LABELS
+);
 
 class MultiGraphCardEditor extends AlexListEditor {
   _normalize() {
@@ -2444,6 +1781,8 @@ class MultiGraphCardEditor extends AlexListEditor {
           hours_to_show: g.hours_to_show != null ? g.hours_to_show : 24,
           points_per_hour: g.points_per_hour != null ? g.points_per_hour : 4,
           tap_action: g.tap_action,
+          hold_action: g.hold_action,
+          double_tap_action: g.double_tap_action,
         },
         MG_LABELS,
         (v) => this._update((c) => (c.graphs[i] = { ...c.graphs[i], ...v }))
@@ -2551,345 +1890,42 @@ class PillCard extends AlexWrapperCard {
 }
 customElements.define("pill-card", PillCard);
 
-class PillCardEditor extends HTMLElement {
+class PillCardEditor extends AlexFormEditor {
   constructor() {
     super();
-
-    this._config = {};
-    this._hass = null;
-    this._form = null;
-    this._customisation = null;
-  }
-
-  setConfig(config) {
-    this._config = { ...(config || {}) };
-    this._render();
-  }
-
-  set hass(hass) {
-    this._hass = hass;
-
-    if (this._form) {
-      this._form.hass = hass;
-    }
-
-    if (this._customisation) {
-      this._customisation.querySelectorAll("ha-selector").forEach((selector) => {
-        selector.hass = hass;
-      });
-    }
-  }
-
-  _emit(changes) {
-    this._config = {
-      ...this._config,
-      ...changes,
-    };
-
-    this.dispatchEvent(
-      new CustomEvent("config-changed", {
-        detail: {
-          config: this._config,
-        },
-        bubbles: true,
-        composed: true,
-      })
-    );
-  }
-
-  _normalizeColor(value) {
-    if (Array.isArray(value)) {
-      return value;
-    }
-
-    return value;
-  }
-
-  _createColorRow(label, configKey) {
-    const row = document.createElement("div");
-
-    row.style.cssText = `
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 16px;
-      min-height: 48px;
-      box-sizing: border-box;
-    `;
-
-    const labelElement = document.createElement("div");
-
-    labelElement.textContent = label;
-
-    labelElement.style.cssText = `
-      flex: 1;
-      min-width: 0;
-      color: var(--primary-text-color);
-      font-size: 14px;
-      line-height: 20px;
-    `;
-
-    const selector = document.createElement("ha-selector");
-
-    selector.hass = this._hass;
-
-    selector.selector = {
-      color_rgb: {},
-    };
-
-    selector.value = this._normalizeColor(this._config[configKey]);
-
-    selector.style.cssText = `
-      flex: 0 0 100px;
-      width: 100px;
-      min-width: 100px;
-    `;
-
-    selector.addEventListener("value-changed", (ev) => {
-      ev.stopPropagation();
-
-      this._emit({
-        [configKey]: ev.detail.value,
-      });
-    });
-
-    row.append(labelElement, selector);
-
-    return row;
-  }
-
-  _createCustomisationSection() {
-    const wrapper = document.createElement("div");
-
-    wrapper.style.cssText = `
-      margin: 8px 0;
-      border: 1px solid var(--divider-color);
-      border-radius: 8px;
-      overflow: hidden;
-    `;
-
-    /*
-     * ----------------------------------------------------------------------
-     * Header
-     * ----------------------------------------------------------------------
-     */
-
-    const header = document.createElement("div");
-
-    header.style.cssText = `
-      display: flex;
-      align-items: center;
-      min-height: 48px;
-      padding: 0 12px;
-      box-sizing: border-box;
-      cursor: pointer;
-      user-select: none;
-    `;
-
-    /*
-     * Icône
-     */
-
-    const icon = document.createElement("ha-icon");
-
-    icon.icon = "mdi:palette";
-
-    icon.style.cssText = `
-      --mdc-icon-size: 20px;
-      margin-right: 12px;
-      color: var(--secondary-text-color);
-    `;
-
-    /*
-     * Titre
-     */
-
-    const title = document.createElement("div");
-
-    title.textContent = "Customisation";
-
-    title.style.cssText = `
-      flex: 1;
-      min-width: 0;
-      font-size: 14px;
-      font-weight: 500;
-      color: var(--primary-text-color);
-    `;
-
-    /*
-     * Chevron
-     */
-
-    const chevron = document.createElement("ha-icon");
-
-    chevron.icon = "mdi:chevron-down";
-
-    chevron.style.cssText = `
-      --mdc-icon-size: 20px;
-      color: var(--secondary-text-color);
-      transition: transform 150ms ease;
-    `;
-
-    header.append(icon, title, chevron);
-
-    /*
-     * ----------------------------------------------------------------------
-     * Contenu
-     * ----------------------------------------------------------------------
-     */
-
-    const content = document.createElement("div");
-
-    content.style.cssText = `
-      display: none;
-      padding: 4px 12px 10px;
-      box-sizing: border-box;
-      border-top: 1px solid var(--divider-color);
-    `;
-
-    content.append(
-      this._createColorRow("Fond de la carte", "background"),
-      this._createColorRow("Couleur de l'icône", "icon_color"),
-      this._createColorRow("Couleur du nom", "name_color"),
-      this._createColorRow("Couleur du sous-titre", "secondary_color")
-    );
-
-    /*
-     * ----------------------------------------------------------------------
-     * Ouverture / fermeture
-     * ----------------------------------------------------------------------
-     */
-
-    let opened = false;
-
-    header.addEventListener("click", () => {
-      opened = !opened;
-
-      content.style.display = opened ? "block" : "none";
-
-      chevron.icon = opened
-        ? "mdi:chevron-up"
-        : "mdi:chevron-down";
-    });
-
-    wrapper.append(header, content);
-
-    this._customisation = wrapper;
-
-    return wrapper;
-  }
-
-  _render() {
-    this.innerHTML = "";
-
-    /*
-     * ----------------------------------------------------------------------
-     * Champs principaux
-     * ----------------------------------------------------------------------
-     */
-
-    this._form = document.createElement("ha-form");
-
-    this._form.schema = [
+    this._schema = [
+      { name: "name", selector: { text: {} } },
+      { name: "secondary", selector: { text: {} } },
+      { name: "icon", selector: { icon: {} } },
       {
-        name: "name",
-        selector: {
-          text: {},
-        },
-      },
-      {
-        name: "secondary",
-        selector: {
-          text: {},
-        },
-      },
-      {
-        name: "icon",
-        selector: {
-          icon: {},
-        },
-      },
-    ];
-
-    this._form.data = {
-      name: this._config.name,
-      secondary: this._config.secondary,
-      icon: this._config.icon,
-    };
-
-    this._form.computeLabel = (schema) => {
-      const labels = {
-        name: "Nom",
-        secondary: "Sous-titre",
-        icon: "Icône",
-      };
-
-      return labels[schema.name] || schema.name;
-    };
-
-    if (this._hass) {
-      this._form.hass = this._hass;
-    }
-
-    this._form.addEventListener("value-changed", (ev) => {
-      ev.stopPropagation();
-
-      this._emit(ev.detail.value);
-    });
-
-    this.appendChild(this._form);
-
-    /*
-     * ----------------------------------------------------------------------
-     * Customisation
-     * ----------------------------------------------------------------------
-     */
-
-    this.appendChild(this._createCustomisationSection());
-
-    /*
-     * ----------------------------------------------------------------------
-     * Interactions
-     * ----------------------------------------------------------------------
-     */
-
-    const interactions = document.createElement("ha-form");
-
-    interactions.schema = [
-      {
-        name: "interactions",
+        name: "customisation",
         type: "expandable",
         flatten: true,
-        title: "Interactions",
-        iconPath:
-          "M12,2C6.48,2 2,6.48 2,12C2,17.52 6.48,22 12,22C17.52,22 22,17.52 22,17.52,22 22,17.52 17.52,22 12,22ZM11,17H13V11H11V17ZM11,7H13V9H11V7Z",
-        schema: ACTION_SCHEMA,
+        title: "Customisation",
+        icon: "mdi:palette",
+        schema: [
+          { name: "background", selector: { color_rgb: {} } },
+          { name: "icon_color", selector: { color_rgb: {} } },
+          { name: "name_color", selector: { color_rgb: {} } },
+          { name: "secondary_color", selector: { color_rgb: {} } },
+        ],
       },
+      INTERACTIONS_FIELD,
     ];
-
-    interactions.data = this._config;
-
-    interactions.computeLabel = (schema) => {
-      return (
-        ACTION_LABELS[schema.name] ||
-        schema.name
-      );
-    };
-
-    if (this._hass) {
-      interactions.hass = this._hass;
-    }
-
-    interactions.addEventListener("value-changed", (ev) => {
-      ev.stopPropagation();
-
-      this._emit(ev.detail.value);
-    });
-
-    this.appendChild(interactions);
+    this._labels = Object.assign(
+      {
+        name: "Nom",
+        secondary: "Sous-titre (label)",
+        icon: "Icône",
+        background: "Fond de la carte",
+        icon_color: "Couleur de l'icône",
+        name_color: "Couleur du nom",
+        secondary_color: "Couleur du sous-titre",
+      },
+      ACTION_LABELS
+    );
   }
 }
-
 customElements.define("pill-card-editor", PillCardEditor);
 
 window.customCards.push({
