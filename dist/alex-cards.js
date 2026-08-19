@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.9.6";
+const ALEX_CARDS_VERSION = "0.9.7";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -1227,21 +1227,10 @@ const LIGHT_MAIN_SCHEMA = [
   { name: "entity", selector: { entity: { domain: "light" } } },
   { name: "name", selector: { text: {} } },
   { name: "icon", selector: { icon: {} } },
-  { name: "expand_toggle", selector: { entity: { domain: "input_boolean" } } },
 ];
-const LIGHT_EXTRAS_SCHEMA = [
-  {
-    name: "customisation",
-    type: "expandable",
-    flatten: true,
-    title: "Customisation",
-    icon: "mdi:palette",
-    schema: [
-      { name: "color", selector: { color_rgb: {} } },
-      { name: "submenu_background", selector: { color_rgb: {} } },
-    ],
-  },
-  INTERACTIONS_FIELD,
+const LIGHT_CUSTOM_SCHEMA = [
+  { name: "color", selector: { color_rgb: {} } },
+  { name: "submenu_background", selector: { color_rgb: {} } },
 ];
 const LIGHT_ITEM_LABELS = Object.assign(
   {
@@ -1279,7 +1268,6 @@ class LightCardEditor extends HTMLElement {
   setConfig(config) {
     const incoming = JSON.stringify(config || {});
 
-    // Garde d'écho : ignore le setConfig renvoyé par HA après notre propre édition
     if (incoming === this._configStr) return;
 
     this._config = JSON.parse(incoming);
@@ -1289,10 +1277,9 @@ class LightCardEditor extends HTMLElement {
     }
 
     this._configStr = incoming;
-
-    if (!Array.isArray(this._path)) {
-      this._path = [];
-    }
+    this._path = Array.isArray(this._path)
+      ? this._path
+      : [];
 
     this._render();
   }
@@ -1301,12 +1288,16 @@ class LightCardEditor extends HTMLElement {
     this._hass = hass;
 
     (this._forms || []).forEach(
-      (f) => (f.hass = hass)
+      (form) => {
+        form.hass = hass;
+      }
     );
   }
 
   _emit() {
-    this._configStr = JSON.stringify(this._config);
+    this._configStr = JSON.stringify(
+      this._config
+    );
 
     this.dispatchEvent(
       new CustomEvent("config-changed", {
@@ -1320,103 +1311,158 @@ class LightCardEditor extends HTMLElement {
   }
 
   _update(mutator) {
-    const cfg = JSON.parse(
+    const config = JSON.parse(
       JSON.stringify(this._config)
     );
 
-    mutator(cfg);
+    mutator(config);
 
-    this._config = cfg;
+    this._config = config;
 
     this._emit();
   }
 
-  /* -----------------------------------------------------------------------
-   * Petits composants
-   * --------------------------------------------------------------------- */
+  /* ------------------------------------------------------------------
+   * Helpers
+   * ---------------------------------------------------------------- */
 
-  _iconButton(icon, title, onClick) {
-    const btn = document.createElement(
-      "ha-icon-button"
-    );
+  _iconButton(
+    icon,
+    title,
+    onClick
+  ) {
+    const button =
+      document.createElement(
+        "ha-icon-button"
+      );
 
-    btn.title = title;
+    button.title = title;
 
-    btn.style.cssText = `
+    button.style.cssText = `
       --mdc-icon-button-size: 40px;
       --mdc-icon-size: 20px;
       color: var(--secondary-text-color);
       flex: 0 0 auto;
     `;
 
-    const ic = document.createElement("ha-icon");
+    const iconEl =
+      document.createElement(
+        "ha-icon"
+      );
 
-    ic.icon = icon;
+    iconEl.icon = icon;
 
-    btn.appendChild(ic);
+    button.appendChild(iconEl);
 
-    btn.addEventListener("click", (e) => {
-      e.stopPropagation();
-      onClick();
-    });
+    button.addEventListener(
+      "click",
+      (event) => {
+        event.stopPropagation();
+        onClick();
+      }
+    );
 
-    return btn;
+    return button;
   }
 
-  _form(schema, data, labels, onChange) {
-    const f = document.createElement("ha-form");
+  _form(
+    schema,
+    data,
+    labels,
+    onChange
+  ) {
+    const form =
+      document.createElement(
+        "ha-form"
+      );
 
-    f.schema = schema;
-    f.data = data || {};
+    form.schema = schema;
+    form.data = data || {};
 
-    f.computeLabel = (s) =>
-      (labels && labels[s.name]) || s.name;
+    form.computeLabel = (schemaItem) =>
+      (labels &&
+        labels[schemaItem.name]) ||
+      schemaItem.name;
 
     if (this._hass) {
-      f.hass = this._hass;
+      form.hass = this._hass;
     }
 
-    f.addEventListener("value-changed", (ev) => {
-      ev.stopPropagation();
-      onChange(ev.detail.value);
-    });
+    form.addEventListener(
+      "value-changed",
+      (event) => {
+        event.stopPropagation();
+        onChange(event.detail.value);
+      }
+    );
 
-    this._forms.push(f);
+    this._forms.push(form);
 
-    return f;
+    return form;
   }
 
-  _row(icon, text, subtitle, onEdit, onDelete) {
-    const row = document.createElement("div");
+  _row(
+    icon,
+    text,
+    subtitle,
+    onEdit,
+    onDelete
+  ) {
+    const row =
+      document.createElement(
+        "div"
+      );
 
-    row.style.cssText =
-      "display:flex;align-items:center;gap:10px;padding:8px 4px;" +
-      "border-bottom:1px solid var(--divider-color,#e0e0e0);";
+    row.style.cssText = `
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 4px;
+      border-bottom:
+        1px solid
+        var(--divider-color, #e0e0e0);
+    `;
 
-    const ic = document.createElement("ha-icon");
+    const iconEl =
+      document.createElement(
+        "ha-icon"
+      );
 
-    ic.icon = icon || "mdi:lightbulb";
-    ic.style.color =
+    iconEl.icon =
+      icon || "mdi:lightbulb";
+
+    iconEl.style.color =
       "var(--secondary-text-color)";
 
-    const lab = document.createElement("div");
+    const label =
+      document.createElement(
+        "div"
+      );
 
-    lab.style.cssText =
-      "flex:1;min-width:0;";
+    label.style.cssText = `
+      flex: 1;
+      min-width: 0;
+    `;
 
-    lab.innerHTML =
-      `<div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(
-        text
-      )}</div>` +
+    label.innerHTML =
+      `<div style="
+        overflow:hidden;
+        text-overflow:ellipsis;
+        white-space:nowrap;
+      ">${escapeHtml(text)}</div>` +
       (subtitle
-        ? `<div style="font-size:12px;color:var(--secondary-text-color);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(
-            subtitle
-          )}</div>`
+        ? `<div style="
+            font-size:12px;
+            color:var(--secondary-text-color);
+            overflow:hidden;
+            text-overflow:ellipsis;
+            white-space:nowrap;
+          ">${escapeHtml(subtitle)}</div>`
         : "");
 
     row.append(
-      ic,
-      lab,
+      iconEl,
+      label,
       this._iconButton(
         "mdi:pencil",
         "Éditer",
@@ -1432,26 +1478,43 @@ class LightCardEditor extends HTMLElement {
     return row;
   }
 
-  _sectionTitle(txt) {
-    const d = document.createElement("div");
+  _sectionTitle(text) {
+    const element =
+      document.createElement(
+        "div"
+      );
 
-    d.textContent = txt;
+    element.textContent = text;
 
-    d.style.cssText =
-      "text-transform:uppercase;font-size:12px;font-weight:500;" +
-      "letter-spacing:.5px;color:var(--secondary-text-color);" +
-      "margin:18px 0 8px;";
+    element.style.cssText = `
+      text-transform: uppercase;
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: .5px;
+      color: var(--secondary-text-color);
+      margin: 18px 0 8px;
+    `;
 
-    return d;
+    return element;
   }
 
-  _backHeader(title, onBack) {
-    const h = document.createElement("div");
+  _backHeader(
+    title,
+    onBack
+  ) {
+    const header =
+      document.createElement(
+        "div"
+      );
 
-    h.style.cssText =
-      "display:flex;align-items:center;gap:8px;margin-bottom:8px;";
+    header.style.cssText = `
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 8px;
+    `;
 
-    h.appendChild(
+    header.appendChild(
       this._iconButton(
         "mdi:arrow-left",
         "Retour",
@@ -1459,19 +1522,29 @@ class LightCardEditor extends HTMLElement {
       )
     );
 
-    const t = document.createElement("div");
+    const titleElement =
+      document.createElement(
+        "div"
+      );
 
-    t.textContent = title;
+    titleElement.textContent =
+      title;
 
-    t.style.cssText =
+    titleElement.style.cssText =
       "font-weight:600;";
 
-    h.appendChild(t);
+    header.appendChild(
+      titleElement
+    );
 
-    return h;
+    return header;
   }
 
-  _addRow(domain, label, onPick) {
+  _addRow(
+    domain,
+    label,
+    onPick
+  ) {
     return this._form(
       [
         {
@@ -1487,112 +1560,58 @@ class LightCardEditor extends HTMLElement {
       {
         entity: label,
       },
-      (v) => {
-        if (v && v.entity) {
-          onPick(v.entity);
+      (value) => {
+        if (
+          value &&
+          value.entity
+        ) {
+          onPick(
+            value.entity
+          );
         }
       }
     );
   }
 
-  /* -----------------------------------------------------------------------
-   * Color picker
-   * --------------------------------------------------------------------- */
-
-  _createColorRow(
-    label,
-    configKey,
-    value,
-    onChange
-  ) {
-    const row = document.createElement("div");
-
-    row.style.cssText = `
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 16px;
-      width: 100%;
-      min-height: 48px;
-      box-sizing: border-box;
-      padding: 4px 0;
-    `;
-
-    const text = document.createElement("div");
-
-    text.textContent = label;
-
-    text.style.cssText = `
-      flex: 1;
-      min-width: 0;
-      font-size: 14px;
-      color: var(--primary-text-color);
-    `;
-
-    const picker = document.createElement(
-      "ha-selector"
-    );
-
-    picker.hass = this._hass;
-
-    picker.selector = {
-      color_rgb: {},
-    };
-
-    picker.value = value || undefined;
-
-    picker.style.cssText = `
-      flex: 0 0 auto;
-      width: 180px;
-    `;
-
-    picker.addEventListener(
-      "value-changed",
-      (ev) => {
-        ev.stopPropagation();
-        onChange(ev.detail.value);
-      }
-    );
-
-    row.append(
-      text,
-      picker
-    );
-
-    return row;
-  }
-
-  /* -----------------------------------------------------------------------
+  /* ------------------------------------------------------------------
    * Panneau commun
    *
-   * Les trois sections utilisent EXACTEMENT ce composant.
-   * --------------------------------------------------------------------- */
+   * Groupe / Customisation / Interactions
+   * utilisent exactement le même composant.
+   * ---------------------------------------------------------------- */
 
-  _createSectionPanel(
+  _panel(
     title,
     iconName,
-    content
+    content,
+    expanded = false
   ) {
-    const panel = document.createElement(
-      "ha-expansion-panel"
-    );
+    const panel =
+      document.createElement(
+        "ha-expansion-panel"
+      );
 
     panel.outlined = true;
+    panel.expanded =
+      !!expanded;
 
     /*
      * Important :
-     * même marge pour les 3 panneaux.
+     * aucun radius/margin différent selon la section.
      */
     panel.style.cssText = `
       display: block;
       width: 100%;
       box-sizing: border-box;
       margin: 8px 0;
+      border-radius: 12px;
+      overflow: hidden;
     `;
 
-    const icon = document.createElement(
-      "ha-icon"
-    );
+    const icon =
+      document.createElement(
+        "ha-icon"
+      );
 
     icon.icon = iconName;
 
@@ -1609,59 +1628,68 @@ class LightCardEditor extends HTMLElement {
     panel.appendChild(icon);
 
     /*
-     * Le header natif est utilisé par ha-expansion-panel.
+     * ha-expansion-panel utilise le header
+     * natif de HA.
      */
     panel.header = title;
 
     /*
      * Contenu
      */
-    const body = document.createElement("div");
+    const body =
+      document.createElement(
+        "div"
+      );
 
     body.style.cssText = `
       width: 100%;
       box-sizing: border-box;
-      padding: 4px 12px 10px;
+      padding: 4px 12px 12px;
     `;
 
-    body.appendChild(content);
+    body.appendChild(
+      content
+    );
 
-    panel.appendChild(body);
+    panel.appendChild(
+      body
+    );
 
     return panel;
   }
 
-  /* -----------------------------------------------------------------------
-   * Vues
-   * --------------------------------------------------------------------- */
+  /* ------------------------------------------------------------------
+   * Rendu principal
+   * ---------------------------------------------------------------- */
 
   _validPath() {
-    const p = this._path || [];
+    const path =
+      this._path || [];
 
     const lights =
       this._config.lights || [];
 
     if (
-      p.length >= 1 &&
-      !lights[p[0]]
+      path.length >= 1 &&
+      !lights[path[0]]
     ) {
       return [];
     }
 
-    if (p.length >= 2) {
+    if (path.length >= 2) {
       const members =
-        lights[p[0]] &&
-        lights[p[0]].members;
+        lights[path[0]] &&
+        lights[path[0]].members;
 
       if (
         !members ||
-        !members[p[1]]
+        !members[path[1]]
       ) {
-        return [p[0]];
+        return [path[0]];
       }
     }
 
-    return p;
+    return path;
   }
 
   _render() {
@@ -1669,32 +1697,41 @@ class LightCardEditor extends HTMLElement {
 
     this.innerHTML = "";
 
-    const p = this._validPath();
+    const path =
+      this._validPath();
 
-    if (p.length === 0) {
+    if (path.length === 0) {
       this._renderRoot();
-    } else if (p.length === 1) {
-      this._renderLight(p[0]);
+    } else if (
+      path.length === 1
+    ) {
+      this._renderLight(
+        path[0]
+      );
     } else {
       this._renderMember(
-        p[0],
-        p[1]
+        path[0],
+        path[1]
       );
     }
 
     if (this._hass) {
       this._forms.forEach(
-        (f) => (f.hass = this._hass)
+        (form) => {
+          form.hass =
+            this._hass;
+        }
       );
     }
   }
 
-  /* -----------------------------------------------------------------------
-   * Vue racine
-   * --------------------------------------------------------------------- */
+  /* ------------------------------------------------------------------
+   * Root
+   * ---------------------------------------------------------------- */
 
   _renderRoot() {
-    const cfg = this._config;
+    const config =
+      this._config;
 
     this.appendChild(
       this._sectionTitle(
@@ -1716,17 +1753,18 @@ class LightCardEditor extends HTMLElement {
         ],
         {
           all_entity:
-            cfg.all_entity || "",
+            config.all_entity ||
+            "",
         },
         {
           all_entity:
             "Entité groupe (All)",
         },
-        (v) =>
+        (value) =>
           this._update(
             (c) =>
               (c.all_entity =
-                v.all_entity)
+                value.all_entity)
           )
       )
     );
@@ -1737,30 +1775,35 @@ class LightCardEditor extends HTMLElement {
       )
     );
 
-    (cfg.lights || []).forEach(
-      (l, i) => {
+    (
+      config.lights || []
+    ).forEach(
+      (light, index) => {
         const isGroup =
-          l.members &&
-          l.members.length;
+          light.members &&
+          light.members.length;
 
         this.appendChild(
           this._row(
-            l.icon,
-            l.name ||
-              l.entity ||
+            light.icon,
+            light.name ||
+              light.entity ||
               "(vide)",
             isGroup
-              ? `groupe · ${l.members.length} membre(s)`
-              : l.entity,
+              ? `groupe · ${light.members.length} membre(s)`
+              : light.entity,
             () => {
-              this._path = [i];
+              this._path = [
+                index,
+              ];
+
               this._render();
             },
             () => {
               this._update(
                 (c) =>
                   c.lights.splice(
-                    i,
+                    index,
                     1
                   )
               );
@@ -1776,25 +1819,27 @@ class LightCardEditor extends HTMLElement {
       this._addRow(
         "light",
         "Ajouter une lumière",
-        (ent) => {
-          let idx;
+        (entity) => {
+          let index;
 
           this._update((c) => {
             c.lights =
               c.lights || [];
 
             c.lights.push({
-              entity: ent,
+              entity,
               name: "",
               icon: "mdi:lightbulb",
               members: [],
             });
 
-            idx =
+            index =
               c.lights.length - 1;
           });
 
-          this._path = [idx];
+          this._path = [
+            index,
+          ];
 
           this._render();
         }
@@ -1802,18 +1847,19 @@ class LightCardEditor extends HTMLElement {
     );
   }
 
-  /* -----------------------------------------------------------------------
-   * Vue d'une lumière
-   * --------------------------------------------------------------------- */
+  /* ------------------------------------------------------------------
+   * Light
+   * ---------------------------------------------------------------- */
 
   _renderLight(i) {
-    const l =
-      this._config.lights[i] || {};
+    const light =
+      this._config.lights[i] ||
+      {};
 
     this.appendChild(
       this._backHeader(
-        l.name ||
-          l.entity ||
+        light.name ||
+          light.entity ||
           "Lumière",
         () => {
           this._path = [];
@@ -1823,26 +1869,26 @@ class LightCardEditor extends HTMLElement {
     );
 
     /*
-     * Champs principaux
-     *
-     * IMPORTANT :
-     * les couleurs et interactions ne sont plus ici.
+     * Informations principales
      */
     this.appendChild(
       this._form(
         LIGHT_MAIN_SCHEMA,
         {
-          entity: l.entity,
-          name: l.name,
-          icon: l.icon,
+          entity:
+            light.entity,
+          name:
+            light.name,
+          icon:
+            light.icon,
         },
         LIGHT_ITEM_LABELS,
-        (v) =>
+        (value) =>
           this._update(
             (c) =>
               (c.lights[i] = {
                 ...c.lights[i],
-                ...v,
+                ...value,
               })
           )
       )
@@ -1852,9 +1898,13 @@ class LightCardEditor extends HTMLElement {
      * Groupe
      */
     this.appendChild(
-      this._createGroupPanel(
-        i,
-        l
+      this._panel(
+        "Groupe",
+        "mdi:account-group",
+        this._groupContent(
+          i,
+          light
+        )
       )
     );
 
@@ -1862,9 +1912,27 @@ class LightCardEditor extends HTMLElement {
      * Customisation
      */
     this.appendChild(
-      this._createCustomisationPanel(
-        i,
-        l
+      this._panel(
+        "Customisation",
+        "mdi:palette",
+        this._form(
+          LIGHT_CUSTOM_SCHEMA,
+          {
+            color:
+              light.color,
+            submenu_background:
+              light.submenu_background,
+          },
+          LIGHT_ITEM_LABELS,
+          (value) =>
+            this._update(
+              (c) =>
+                (c.lights[i] = {
+                  ...c.lights[i],
+                  ...value,
+                })
+            )
+        )
       )
     );
 
@@ -1872,20 +1940,45 @@ class LightCardEditor extends HTMLElement {
      * Interactions
      */
     this.appendChild(
-      this._createInteractionsPanel(
-        i,
-        l
+      this._panel(
+        "Interactions",
+        "mdi:gesture-tap",
+        this._form(
+          ACTION_SCHEMA,
+          {
+            tap_action:
+              light.tap_action,
+            hold_action:
+              light.hold_action,
+            double_tap_action:
+              light.double_tap_action,
+          },
+          ACTION_LABELS,
+          (value) =>
+            this._update(
+              (c) =>
+                (c.lights[i] = {
+                  ...c.lights[i],
+                  ...value,
+                })
+            )
+        )
       )
     );
   }
 
-  /* -----------------------------------------------------------------------
+  /* ------------------------------------------------------------------
    * Groupe
-   * --------------------------------------------------------------------- */
+   * ---------------------------------------------------------------- */
 
-  _createGroupPanel(i, l) {
+  _groupContent(
+    i,
+    light
+  ) {
     const content =
-      document.createElement("div");
+      document.createElement(
+        "div"
+      );
 
     /*
      * Input_boolean d'affichage
@@ -1894,7 +1987,8 @@ class LightCardEditor extends HTMLElement {
       this._form(
         [
           {
-            name: "expand_toggle",
+            name:
+              "expand_toggle",
             selector: {
               entity: {
                 domain:
@@ -1905,23 +1999,23 @@ class LightCardEditor extends HTMLElement {
         ],
         {
           expand_toggle:
-            l.expand_toggle,
+            light.expand_toggle,
         },
         {
           expand_toggle:
             "input_boolean d'affichage (rend la lumière déployable)",
         },
-        (v) =>
+        (value) =>
           this._update(
             (c) =>
               (c.lights[i].expand_toggle =
-                v.expand_toggle)
+                value.expand_toggle)
           )
       )
     );
 
     /*
-     * Membres
+     * Membres du groupe
      */
     content.appendChild(
       this._sectionTitle(
@@ -1930,11 +2024,11 @@ class LightCardEditor extends HTMLElement {
     );
 
     const members =
-      l.members || [];
+      light.members || [];
 
     if (
       members.length &&
-      !l.expand_toggle
+      !light.expand_toggle
     ) {
       const hint =
         document.createElement(
@@ -1942,26 +2036,31 @@ class LightCardEditor extends HTMLElement {
         );
 
       hint.textContent =
-        "⚠ Renseigne un input_boolean d'affichage ci-dessus pour que le groupe se déploie.";
+        "⚠ Renseigne un « Affichage groupe » ci-dessus pour que le groupe se déploie.";
 
       hint.style.cssText = `
         font-size: 12px;
-        color: var(--warning-color, #f4a000);
+        color: var(
+          --warning-color,
+          #f4a000
+        );
         margin: 4px 0;
       `;
 
-      content.appendChild(hint);
+      content.appendChild(
+        hint
+      );
     }
 
     members.forEach(
-      (m, j) => {
+      (member, j) => {
         content.appendChild(
           this._row(
-            m.icon,
-            m.name ||
-              m.entity ||
+            member.icon,
+            member.name ||
+              member.entity ||
               "(vide)",
-            m.entity,
+            member.entity,
             () => {
               this._path = [
                 i,
@@ -1993,29 +2092,31 @@ class LightCardEditor extends HTMLElement {
       this._addRow(
         "light",
         "Ajouter un membre",
-        (ent) => {
-          let idx;
+        (entity) => {
+          let index;
 
           this._update((c) => {
-            const li =
+            const current =
               c.lights[i];
 
-            li.members =
-              li.members || [];
+            current.members =
+              current.members ||
+              [];
 
-            li.members.push({
-              entity: ent,
+            current.members.push({
+              entity,
               name: "",
               icon: "mdi:lightbulb",
             });
 
-            idx =
-              li.members.length - 1;
+            index =
+              current.members.length -
+              1;
           });
 
           this._path = [
             i,
-            idx,
+            index,
           ];
 
           this._render();
@@ -2023,171 +2124,34 @@ class LightCardEditor extends HTMLElement {
       )
     );
 
-    return this._createSectionPanel(
-      "Groupe",
-      "mdi:account-group",
-      content
-    );
+    return content;
   }
 
-  /* -----------------------------------------------------------------------
-   * Customisation
-   * --------------------------------------------------------------------- */
+  /* ------------------------------------------------------------------
+   * Member
+   * ---------------------------------------------------------------- */
 
-  _createCustomisationPanel(
+  _renderMember(
     i,
-    l
+    j
   ) {
-    const content =
-      document.createElement("div");
-
-    content.style.cssText = `
-      display: flex;
-      flex-direction: column;
-      width: 100%;
-    `;
-
-    content.append(
-      this._createColorRow(
-        "Couleur",
-        "color",
-        l.color,
-        (value) =>
-          this._update(
-            (c) =>
-              (c.lights[i].color =
-                value)
-          )
-      ),
-
-      this._createColorRow(
-        "Fond du sous-menu",
-        "submenu_background",
-        l.submenu_background,
-        (value) =>
-          this._update(
-            (c) =>
-              (c.lights[i].submenu_background =
-                value)
-          )
-      )
-    );
-
-    return this._createSectionPanel(
-      "Customisation",
-      "mdi:palette",
-      content
-    );
-  }
-
-  /* -----------------------------------------------------------------------
-   * Interactions
-   * --------------------------------------------------------------------- */
-
-  _createInteractionsPanel(
-    i,
-    l
-  ) {
-    const form =
-      document.createElement(
-        "ha-form"
-      );
-
-    /*
-     * ACTION_SCHEMA de ta version contient déjà
-     * le expandable "Interactions".
-     *
-     * Ici on récupère UNIQUEMENT son contenu.
-     *
-     * Cela évite :
-     *
-     * Interactions
-     *   └── Interactions
-     */
-    const actionSchema =
-      Array.isArray(
-        ACTION_SCHEMA
-      )
-        ? ACTION_SCHEMA
-        : [];
-
-    const interactionField =
-      actionSchema.find(
-        (schema) =>
-          schema.name ===
-          "interactions"
-      );
-
-    form.schema =
-      interactionField &&
-      Array.isArray(
-        interactionField.schema
-      )
-        ? interactionField.schema
-        : actionSchema;
-
-    form.data = {
-      tap_action:
-        l.tap_action,
-      hold_action:
-        l.hold_action,
-      double_tap_action:
-        l.double_tap_action,
-    };
-
-    form.computeLabel = (
-      schema
-    ) =>
-      ACTION_LABELS[
-        schema.name
-      ] ||
-      schema.name;
-
-    if (this._hass) {
-      form.hass =
-        this._hass;
-    }
-
-    form.addEventListener(
-      "value-changed",
-      (ev) => {
-        ev.stopPropagation();
-
-        this._update(
-          (c) =>
-            (c.lights[i] = {
-              ...c.lights[i],
-              ...ev.detail.value,
-            })
-        );
-      }
-    );
-
-    this._forms.push(form);
-
-    return this._createSectionPanel(
-      "Interactions",
-      "mdi:gesture-tap",
-      form
-    );
-  }
-
-  /* -----------------------------------------------------------------------
-   * Vue membre
-   * --------------------------------------------------------------------- */
-
-  _renderMember(i, j) {
-    const m =
-      (this._config.lights[i]
-        .members || [])[j] || {};
+    const member =
+      (
+        this._config
+          .lights[i]
+          .members || []
+      )[j] || {};
 
     this.appendChild(
       this._backHeader(
-        m.name ||
-          m.entity ||
+        member.name ||
+          member.entity ||
           "Membre",
         () => {
-          this._path = [i];
+          this._path = [
+            i,
+          ];
+
           this._render();
         }
       )
@@ -2197,20 +2161,25 @@ class LightCardEditor extends HTMLElement {
       this._form(
         MEMBER_ITEM_SCHEMA,
         {
-          entity: m.entity,
-          name: m.name,
-          icon: m.icon,
-          color: m.color,
+          entity:
+            member.entity,
+          name:
+            member.name,
+          icon:
+            member.icon,
+          color:
+            member.color,
         },
         MEMBER_ITEM_LABELS,
-        (v) =>
+        (value) =>
           this._update(
             (c) =>
-              (c.lights[i].members[j] = {
-                ...c.lights[i]
-                  .members[j],
-                ...v,
-              })
+              (c.lights[i].members[j] =
+                {
+                  ...c.lights[i]
+                    .members[j],
+                  ...value,
+                })
           )
       )
     );
