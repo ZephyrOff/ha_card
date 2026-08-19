@@ -317,45 +317,36 @@ const ACTION_RELATED_CONTEXT_ALEX = {
 
 const ACTION_SCHEMA = [
   {
-    name: "interactions",
-    type: "expandable",
+    name: "tap_action",
+    selector: {
+      ui_action: {
+        default_action: "more-info",
+      },
+    },
+    context: ACTION_RELATED_CONTEXT_ALEX,
+  },
+  {
+    name: "",
+    type: "optional_actions",
     flatten: true,
-    title: "Interactions",
-    iconPath: "M12,2C6.48,2 2,6.48 2,12C2,17.52 6.48,22 12,22C17.52,22 22,17.52 22,12C22,6.48 17.52,2 12,2ZM11,17H13V11H11V17ZM11,7H13V9H11V7Z",
     schema: [
       {
-        name: "tap_action",
+        name: "hold_action",
         selector: {
           ui_action: {
-            default_action: "more-info",
+            default_action: "none",
           },
         },
         context: ACTION_RELATED_CONTEXT_ALEX,
       },
       {
-        name: "",
-        type: "optional_actions",
-        flatten: true,
-        schema: [
-          {
-            name: "hold_action",
-            selector: {
-              ui_action: {
-                default_action: "none",
-              },
-            },
-            context: ACTION_RELATED_CONTEXT_ALEX,
+        name: "double_tap_action",
+        selector: {
+          ui_action: {
+            default_action: "none",
           },
-          {
-            name: "double_tap_action",
-            selector: {
-              ui_action: {
-                default_action: "none",
-              },
-            },
-            context: ACTION_RELATED_CONTEXT_ALEX,
-          },
-        ],
+        },
+        context: ACTION_RELATED_CONTEXT_ALEX,
       },
     ],
   },
