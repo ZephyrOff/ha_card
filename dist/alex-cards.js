@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.5.0";
+const ALEX_CARDS_VERSION = "0.6.0";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -243,6 +243,14 @@ function escapeHtml(s) {
     /[&<>"]/g,
     (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])
   );
+}
+
+// Résout une couleur optionnelle ([r,g,b] du picker, chaîne CSS, ou vide) vers
+// une valeur CSS, avec repli sur une variable de thème.
+function colorOr(v, fallback) {
+  if (Array.isArray(v)) return rgbToHex(v);
+  if (typeof v === "string" && v.trim()) return v;
+  return fallback;
 }
 
 /*
@@ -1401,6 +1409,128 @@ window.customCards.push({
   name: "Multi Graph Card",
   description: "Pile de mini-graphes configurables (fond de card du thème).",
   preview: false,
+  documentationURL: "https://github.com/<user>/alex-cards",
+});
+
+/* =========================================================================
+ * === pill-card ===========================================================
+ * Pastille nom + label, icône ronde et chevron. Fond = thème par défaut.
+ * Options : fond, icône, couleur d'icône, couleur du nom, couleur du label.
+ * ========================================================================= */
+
+class PillCard extends AlexWrapperCard {
+  static getConfigElement() {
+    return document.createElement("pill-card-editor");
+  }
+  static getStubConfig() {
+    return { name: "Titre", secondary: "Sous-titre", icon: "mdi:home" };
+  }
+
+  _innerConfig(c) {
+    const bg = colorOr(
+      c.background,
+      "var(--ha-card-background, var(--card-background-color))"
+    );
+    const iconColor = colorOr(c.icon_color, "var(--state-icon-color)");
+    const circleBg = Array.isArray(c.icon_color)
+      ? rgba(c.icon_color, 0.14)
+      : "rgba(var(--rgb-primary-text-color, 0, 0, 0), 0.08)";
+    const nameColor = colorOr(c.name_color, "var(--primary-text-color)");
+    const secColor = colorOr(c.secondary_color, "var(--secondary-text-color)");
+
+    return {
+      type: "custom:button-card",
+      icon: c.icon || "mdi:home",
+      name: c.name || "",
+      label: c.secondary || "",
+      show_name: true,
+      show_label: true,
+      show_icon: true,
+      styles: {
+        card: [
+          { height: "64px" },
+          { padding: "8px 14px" },
+          { "border-radius": "20px" },
+          { background: bg },
+          { "box-shadow": "0 4px 12px rgba(50, 60, 90, 0.08)" },
+        ],
+        grid: [
+          { "grid-template-areas": '"i n action" "i l action"' },
+          { "grid-template-columns": "42px 1fr 25px" },
+          { "grid-template-rows": "1fr 1fr" },
+          { "column-gap": "10px" },
+        ],
+        img_cell: [
+          { width: "40px" },
+          { height: "40px" },
+          { "border-radius": "50%" },
+          { background: circleBg },
+          { "align-self": "center" },
+          { "justify-self": "center" },
+        ],
+        icon: [{ width: "21px" }, { height: "21px" }, { color: iconColor }],
+        name: [
+          { "justify-self": "start" },
+          { "align-self": "end" },
+          { "font-size": "15px" },
+          { "font-weight": "650" },
+          { color: nameColor },
+          { "line-height": "18px" },
+        ],
+        label: [
+          { "justify-self": "start" },
+          { "align-self": "start" },
+          { "font-size": "12px" },
+          { "font-weight": "500" },
+          { color: secColor },
+          { "line-height": "15px" },
+        ],
+        custom_fields: {
+          action: [
+            { color: secColor },
+            { "align-self": "center" },
+            { "justify-self": "end" },
+          ],
+        },
+      },
+      custom_fields: {
+        action: '<ha-icon icon="mdi:chevron-right"></ha-icon>',
+      },
+    };
+  }
+}
+customElements.define("pill-card", PillCard);
+
+class PillCardEditor extends AlexFormEditor {
+  constructor() {
+    super();
+    this._schema = [
+      { name: "name", selector: { text: {} } },
+      { name: "secondary", selector: { text: {} } },
+      { name: "icon", selector: { icon: {} } },
+      { name: "background", selector: { color_rgb: {} } },
+      { name: "icon_color", selector: { color_rgb: {} } },
+      { name: "name_color", selector: { color_rgb: {} } },
+      { name: "secondary_color", selector: { color_rgb: {} } },
+    ];
+    this._labels = {
+      name: "Nom",
+      secondary: "Sous-titre (label)",
+      icon: "Icône",
+      background: "Fond de la carte (vide = thème)",
+      icon_color: "Couleur de l'icône (vide = thème)",
+      name_color: "Couleur du nom (vide = thème)",
+      secondary_color: "Couleur du sous-titre (vide = thème)",
+    };
+  }
+}
+customElements.define("pill-card-editor", PillCardEditor);
+
+window.customCards.push({
+  type: "pill-card",
+  name: "Pill Card",
+  description: "Pastille nom + sous-titre avec icône et chevron.",
+  preview: true,
   documentationURL: "https://github.com/<user>/alex-cards",
 });
 
