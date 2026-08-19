@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.9.3";
+const ALEX_CARDS_VERSION = "0.9.4";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -1228,20 +1228,6 @@ const LIGHT_MAIN_SCHEMA = [
   { name: "name", selector: { text: {} } },
   { name: "icon", selector: { icon: {} } },
 ];
-const LIGHT_EXTRAS_SCHEMA = [
-  {
-    name: "customisation",
-    type: "expandable",
-    flatten: true,
-    title: "Customisation",
-    icon: "mdi:palette",
-    schema: [
-      { name: "color", selector: { color_rgb: {} } },
-      { name: "submenu_background", selector: { color_rgb: {} } },
-    ],
-  },
-  INTERACTIONS_FIELD,
-];
 const LIGHT_ITEM_LABELS = Object.assign(
   {
     entity: "Entité",
@@ -1518,64 +1504,134 @@ class LightCardEditor extends HTMLElement {
       )
     );
 
-    this.appendChild(this._groupPanel(i, l));
+    /*
+     * Groupe
+     */
 
     this.appendChild(
-      this._form(
-        LIGHT_EXTRAS_SCHEMA,
-        {
-          color: l.color,
-          submenu_background: l.submenu_background,
-          tap_action: l.tap_action,
-          hold_action: l.hold_action,
-          double_tap_action: l.double_tap_action,
-        },
-        LIGHT_ITEM_LABELS,
-        (v) =>
-          this._update(
-            (c) =>
-              (c.lights[i] = {
-                ...c.lights[i],
-                ...v,
-              })
-          )
-      )
+      this._groupPanel(i, l)
+    );
+
+    /*
+     * Customisation
+     */
+
+    this.appendChild(
+      this._createCustomisationPanel(i, l)
+    );
+
+    /*
+     * Interactions
+     */
+
+    this.appendChild(
+      this._createInteractionsPanel(i, l)
     );
   }
 
-  _groupPanel(i, l) {
+  _createSectionPanel(title, iconName, content) {
     const panel = document.createElement("ha-expansion-panel");
+
     panel.outlined = true;
-    panel.header = "Groupe";
-    panel.style.cssText = "display:block;margin:8px 0;";
+    panel.header = title;
 
-    const licon = document.createElement("ha-icon");
-    licon.icon = "mdi:account-group";
-    licon.setAttribute("slot", "leading-icon");
-    licon.style.cssText = "--mdc-icon-size:20px;color:var(--secondary-text-color);";
-    panel.appendChild(licon);
+    panel.style.cssText = `
+      display: block;
+      width: 100%;
+      box-sizing: border-box;
+      margin: 8px 0;
+      border-radius: 12px;
+      overflow: hidden;
+    `;
 
+    const icon = document.createElement("ha-icon");
+
+    icon.icon = iconName;
+    icon.setAttribute("slot", "leading-icon");
+
+    icon.style.cssText = `
+      --mdc-icon-size: 20px;
+      color: var(--secondary-text-color);
+    `;
+
+    panel.appendChild(icon);
+
+    const body = document.createElement("div");
+
+    body.style.cssText = `
+      width: 100%;
+      box-sizing: border-box;
+      padding: 4px 12px 10px;
+    `;
+
+    body.appendChild(content);
+
+    panel.appendChild(body);
+
+    return panel;
+  }
+
+  _groupPanel(i, l) {
     const content = document.createElement("div");
-    content.style.cssText = "padding:4px 8px 8px;";
 
-    // Affichage groupe (input_boolean)
+    /*
+     * ----------------------------------------------------------------------
+     * Input_boolean d'affichage
+     * ----------------------------------------------------------------------
+     */
+
     content.appendChild(
       this._form(
-        [{ name: "expand_toggle", selector: { entity: { domain: "input_boolean" } } }],
-        { expand_toggle: l.expand_toggle },
-        { expand_toggle: "Affichage groupe" },
-        (v) => this._update((c) => (c.lights[i].expand_toggle = v.expand_toggle))
+        [
+          {
+            name: "expand_toggle",
+            selector: {
+              entity: {
+                domain: "input_boolean",
+              },
+            },
+          },
+        ],
+        {
+          expand_toggle: l.expand_toggle,
+        },
+        {
+          expand_toggle:
+            "input_boolean d'affichage (rend la lumière déployable)",
+        },
+        (v) =>
+          this._update(
+            (c) =>
+              (c.lights[i].expand_toggle =
+                v.expand_toggle)
+          )
       )
     );
 
-    content.appendChild(this._sectionTitle("Membres du groupe"));
+    /*
+     * ----------------------------------------------------------------------
+     * Membres du groupe
+     * ----------------------------------------------------------------------
+     */
+
+    content.appendChild(
+      this._sectionTitle("Membres du groupe")
+    );
 
     const members = l.members || [];
+
     if (members.length && !l.expand_toggle) {
       const hint = document.createElement("div");
+
       hint.textContent =
-        "⚠ Renseigne un « Affichage groupe » ci-dessus pour que le groupe se déploie.";
-      hint.style.cssText = "font-size:12px;color:var(--warning-color,#f4a000);margin:4px 0;";
+        "⚠ Renseigne un input_boolean d'affichage ci-dessus pour que le groupe se déploie.";
+
+      hint.style.cssText = `
+        font-size: 12px;
+        color: var(--warning-color, #f4a000);
+        margin: 4px 0;
+      `;
+
       content.appendChild(hint);
     }
 
@@ -1590,29 +1646,145 @@ class LightCardEditor extends HTMLElement {
             this._render();
           },
           () => {
-            this._update((c) => c.lights[i].members.splice(j, 1));
+            this._update(
+              (c) =>
+                c.lights[i].members.splice(j, 1)
+            );
+
             this._render();
           }
         )
       );
     });
 
+    _createCustomisationPanel(i, l) {
+      const content = document.createElement("div");
+
+      content.style.cssText = `
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      `;
+
+      content.append(
+        this._createColorRow(
+          "Couleur",
+          "color",
+          l.color,
+          (value) =>
+            this._update(
+              (c) =>
+                (c.lights[i].color = value)
+            )
+        ),
+
+        this._createColorRow(
+          "Fond du sous-menu",
+          "submenu_background",
+          l.submenu_background,
+          (value) =>
+            this._update(
+              (c) =>
+                (c.lights[i].submenu_background = value)
+            )
+        )
+      );
+
+      return this._createSectionPanel(
+        "Customisation",
+        "mdi:palette",
+        content
+      );
+    }
+
+    _createInteractionsPanel(i, l) {
+      const form = document.createElement("ha-form");
+
+      form.schema = [
+        {
+          name: "interactions",
+          type: "expandable",
+          flatten: true,
+          title: "Actions",
+          icon: "mdi:gesture-tap",
+          schema: ACTION_SCHEMA,
+        },
+      ];
+
+      form.data = {
+        interactions: {
+          tap_action: l.tap_action,
+          hold_action: l.hold_action,
+          double_tap_action: l.double_tap_action,
+        },
+      };
+
+      if (this._hass) {
+        form.hass = this._hass;
+      }
+
+      form.addEventListener("value-changed", (ev) => {
+        ev.stopPropagation();
+
+        const value = ev.detail.value || {};
+        const actions = value.interactions || {};
+
+        this._update(
+          (c) =>
+            (c.lights[i] = {
+              ...c.lights[i],
+              ...actions,
+            })
+        );
+      });
+
+      this._forms.push(form);
+
+      return this._createSectionPanel(
+        "Interactions",
+        "mdi:gesture-tap",
+        form
+      );
+    }
+
+    /*
+     * ----------------------------------------------------------------------
+     * Ajouter un membre
+     * ----------------------------------------------------------------------
+     */
+
     content.appendChild(
-      this._addRow("light", "Ajouter un membre", (ent) => {
-        let idx;
-        this._update((c) => {
-          const li = c.lights[i];
-          li.members = li.members || [];
-          li.members.push({ entity: ent, name: "", icon: "mdi:lightbulb" });
-          idx = li.members.length - 1;
-        });
-        this._path = [i, idx];
-        this._render();
-      })
+      this._addRow(
+        "light",
+        "Ajouter un membre",
+        (ent) => {
+          let idx;
+
+          this._update((c) => {
+            const li = c.lights[i];
+
+            li.members = li.members || [];
+
+            li.members.push({
+              entity: ent,
+              name: "",
+              icon: "mdi:lightbulb",
+            });
+
+            idx = li.members.length - 1;
+          });
+
+          this._path = [i, idx];
+          this._render();
+        }
+      )
     );
 
-    panel.appendChild(content);
-    return panel;
+    return this._createSectionPanel(
+      "Groupe",
+      "mdi:account-group",
+      content
+    );
   }
 
   _renderMember(i, j) {
