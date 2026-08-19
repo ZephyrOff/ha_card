@@ -1760,110 +1760,266 @@ class PillCard extends AlexWrapperCard {
 }
 customElements.define("pill-card", PillCard);
 
-class PillCardEditor extends AlexFormEditor {
+class PillCardEditor extends HTMLElement {
   constructor() {
     super();
 
-    this._schema = [
-      { name: "name", selector: { text: {} } },
-      { name: "secondary", selector: { text: {} } },
-      { name: "icon", selector: { icon: {} } },
+    this._config = {};
+    this._hass = null;
+    this._form = null;
+    this._customisation = null;
+  }
 
+  setConfig(config) {
+    this._config = { ...(config || {}) };
+    this._render();
+  }
+
+  set hass(hass) {
+    this._hass = hass;
+
+    if (this._form) {
+      this._form.hass = hass;
+    }
+
+    if (this._customisation) {
+      this._customisation.querySelectorAll("ha-selector").forEach((selector) => {
+        selector.hass = hass;
+      });
+    }
+  }
+
+  _emit(changes) {
+    this._config = {
+      ...this._config,
+      ...changes,
+    };
+
+    this.dispatchEvent(
+      new CustomEvent("config-changed", {
+        detail: {
+          config: this._config,
+        },
+        bubbles: true,
+        composed: true,
+      })
+    );
+  }
+
+  _normalizeColor(value) {
+    if (Array.isArray(value)) {
+      return value;
+    }
+
+    return value;
+  }
+
+  _createColorRow(label, configKey) {
+    const row = document.createElement("div");
+
+    row.style.cssText = `
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      min-height: 48px;
+      padding: 4px 0;
+      box-sizing: border-box;
+    `;
+
+    const labelElement = document.createElement("div");
+
+    labelElement.textContent = label;
+
+    labelElement.style.cssText = `
+      flex: 1;
+      min-width: 0;
+      color: var(--primary-text-color);
+      font-size: 14px;
+      line-height: 20px;
+    `;
+
+    const selector = document.createElement("ha-selector");
+
+    selector.hass = this._hass;
+
+    selector.selector = {
+      color_rgb: {},
+    };
+
+    selector.value = this._normalizeColor(this._config[configKey]);
+
+    selector.style.cssText = `
+      flex: 0 0 auto;
+      width: 120px;
+      min-width: 120px;
+    `;
+
+    selector.addEventListener("value-changed", (ev) => {
+      ev.stopPropagation();
+
+      this._emit({
+        [configKey]: ev.detail.value,
+      });
+    });
+
+    row.append(labelElement, selector);
+
+    return row;
+  }
+
+  _createCustomisationSection() {
+    const wrapper = document.createElement("div");
+
+    wrapper.style.cssText = `
+      margin-top: 8px;
+      margin-bottom: 16px;
+    `;
+
+    const title = document.createElement("div");
+
+    title.textContent = "Customisation";
+
+    title.style.cssText = `
+      font-size: 16px;
+      font-weight: 500;
+      color: var(--primary-text-color);
+      margin: 12px 0 8px;
+    `;
+
+    const content = document.createElement("div");
+
+    content.style.cssText = `
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    `;
+
+    content.append(
+      this._createColorRow("Fond de la carte", "background"),
+      this._createColorRow("Couleur de l'icône", "icon_color"),
+      this._createColorRow("Couleur du nom", "name_color"),
+      this._createColorRow("Couleur du sous-titre", "secondary_color")
+    );
+
+    wrapper.append(title, content);
+
+    this._customisation = wrapper;
+
+    return wrapper;
+  }
+
+  _render() {
+    this.innerHTML = "";
+
+    /*
+     * ----------------------------------------------------------------------
+     * Champs principaux
+     * ----------------------------------------------------------------------
+     */
+
+    this._form = document.createElement("ha-form");
+
+    this._form.schema = [
       {
-        name: "customisation",
-        type: "expandable",
-        flatten: true,
-        title: "Customisation",
-        iconPath:
-          "M12,2C6.48,2 2,6.48 2,12C2,17.52 6.48,22 12,22C17.52,22 22,17.52 22,12C22,6.48 17.52,2 12,2ZM11,17H13V11H11V17ZM11,7H13V9H11V7Z",
-        schema: [
-          {
-            name: "background",
-            selector: {
-              ui_color: {
-                include_none: true,
-              },
-            },
-          },
-          {
-            name: "icon_color",
-            selector: {
-              ui_color: {
-                include_none: true,
-              },
-            },
-          },
-          {
-            name: "name_color",
-            selector: {
-              ui_color: {
-                include_none: true,
-              },
-            },
-          },
-          {
-            name: "secondary_color",
-            selector: {
-              ui_color: {
-                include_none: true,
-              },
-            },
-          },
-        ],
+        name: "name",
+        selector: {
+          text: {},
+        },
       },
+      {
+        name: "secondary",
+        selector: {
+          text: {},
+        },
+      },
+      {
+        name: "icon",
+        selector: {
+          icon: {},
+        },
+      },
+    ];
 
+    this._form.data = {
+      name: this._config.name,
+      secondary: this._config.secondary,
+      icon: this._config.icon,
+    };
+
+    this._form.computeLabel = (schema) => {
+      const labels = {
+        name: "Nom",
+        secondary: "Sous-titre",
+        icon: "Icône",
+      };
+
+      return labels[schema.name] || schema.name;
+    };
+
+    if (this._hass) {
+      this._form.hass = this._hass;
+    }
+
+    this._form.addEventListener("value-changed", (ev) => {
+      ev.stopPropagation();
+
+      this._emit(ev.detail.value);
+    });
+
+    this.appendChild(this._form);
+
+    /*
+     * ----------------------------------------------------------------------
+     * Customisation
+     * ----------------------------------------------------------------------
+     */
+
+    this.appendChild(this._createCustomisationSection());
+
+    /*
+     * ----------------------------------------------------------------------
+     * Interactions
+     * ----------------------------------------------------------------------
+     */
+
+    const interactions = document.createElement("ha-form");
+
+    interactions.schema = [
       {
         name: "interactions",
         type: "expandable",
         flatten: true,
         title: "Interactions",
         iconPath:
-          "M12,2C6.48,2 2,6.48 2,12C2,17.52 6.48,22 12,22C17.52,22 22,17.52 22,12 22,6.48 17.52,2 12,2ZM11,17H13V11H11V17ZM11,7H13V9H11V7Z",
+          "M12,2C6.48,2 2,6.48 2,12C2,17.52 6.48,22 12,22C17.52,22 22,17.52 22,17.52,22 22,17.52 17.52,22 12,22ZM11,17H13V11H11V17ZM11,7H13V9H11V7Z",
         schema: ACTION_SCHEMA,
       },
     ];
 
-    this._labels = Object.assign(
-      {
-        name: "Nom",
-        secondary: "Sous-titre",
-        icon: "Icône",
-        background: "Fond de la carte",
-        icon_color: "Couleur de l'icône",
-        name_color: "Couleur du nom",
-        secondary_color: "Couleur du sous-titre",
-      },
-      ACTION_LABELS
-    );
-  }
+    interactions.data = this._config;
 
-  setConfig(config) {
-    // Le sélecteur ui_color travaille avec des chaînes CSS/hexadécimales.
-    // On convertit donc les anciennes valeurs RGB [r,g,b] uniquement
-    // pour l'affichage dans l'éditeur.
-    this._config = {
-      ...(config || {}),
-      background: this._normalizeColor(config?.background),
-      icon_color: this._normalizeColor(config?.icon_color),
-      name_color: this._normalizeColor(config?.name_color),
-      secondary_color: this._normalizeColor(config?.secondary_color),
+    interactions.computeLabel = (schema) => {
+      return (
+        ACTION_LABELS[schema.name] ||
+        schema.name
+      );
     };
 
-    this._render();
-  }
-
-  _normalizeColor(value) {
-    if (Array.isArray(value)) {
-      return rgbToHex(value);
+    if (this._hass) {
+      interactions.hass = this._hass;
     }
 
-    if (typeof value === "string" && value.trim()) {
-      return value;
-    }
+    interactions.addEventListener("value-changed", (ev) => {
+      ev.stopPropagation();
 
-    return undefined;
+      this._emit(ev.detail.value);
+    });
+
+    this.appendChild(interactions);
   }
 }
+
 customElements.define("pill-card-editor", PillCardEditor);
 
 window.customCards.push({
