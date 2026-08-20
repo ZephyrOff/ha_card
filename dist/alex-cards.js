@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.12.1";
+const ALEX_CARDS_VERSION = "0.12.2";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -2663,7 +2663,14 @@ class WeatherCard extends AlexWrapperCard {
       if (comp.type === "chart") return this._chartConfig(entity, comp);
       return this._currentConfig(entity, comp);
     });
-    return { type: "custom:vertical-stack-in-card", cards };
+    return {
+      type: "custom:vertical-stack-in-card",
+      card_mod: {
+        style:
+          "ha-card {\n  background: transparent;\n  box-shadow: none;\n  border: none;\n}\n",
+      },
+      cards,
+    };
   }
 }
 customElements.define("alex-weather-card", WeatherCard);
