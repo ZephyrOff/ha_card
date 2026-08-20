@@ -19,6 +19,7 @@ Collection de cartes Lovelace custom pour Home Assistant, distribuée en **plugi
 | `custom:alex-entity-card`       | oui        | Liste détaillée d'entités d'un même type (état, zone, dernier changement). |
 | `custom:alex-toggle-card`       | oui        | Liste d'entités basculables avec interrupteur cliquable par ligne. |
 | `custom:alex-clock-card`        | oui        | Horloge et date, alignables, avec la personnalisation du package. |
+| `custom:alex-media-player-card` | oui        | Contrôle média (pochette, lecture, volume) avec bascule entre lecteurs actifs. |
 
 Toutes les cartes apparaissent dans le sélecteur « Ajouter une carte » avec un éditeur
 visuel. La `alex-light-card` a un éditeur type « chips » (liste + crayon pour éditer chaque
@@ -352,6 +353,42 @@ secondary_color: [150, 150, 150] # optionnel, couleur de la date
 - La date est formatée dans la langue de l'interface HA (`hass.locale`, repli sur le
   français), au format « Jour J mois » (ex. « Mardi 16 septembre »). L'heure est
   affichée en 24 h.
+
+### Media Player Card
+
+Contrôle média complet : pochette, titre/artiste, lecture (précédent/lecture-pause/
+suivant), volume. Prend en charge plusieurs lecteurs ; s'il y en a **plusieurs
+actuellement actifs** (lecture ou pause), des onglets apparaissent en bas pour basculer
+entre eux.
+
+```yaml
+type: custom:alex-media-player-card
+entities:
+  - media_player.salon
+  - media_player.spotify
+now_playing_label: "À l'écoute"   # optionnel, texte au-dessus du titre
+accent_color: [255, 255, 255]     # optionnel, couleur du bouton lecture/volume/onglet actif
+```
+
+- **Sélection automatique** : si un seul lecteur configuré est actif, il s'affiche
+  directement. S'il y en a plusieurs, le premier actif s'affiche par défaut ; les onglets
+  permettent de choisir lequel afficher. La sélection est un état d'affichage (pas
+  sauvegardé dans la config) : elle revient au comportement automatique après un
+  rechargement de la page.
+- **Précédent/Suivant** appellent `media_player.media_previous_track`/`media_next_track`
+  (changement de piste) plutôt que rewind/fast-forward, pour rester compatible avec le
+  plus grand nombre d'intégrations.
+- **Volume** : le curseur n'apparaît que si l'entité expose `volume_level` ; cliquer sur
+  l'icône bascule le mute. Le service `volume_set` n'est appelé qu'au relâchement du
+  curseur (pas en continu pendant le glissement), pour éviter de spammer l'entité.
+- **Icône « cast »** en haut à droite : ouvre le more-info natif de HA sur le lecteur
+  sélectionné (accès à la sélection de source, etc., sans réinventer ce sélecteur).
+- Personnalisation (panneau Customisation) : fond de la carte, couleur du titre,
+  couleur de l'artiste/libellé, couleur du bouton lecture + curseur de volume + onglet
+  actif.
+- Note de contraste : le bouton lecture/pause et les onglets actifs utilisent une icône
+  noire fixe sur la couleur d'accent — pense à choisir une couleur d'accent claire pour
+  garder l'icône lisible.
 
 ## Ajouter une nouvelle carte
 

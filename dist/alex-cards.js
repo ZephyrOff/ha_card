@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.20.1";
+const ALEX_CARDS_VERSION = "0.21.0";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -4333,6 +4333,320 @@ window.customCards.push({
   name: "Alex Clock Card",
   description: "Horloge et date, alignables, avec la personnalisation du package.",
   preview: true,
+  documentationURL: "https://github.com/<user>/alex-cards",
+});
+
+/* =========================================================================
+ * === alex-media-player-card ==============================================
+ * Carte de controle media (pochette, titre/artiste, lecture, volume), avec
+ * plusieurs media_player configurables : si plusieurs sont actuellement
+ * actifs (playing/paused/buffering), des onglets apparaissent pour basculer
+ * entre eux. Rendu "maison" (comme Toggle/Sensor/Entity Card), controles via
+ * hass.callService direct.
+ * ========================================================================= */
+
+const MEDIA_ACTIVE_STATES = ["playing", "paused", "buffering"];
+
+function mediaVolumeIcon(muted, level) {
+  if (muted || level === 0) return "mdi:volume-mute";
+  if (level < 0.5) return "mdi:volume-medium";
+  return "mdi:volume-high";
+}
+
+class MediaPlayerCard extends HTMLElement {
+  static getConfigElement() {
+    return document.createElement("alex-media-player-card-editor");
+  }
+  static getStubConfig() {
+    return { entities: [], now_playing_label: "À l'écoute" };
+  }
+
+  setConfig(config) {
+    if (!config) throw new Error("Configuration invalide");
+    this._config = config;
+    this._built = false;
+    this._lastSig = null;
+  }
+
+  set hass(hass) {
+    this._hass = hass;
+    this._render();
+  }
+
+  getCardSize() {
+    return 3;
+  }
+
+  _pickSelected(hass, configured, active) {
+    let selected = this._selectedEntity;
+    if (!selected || !configured.includes(selected) || (active.length && !active.includes(selected))) {
+      selected = active[0] || configured[0] || null;
+    }
+    this._selectedEntity = selected;
+    return selected;
+  }
+
+  _render() {
+    if (!this._config || !this._hass) return;
+    const c = this._config;
+    const hass = this._hass;
+    const configured = c.entities || [];
+
+    const active = configured.filter((e) => {
+      const st = hass.states[e];
+      return st && MEDIA_ACTIVE_STATES.includes(st.state);
+    });
+    const selected = this._pickSelected(hass, configured, active);
+    const stateObj = selected ? hass.states[selected] : null;
+    const attrs = (stateObj && stateObj.attributes) || {};
+
+    const title = attrs.media_title || "Aucune lecture en cours";
+    const artist = attrs.media_artist || "";
+    const picture = attrs.entity_picture || "";
+    const isPlaying = stateObj && stateObj.state === "playing";
+    const muted = !!attrs.is_volume_muted;
+    const volume = attrs.volume_level != null ? attrs.volume_level : 1;
+    const hasVolume = attrs.volume_level != null;
+    const showTabs = active.length > 1;
+
+    const sig = [
+      JSON.stringify(c.background || null),
+      JSON.stringify(c.primary_color || null),
+      JSON.stringify(c.secondary_color || null),
+      JSON.stringify(c.accent_color || null),
+      c.now_playing_label,
+      selected,
+      title,
+      artist,
+      picture,
+      isPlaying,
+      muted,
+      volume,
+      active.join(","),
+    ].join("~");
+    if (this._built && sig === this._lastSig) return;
+    this._lastSig = sig;
+
+    const cardBg = colorOr(c.background, "var(--ha-card-background, var(--card-background-color))");
+    const primaryColor = colorOr(c.primary_color, "var(--primary-text-color)");
+    const secondaryColor = colorOr(c.secondary_color, "var(--secondary-text-color)");
+    const accentColor = colorOr(c.accent_color, "#ffffff");
+    const label = c.now_playing_label != null ? c.now_playing_label : "À l'écoute";
+
+    const artHtml = picture
+      ? `<div style="width:48px;height:48px;border-radius:12px;background-image:url('${escapeHtml(picture)}');
+                     background-size:cover;background-position:center;flex:0 0 auto;"></div>`
+      : `<div style="width:48px;height:48px;border-radius:12px;
+                     background:rgba(var(--rgb-primary-text-color,0,0,0),0.08);
+                     display:flex;align-items:center;justify-content:center;flex:0 0 auto;">
+           <ha-icon icon="mdi:music" style="--mdc-icon-size:22px;color:${secondaryColor};"></ha-icon>
+         </div>`;
+
+    const tabsHtml = showTabs
+      ? `<div class="ac-mp-tabs" style="display:flex;justify-content:center;gap:8px;margin-top:14px;">
+          ${active
+            .map((e) => {
+              const st = hass.states[e];
+              const icon = (st && st.attributes.icon) || "mdi:speaker";
+              const isSel = e === selected;
+              const bg = isSel ? accentColor : "rgba(var(--rgb-primary-text-color,0,0,0),0.10)";
+              const col = isSel ? "#000" : secondaryColor;
+              return `
+                <div class="ac-mp-tab" data-entity="${escapeHtml(e)}"
+                    style="width:30px;height:30px;border-radius:9px;background:${bg};cursor:pointer;
+                           display:flex;align-items:center;justify-content:center;">
+                  <ha-icon icon="${icon}" style="--mdc-icon-size:16px;color:${col};"></ha-icon>
+                </div>`;
+            })
+            .join("")}
+        </div>`
+      : "";
+
+    this.innerHTML = `
+      <ha-card style="border-radius:22px;box-shadow:none;background:${cardBg};padding:16px 18px;">
+        <div style="display:flex;align-items:flex-start;gap:12px;">
+          ${artHtml}
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:12px;color:${secondaryColor};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(label)}</div>
+            <div style="font-size:16px;font-weight:700;color:${primaryColor};margin-top:2px;
+                        overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(title)}</div>
+            <div style="font-size:13px;color:${secondaryColor};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(artist)}</div>
+          </div>
+          <div class="ac-mp-more" style="flex:0 0 auto;cursor:pointer;padding:4px;">
+            <ha-icon icon="mdi:cast" style="--mdc-icon-size:18px;color:${secondaryColor};"></ha-icon>
+          </div>
+        </div>
+
+        <div style="display:flex;align-items:center;justify-content:center;gap:22px;margin-top:16px;">
+          <div class="ac-mp-prev" style="cursor:pointer;">
+            <ha-icon icon="mdi:skip-previous" style="--mdc-icon-size:26px;color:${primaryColor};"></ha-icon>
+          </div>
+          <div class="ac-mp-playpause" style="width:44px;height:44px;border-radius:50%;background:${accentColor};
+                      display:flex;align-items:center;justify-content:center;cursor:pointer;">
+            <ha-icon icon="${isPlaying ? "mdi:pause" : "mdi:play"}" style="--mdc-icon-size:22px;color:#000;"></ha-icon>
+          </div>
+          <div class="ac-mp-next" style="cursor:pointer;">
+            <ha-icon icon="mdi:skip-next" style="--mdc-icon-size:26px;color:${primaryColor};"></ha-icon>
+          </div>
+        </div>
+
+        ${
+          hasVolume
+            ? `<div style="display:flex;align-items:center;gap:10px;margin-top:16px;">
+                <div class="ac-mp-mute" style="cursor:pointer;flex:0 0 auto;">
+                  <ha-icon icon="${mediaVolumeIcon(muted, volume)}" style="--mdc-icon-size:18px;color:${secondaryColor};"></ha-icon>
+                </div>
+                <input class="ac-mp-volume" type="range" min="0" max="1" step="0.01"
+                       value="${muted ? 0 : volume}"
+                       style="flex:1;accent-color:${accentColor};height:4px;cursor:pointer;" />
+              </div>`
+            : ""
+        }
+
+        ${tabsHtml}
+      </ha-card>`;
+
+    const entityId = selected;
+    const call = (service, extra) => {
+      if (!entityId) return;
+      const [domain, svc] = service.split(".");
+      hass.callService(domain, svc, { entity_id: entityId, ...extra });
+    };
+
+    const prevEl = this.querySelector(".ac-mp-prev");
+    if (prevEl) prevEl.addEventListener("click", () => call("media_player.media_previous_track"));
+    const nextEl = this.querySelector(".ac-mp-next");
+    if (nextEl) nextEl.addEventListener("click", () => call("media_player.media_next_track"));
+    const ppEl = this.querySelector(".ac-mp-playpause");
+    if (ppEl) ppEl.addEventListener("click", () => call("media_player.media_play_pause"));
+    const moreEl = this.querySelector(".ac-mp-more");
+    if (moreEl) moreEl.addEventListener("click", () => fireAction(this, hass, { action: "more-info" }, entityId));
+    const muteEl = this.querySelector(".ac-mp-mute");
+    if (muteEl)
+      muteEl.addEventListener("click", () => call("media_player.volume_mute", { is_volume_muted: !muted }));
+    const volEl = this.querySelector(".ac-mp-volume");
+    if (volEl)
+      volEl.addEventListener("change", (ev) =>
+        call("media_player.volume_set", { volume_level: parseFloat(ev.target.value) })
+      );
+    this.querySelectorAll(".ac-mp-tab").forEach((el) => {
+      el.addEventListener("click", () => {
+        this._selectedEntity = el.getAttribute("data-entity");
+        this._lastSig = null;
+        this._render();
+      });
+    });
+
+    this._built = true;
+  }
+}
+customElements.define("alex-media-player-card", MediaPlayerCard);
+
+class MediaPlayerCardEditor extends AlexListEditor {
+  static getStubConfig() {
+    return MediaPlayerCard.getStubConfig();
+  }
+
+  _normalize() {
+    if (!Array.isArray(this._config.entities)) this._config.entities = [];
+  }
+
+  _addEntityRow(onPick) {
+    return this._form(
+      [{ name: "entity", selector: { entity: { domain: "media_player" } } }],
+      {},
+      { entity: "Ajouter un lecteur" },
+      (v) => {
+        if (v && v.entity) onPick(v.entity);
+      }
+    );
+  }
+
+  _render() {
+    this._forms = [];
+    this._selectors = [];
+    this.innerHTML = "";
+    const cfg = this._config;
+
+    this.appendChild(this._sectionTitle("Options"));
+    this.appendChild(
+      this._form(
+        [{ name: "now_playing_label", selector: { text: {} } }],
+        { now_playing_label: cfg.now_playing_label != null ? cfg.now_playing_label : "À l'écoute" },
+        { now_playing_label: "Libellé « en cours de lecture »" },
+        (v) => this._update((c) => Object.assign(c, v))
+      )
+    );
+
+    this.appendChild(this._sectionTitle("Lecteurs"));
+    const entities = cfg.entities || [];
+    entities.forEach((entityId, j) => {
+      const st = this._hass && this._hass.states[entityId];
+      const friendly = st && st.attributes && st.attributes.friendly_name;
+      this.appendChild(
+        this._row(
+          (st && st.attributes && st.attributes.icon) || "mdi:speaker",
+          friendly || entityId,
+          friendly ? entityId : "",
+          null,
+          () => {
+            this._update((c) => c.entities.splice(j, 1));
+            this._render();
+          }
+        )
+      );
+    });
+    this.appendChild(
+      this._addEntityRow((entityId) => {
+        this._update((c) => {
+          c.entities = c.entities || [];
+          c.entities.push(entityId);
+        });
+        this._render();
+      })
+    );
+
+    this.appendChild(
+      this._panel(
+        "Customisation",
+        "mdi:palette",
+        this._mixed(
+          [
+            { name: "background", selector: { color_rgb: {} } },
+            { name: "primary_color", selector: { color_rgb: {} } },
+            { name: "secondary_color", selector: { color_rgb: {} } },
+            { name: "accent_color", selector: { color_rgb: {} } },
+          ],
+          {
+            background: cfg.background,
+            primary_color: cfg.primary_color,
+            secondary_color: cfg.secondary_color,
+            accent_color: cfg.accent_color,
+          },
+          {
+            background: "Fond de la carte",
+            primary_color: "Couleur du titre",
+            secondary_color: "Couleur de l'artiste / du libellé",
+            accent_color: "Couleur du bouton lecture / volume / onglet actif",
+          },
+          (v) => this._update((c) => Object.assign(c, v))
+        )
+      )
+    );
+
+    if (this._hass) {
+      this._forms.forEach((f) => (f.hass = this._hass));
+      this._selectors.forEach((s) => (s.hass = this._hass));
+    }
+  }
+}
+customElements.define("alex-media-player-card-editor", MediaPlayerCardEditor);
+
+window.customCards.push({
+  type: "alex-media-player-card",
+  name: "Alex Media Player Card",
+  description: "Contrôle média (pochette, lecture, volume) avec bascule entre lecteurs actifs.",
+  preview: false,
   documentationURL: "https://github.com/<user>/alex-cards",
 });
 
