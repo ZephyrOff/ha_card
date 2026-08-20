@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.9.12";
+const ALEX_CARDS_VERSION = "0.9.13";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -1512,7 +1512,13 @@ class LightCardEditor extends HTMLElement {
       this._update((c) => (c.lights[i] = { ...c.lights[i], ...v }));
 
     this.appendChild(
-      this._panel("Groupe", "mdi:account-group", this._groupContent(i, l))
+      this._panel(
+        "Groupe",
+        "mdi:account-group",
+        this._groupContent(i, l),
+        false,
+        "margin-top:12px;"
+      )
     );
 
     this.appendChild(
@@ -1546,21 +1552,22 @@ class LightCardEditor extends HTMLElement {
     );
   }
 
-  _panel(title, iconName, contentEl, expanded) {
+  _panel(title, iconName, contentEl, expanded, extraStyle) {
     const panel = document.createElement("ha-expansion-panel");
     panel.outlined = true;
     panel.expanded = !!expanded;
     panel.style.cssText =
       "display:block;margin-bottom:8px;" +
       "--expansion-panel-summary-padding:0 12px;" +
-      "--expansion-panel-content-padding:0 12px 12px;";
+      "--expansion-panel-content-padding:0 12px 12px;" +
+      (extraStyle || "");
 
     // En-tête compact fait main (au lieu du rendu par défaut du composant,
     // trop haut) : hauteur fixe alignée sur les lignes de la liste.
     const header = document.createElement("div");
     header.setAttribute("slot", "header");
     header.style.cssText =
-      "display:flex;align-items:center;gap:8px;height:40px;" +
+      "display:flex;align-items:center;gap:8px;height:32px;" +
       "font-size:14px;font-weight:500;color:var(--primary-text-color);";
     if (iconName) {
       const ic = document.createElement("ha-icon");
