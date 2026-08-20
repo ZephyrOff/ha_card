@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.12.0";
+const ALEX_CARDS_VERSION = "0.12.1";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -2606,7 +2606,7 @@ class WeatherCard extends AlexWrapperCard {
       field: "forecast",
       template: TPL_FORECAST_CLASSIC,
       extraStyles,
-      defaultBg: "#343342",
+      defaultBg: "var(--ha-card-background, var(--card-background-color))",
       defaultPrimary: "rgba(255,255,255,.95)",
       defaultSecondary: "rgba(255,255,255,.42)",
       height: "255px",
@@ -2633,7 +2633,7 @@ class WeatherCard extends AlexWrapperCard {
       field: "daily",
       template: TPL_FORECAST_BARS,
       extraStyles,
-      defaultBg: "#242424",
+      defaultBg: "var(--ha-card-background, var(--card-background-color))",
       defaultPrimary: "rgba(255,255,255,.92)",
       defaultSecondary: "rgba(255,255,255,.42)",
       height: "235px",
@@ -2646,7 +2646,7 @@ class WeatherCard extends AlexWrapperCard {
       field: "chart",
       template: TPL_FORECAST_CHART,
       extraStyles: null,
-      defaultBg: "#30303f",
+      defaultBg: "var(--ha-card-background, var(--card-background-color))",
       defaultPrimary: "#18a6d5",
       defaultSecondary: "#e8a52c",
       height: "245px",

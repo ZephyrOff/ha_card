@@ -142,8 +142,9 @@ Points importants :
 - **`type: current`** : le fond est le dégradé dynamique selon la condition météo par
   défaut ; définir `background` dans l'éditeur le remplace par une couleur fixe. `primary_color`
   colore la température et la condition, `secondary_color` colore le min/max du jour.
-- **`type: classic` / `bars` / `chart`** : `days` (défaut 5) limite le nombre de jours de
-  prévision affichés. Les prévisions sont récupérées via l'abonnement WebSocket
+- **`type: classic` / `bars` / `chart`** : le fond par défaut suit le fond de card du
+  thème (`--ha-card-background`) ; définir `background` dans l'éditeur le remplace par
+  une couleur fixe. `days` (défaut 5) limite le nombre de jours de prévision affichés. Les prévisions sont récupérées via l'abonnement WebSocket
   `weather/subscribe_forecast` (méthode standard de HA depuis 2023.9, celle qu'utilise la
   carte météo native) ; en repli, si l'entité ne le supporte pas, l'ancien attribut
   `attributes.forecast` est lu une fois. Si aucun des deux n'est disponible, le composant
