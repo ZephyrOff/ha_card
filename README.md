@@ -20,6 +20,7 @@ Collection de cartes Lovelace custom pour Home Assistant, distribuée en **plugi
 | `custom:alex-toggle-card`       | oui        | Liste d'entités basculables avec interrupteur cliquable par ligne. |
 | `custom:alex-clock-card`        | oui        | Horloge et date, alignables, avec la personnalisation du package. |
 | `custom:alex-media-player-card` | oui        | Contrôle média (pochette, lecture, volume) avec bascule entre lecteurs actifs. |
+| `custom:alex-server-card`       | oui        | Liste de serveurs/VM avec statut en ligne et bouton power. |
 
 Toutes les cartes apparaissent dans le sélecteur « Ajouter une carte » avec un éditeur
 visuel. La `alex-light-card` a un éditeur type « chips » (liste + crayon pour éditer chaque
@@ -406,6 +407,41 @@ accent_color: [255, 255, 255]     # optionnel, couleur du bouton lecture/volume/
   (primary), couleur d'accent (curseur de volume + onglet actif uniquement).
 - Rétrocompatible : une ancienne config avec `entities:` en simple liste de chaînes, ou
   avec l'ancien champ `background` (désormais `top_background`), reste valide.
+
+### Server Card
+
+Liste de serveurs/VM avec statut en ligne/hors ligne et bouton power qui bascule
+directement l'entité associée. Pas de badge d'en-tête (juste un titre + compteur
+« N/Total en ligne »), fidèle au gabarit `custom:button-card` fourni.
+
+```yaml
+type: custom:alex-server-card
+name: Serveurs
+servers:
+  - name: Proxmox
+    secondary: 192.168.1.10
+    icon: mdi:server
+    entity: switch.proxmox_power
+  - name: Ubuntu Server
+    secondary: 192.168.1.20
+    icon: mdi:linux
+    entity: switch.ubuntu_power
+```
+
+- Chaque serveur a son **nom**, son **sous-titre** (texte libre — typiquement une adresse
+  IP, mais ce n'est pas contraint), son **icône**, et son **entité** (`switch` ou
+  `input_boolean` de préférence — c'est cette entité qui détermine en ligne/hors ligne
+  et que le bouton power bascule).
+- Le sous-titre est un **champ texte libre**, pas une valeur dynamique lue depuis
+  l'entité (contrairement à ce que suggérait le gabarit d'origine où l'IP était en dur) —
+  à toi de le renseigner toi-même.
+- Le bouton power appelle `homeassistant.toggle` sur l'entité du serveur (éteint si en
+  ligne, allume si hors ligne).
+- Personnalisation (panneau Customisation) : fond de la carte, couleur des noms de
+  serveur/titre (primary), couleur des adresses/compteur (secondary), couleur « en
+  ligne » et couleur « hors ligne » (appliquées au point de statut, au texte de statut,
+  et à l'icône du bouton power) — une simplification par rapport aux 4 teintes distinctes
+  du gabarit d'origine, pour rester sur le même nombre de champs que les autres cartes.
 
 ## Ajouter une nouvelle carte
 

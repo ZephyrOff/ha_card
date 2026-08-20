@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.22.1";
+const ALEX_CARDS_VERSION = "0.23.0";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -4744,6 +4744,280 @@ window.customCards.push({
   type: "alex-media-player-card",
   name: "Alex Media Player Card",
   description: "Contrôle média (pochette, lecture, volume) avec bascule entre lecteurs actifs.",
+  preview: false,
+  documentationURL: "https://github.com/<user>/alex-cards",
+});
+
+/* =========================================================================
+ * === alex-server-card ====================================================
+ * Liste de serveurs/VM avec statut en ligne/hors ligne et bouton power
+ * (bascule l'entite associee). Rendu "maison", meme famille que
+ * Sensor/Entity/Toggle Card. Pas de badge d'en-tete (fidele au gabarit
+ * button-card fourni : juste un titre + compteur "N/Total en ligne").
+ * ========================================================================= */
+
+class ServerCard extends HTMLElement {
+  static getConfigElement() {
+    return document.createElement("alex-server-card-editor");
+  }
+  static getStubConfig() {
+    return { name: "Serveurs", servers: [] };
+  }
+
+  setConfig(config) {
+    if (!config) throw new Error("Configuration invalide");
+    this._config = config;
+    this._built = false;
+    this._lastSig = null;
+  }
+
+  set hass(hass) {
+    this._hass = hass;
+    this._render();
+  }
+
+  getCardSize() {
+    return 1 + ((this._config && this._config.servers) || []).length;
+  }
+
+  _render() {
+    if (!this._config || !this._hass) return;
+    const c = this._config;
+    const hass = this._hass;
+    const servers = c.servers || [];
+
+    const rows = servers.map((s) => {
+      const st = s.entity ? hass.states[s.entity] : null;
+      const online = !!st && st.state === "on";
+      return { ...s, online, available: !!st };
+    });
+    const onlineCount = rows.filter((r) => r.online).length;
+
+    const sig = [
+      c.name,
+      JSON.stringify(c.background || null),
+      JSON.stringify(c.primary_color || null),
+      JSON.stringify(c.secondary_color || null),
+      JSON.stringify(c.online_color || null),
+      JSON.stringify(c.offline_color || null),
+      rows.map((r) => `${r.entity}|${r.name}|${r.secondary}|${r.icon}|${r.online}`).join(";"),
+    ].join("~");
+    if (this._built && sig === this._lastSig) return;
+    this._lastSig = sig;
+
+    const cardBg = colorOr(c.background, "var(--ha-card-background, var(--card-background-color))");
+    const primaryColor = colorOr(c.primary_color, "var(--primary-text-color)");
+    const secondaryColor = colorOr(c.secondary_color, "var(--secondary-text-color)");
+    const onlineColor = colorOr(c.online_color, "#72c58a");
+    const offlineColor = colorOr(c.offline_color, "var(--secondary-text-color)");
+    const title = c.name != null ? c.name : "Serveurs";
+
+    const rowsHtml = rows
+      .map((r) => {
+        const statusColor = r.online ? onlineColor : offlineColor;
+        const statusText = r.online ? "En ligne" : "Arrêté";
+        const powerIcon = r.online ? "mdi:power" : "mdi:play";
+        return `
+          <div class="ac-srv-row" style="display:grid;grid-template-columns:42px minmax(0,1fr) auto 42px;
+                      align-items:center;width:100%;min-height:62px;padding:0 10px;box-sizing:border-box;
+                      border-radius:15px;background:rgba(var(--rgb-primary-text-color,0,0,0),0.045);">
+            <div style="width:34px;height:34px;border-radius:10px;display:flex;align-items:center;
+                        justify-content:center;background:rgba(var(--rgb-primary-text-color,0,0,0),0.07);">
+              <ha-icon icon="${r.icon || "mdi:server"}" style="--mdc-icon-size:21px;color:${secondaryColor};"></ha-icon>
+            </div>
+            <div style="display:flex;flex-direction:column;justify-content:center;min-width:0;padding:0 10px;">
+              <div style="font-size:15px;font-weight:500;color:${primaryColor};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(r.name || "")}</div>
+              <div style="font-size:11px;margin-top:3px;color:${secondaryColor};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(r.secondary || "")}</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:5px;margin-right:12px;font-size:11px;white-space:nowrap;color:${statusColor};">
+              <span style="width:7px;height:7px;border-radius:50%;background:${statusColor};box-shadow:${r.online ? `0 0 7px ${statusColor}` : "none"};"></span>
+              ${statusText}
+            </div>
+            <div class="ac-srv-power" data-entity="${escapeHtml(r.entity || "")}"
+                style="width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;
+                       background:rgba(var(--rgb-primary-text-color,0,0,0),0.06);cursor:pointer;">
+              <ha-icon icon="${powerIcon}" style="--mdc-icon-size:19px;color:${statusColor};"></ha-icon>
+            </div>
+          </div>`;
+      })
+      .join("");
+
+    this.innerHTML = `
+      <ha-card style="border-radius:22px;box-shadow:none;background:${cardBg};padding:14px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:2px 4px 8px 4px;">
+          <div style="font-size:14px;font-weight:500;color:${primaryColor};">${escapeHtml(title)}</div>
+          <div style="font-size:11px;color:${secondaryColor};">${onlineCount}/${rows.length} en ligne</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:8px;">${rowsHtml}</div>
+      </ha-card>`;
+
+    this.querySelectorAll(".ac-srv-power").forEach((el) => {
+      const entityId = el.getAttribute("data-entity");
+      if (!entityId) return;
+      el.addEventListener("click", () => {
+        hass.callService("homeassistant", "toggle", { entity_id: entityId });
+      });
+    });
+
+    this._built = true;
+  }
+}
+customElements.define("alex-server-card", ServerCard);
+
+class ServerCardEditor extends AlexListEditor {
+  static getStubConfig() {
+    return ServerCard.getStubConfig();
+  }
+
+  _normalize() {
+    if (!Array.isArray(this._config.servers)) this._config.servers = [];
+  }
+
+  _validPath() {
+    const p = this._path || [];
+    if (p.length >= 1 && !this._config.servers[p[0]]) return [];
+    return p;
+  }
+
+  _addServerRow(onPick) {
+    return this._form(
+      [{ name: "entity", selector: { entity: { domain: ["switch", "input_boolean"] } } }],
+      {},
+      { entity: "Ajouter un serveur" },
+      (v) => {
+        if (v && v.entity) onPick(v.entity);
+      }
+    );
+  }
+
+  _render() {
+    this._forms = [];
+    this._selectors = [];
+    this.innerHTML = "";
+    const p = this._validPath();
+    if (p.length === 0) this._renderRoot();
+    else this._renderServer(p[0]);
+    if (this._hass) {
+      this._forms.forEach((f) => (f.hass = this._hass));
+      this._selectors.forEach((s) => (s.hass = this._hass));
+    }
+  }
+
+  _renderRoot() {
+    const cfg = this._config;
+
+    this.appendChild(this._sectionTitle("En-tête"));
+    this.appendChild(
+      this._form(
+        [{ name: "name", selector: { text: {} } }],
+        { name: cfg.name != null ? cfg.name : "Serveurs" },
+        { name: "Titre" },
+        (v) => this._update((c) => Object.assign(c, v))
+      )
+    );
+
+    this.appendChild(this._sectionTitle("Serveurs"));
+    const servers = cfg.servers || [];
+    servers.forEach((s, j) => {
+      this.appendChild(
+        this._row(
+          s.icon || "mdi:server",
+          s.name || s.entity || "(sans nom)",
+          s.secondary || s.entity || "",
+          () => {
+            this._path = [j];
+            this._render();
+          },
+          () => {
+            this._update((c) => c.servers.splice(j, 1));
+            this._render();
+          }
+        )
+      );
+    });
+    this.appendChild(
+      this._addServerRow((entityId) => {
+        let idx;
+        this._update((c) => {
+          c.servers = c.servers || [];
+          c.servers.push({ entity: entityId, icon: "mdi:server" });
+          idx = c.servers.length - 1;
+        });
+        this._path = [idx];
+        this._render();
+      })
+    );
+
+    this.appendChild(
+      this._panel(
+        "Customisation",
+        "mdi:palette",
+        this._mixed(
+          [
+            { name: "background", selector: { color_rgb: {} } },
+            { name: "primary_color", selector: { color_rgb: {} } },
+            { name: "secondary_color", selector: { color_rgb: {} } },
+            { name: "online_color", selector: { color_rgb: {} } },
+            { name: "offline_color", selector: { color_rgb: {} } },
+          ],
+          {
+            background: cfg.background,
+            primary_color: cfg.primary_color,
+            secondary_color: cfg.secondary_color,
+            online_color: cfg.online_color,
+            offline_color: cfg.offline_color,
+          },
+          {
+            background: "Fond de la carte",
+            primary_color: "Couleur des noms de serveur / titre",
+            secondary_color: "Couleur des adresses / compteur",
+            online_color: "Couleur « en ligne » (statut + bouton)",
+            offline_color: "Couleur « hors ligne » (statut + bouton)",
+          },
+          (v) => this._update((c) => Object.assign(c, v))
+        )
+      )
+    );
+  }
+
+  _renderServer(i) {
+    const cfg = this._config;
+    const s = cfg.servers[i] || {};
+    const merge = (v) => this._update((c) => (c.servers[i] = { ...c.servers[i], ...v }));
+
+    this.appendChild(
+      this._backHeader(s.name || s.entity || "Serveur", () => {
+        this._path = [];
+        this._render();
+      })
+    );
+
+    this.appendChild(
+      this._form(
+        [
+          { name: "name", selector: { text: {} } },
+          { name: "secondary", selector: { text: {} } },
+          { name: "icon", selector: { icon: {} } },
+          { name: "entity", selector: { entity: { domain: ["switch", "input_boolean"] } } },
+        ],
+        { name: s.name, secondary: s.secondary, icon: s.icon, entity: s.entity },
+        {
+          name: "Nom",
+          secondary: "Sous-titre (ex. adresse IP)",
+          icon: "Icône",
+          entity: "Entité (marche/arrêt)",
+        },
+        merge
+      )
+    );
+  }
+}
+customElements.define("alex-server-card-editor", ServerCardEditor);
+
+window.customCards.push({
+  type: "alex-server-card",
+  name: "Alex Server Card",
+  description: "Liste de serveurs/VM avec statut en ligne et bouton power.",
   preview: false,
   documentationURL: "https://github.com/<user>/alex-cards",
 });
