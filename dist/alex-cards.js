@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.23.1";
+const ALEX_CARDS_VERSION = "0.23.2";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -2654,6 +2654,7 @@ class WeatherCard extends AlexWrapperCard {
     );
 
     const body = fillTokens(opts.template, tokenValues);
+    const heightVal = typeof opts.height === "function" ? opts.height(comp, days) : opts.height;
 
     const cfg = {
       type: "custom:button-card",
@@ -2663,7 +2664,7 @@ class WeatherCard extends AlexWrapperCard {
       show_state: false,
       styles: {
         card: [
-          { height: opts.height },
+          { height: heightVal },
           { "border-radius": keepsOwnBg ? "22px" : "0" },
           { padding: opts.padding },
           { background: bg },
@@ -2765,7 +2766,16 @@ class WeatherCard extends AlexWrapperCard {
           { token: "RANGE_TRACK", field: "range_track_color", fallback: "secondary" },
         ],
         extraValues: [{ token: "ROW_GAP", field: "row_spacing", fallback: 10 }],
-        height: "235px",
+        // Hauteur dynamique : row_spacing n'etant plus absorbe par un
+        // space-between qui etirait automatiquement, la carte doit suivre
+        // le nombre de jours x hauteur de ligne (30px, fixee en CSS) +
+        // les ecarts entre lignes + le padding vertical (14px x 2).
+        height: (c, days) => {
+          const rowH = 30;
+          const gap = c.row_spacing != null ? c.row_spacing : 10;
+          const padV = 28;
+          return `${days * rowH + Math.max(0, days - 1) * gap + padV}px`;
+        },
         padding: "14px",
       },
       keepsOwnBg,
