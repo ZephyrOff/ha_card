@@ -397,6 +397,10 @@ accent_color: [255, 255, 255]     # optionnel, couleur du bouton lecture/volume/
 - **Icône « cast »** en haut à droite : ouvre le more-info natif de HA sur le lecteur
   sélectionné (accès à la sélection de source, etc., sans réinventer ce sélecteur).
 - **Pochette** agrandie (72×72px) pour rester lisible en avant-plan de la carte.
+- La carte est divisée en **deux panneaux visuellement distincts** : le haut (pochette +
+  infos du média) sur le fond de la carte, le bas (transport, volume, onglets) sur un
+  panneau légèrement teinté — même principe que le sous-panneau « Groupe » de la Light
+  Card.
 - Personnalisation (panneau Customisation) : fond de la carte, couleur du titre,
   couleur de l'artiste/libellé/boutons de transport (primary), couleur d'accent (curseur
   de volume + onglet actif uniquement — les boutons de transport suivent désormais la

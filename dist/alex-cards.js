@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.21.2";
+const ALEX_CARDS_VERSION = "0.21.3";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -4484,52 +4484,56 @@ class MediaPlayerCard extends HTMLElement {
       : "";
 
     this.innerHTML = `
-      <ha-card style="border-radius:22px;box-shadow:none;background:${cardBg};padding:18px 20px;">
-        <div style="display:flex;align-items:flex-start;gap:14px;">
-          ${artHtml}
-          <div style="flex:1;min-width:0;padding-top:2px;">
-            <div style="font-size:12px;color:${secondaryColor};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(label)}</div>
-            <div style="font-size:17px;font-weight:700;color:${primaryColor};margin-top:3px;
-                        overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(title)}</div>
-            <div style="font-size:13px;color:${secondaryColor};margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(artist)}</div>
-          </div>
-          <div class="ac-mp-more" style="flex:0 0 auto;cursor:pointer;padding:4px;">
-            <ha-icon icon="mdi:cast" style="--mdc-icon-size:18px;color:${secondaryColor};"></ha-icon>
-          </div>
-        </div>
-
-        <div style="display:flex;align-items:center;justify-content:center;gap:14px;margin-top:18px;">
-          <div class="ac-mp-prev" style="width:40px;height:40px;border-radius:14px;
-                      background:rgba(var(--rgb-primary-text-color,0,0,0),0.10);
-                      display:flex;align-items:center;justify-content:center;cursor:pointer;">
-            <ha-icon icon="mdi:rewind" style="--mdc-icon-size:20px;color:${primaryColor};"></ha-icon>
-          </div>
-          <div class="ac-mp-playpause" style="width:40px;height:40px;border-radius:14px;
-                      background:rgba(var(--rgb-primary-text-color,0,0,0),0.10);
-                      display:flex;align-items:center;justify-content:center;cursor:pointer;">
-            <ha-icon icon="${isPlaying ? "mdi:pause" : "mdi:play"}" style="--mdc-icon-size:20px;color:${primaryColor};"></ha-icon>
-          </div>
-          <div class="ac-mp-next" style="width:40px;height:40px;border-radius:14px;
-                      background:rgba(var(--rgb-primary-text-color,0,0,0),0.10);
-                      display:flex;align-items:center;justify-content:center;cursor:pointer;">
-            <ha-icon icon="mdi:fast-forward" style="--mdc-icon-size:20px;color:${primaryColor};"></ha-icon>
+      <ha-card style="border-radius:22px;box-shadow:none;background:${cardBg};padding:0;overflow:hidden;">
+        <div style="padding:18px 20px 16px;">
+          <div style="display:flex;align-items:flex-start;gap:14px;">
+            ${artHtml}
+            <div style="flex:1;min-width:0;padding-top:2px;">
+              <div style="font-size:12px;color:${secondaryColor};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(label)}</div>
+              <div style="font-size:17px;font-weight:700;color:${primaryColor};margin-top:3px;
+                          overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(title)}</div>
+              <div style="font-size:13px;color:${secondaryColor};margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(artist)}</div>
+            </div>
+            <div class="ac-mp-more" style="flex:0 0 auto;cursor:pointer;padding:4px;">
+              <ha-icon icon="mdi:cast" style="--mdc-icon-size:18px;color:${secondaryColor};"></ha-icon>
+            </div>
           </div>
         </div>
 
-        ${
-          hasVolume
-            ? `<div style="display:flex;align-items:center;gap:10px;margin-top:18px;">
-                <div class="ac-mp-mute" style="cursor:pointer;flex:0 0 auto;">
-                  <ha-icon icon="${mediaVolumeIcon(muted, volume)}" style="--mdc-icon-size:18px;color:${secondaryColor};"></ha-icon>
-                </div>
-                <input class="ac-mp-volume" type="range" min="0" max="1" step="0.01"
-                       value="${muted ? 0 : volume}"
-                       style="flex:1;accent-color:${accentColor};height:4px;cursor:pointer;" />
-              </div>`
-            : ""
-        }
+        <div style="background:rgba(var(--rgb-primary-text-color,0,0,0),0.05);padding:16px 20px 18px;">
+          <div style="display:flex;align-items:center;justify-content:center;gap:14px;">
+            <div class="ac-mp-prev" style="width:40px;height:40px;border-radius:14px;
+                        background:rgba(var(--rgb-primary-text-color,0,0,0),0.10);
+                        display:flex;align-items:center;justify-content:center;cursor:pointer;">
+              <ha-icon icon="mdi:rewind" style="--mdc-icon-size:20px;color:${primaryColor};"></ha-icon>
+            </div>
+            <div class="ac-mp-playpause" style="width:40px;height:40px;border-radius:14px;
+                        background:rgba(var(--rgb-primary-text-color,0,0,0),0.10);
+                        display:flex;align-items:center;justify-content:center;cursor:pointer;">
+              <ha-icon icon="${isPlaying ? "mdi:pause" : "mdi:play"}" style="--mdc-icon-size:20px;color:${primaryColor};"></ha-icon>
+            </div>
+            <div class="ac-mp-next" style="width:40px;height:40px;border-radius:14px;
+                        background:rgba(var(--rgb-primary-text-color,0,0,0),0.10);
+                        display:flex;align-items:center;justify-content:center;cursor:pointer;">
+              <ha-icon icon="mdi:fast-forward" style="--mdc-icon-size:20px;color:${primaryColor};"></ha-icon>
+            </div>
+          </div>
 
-        ${tabsHtml}
+          ${
+            hasVolume
+              ? `<div style="display:flex;align-items:center;gap:10px;margin-top:16px;">
+                  <div class="ac-mp-mute" style="cursor:pointer;flex:0 0 auto;">
+                    <ha-icon icon="${mediaVolumeIcon(muted, volume)}" style="--mdc-icon-size:18px;color:${secondaryColor};"></ha-icon>
+                  </div>
+                  <input class="ac-mp-volume" type="range" min="0" max="1" step="0.01"
+                         value="${muted ? 0 : volume}"
+                         style="flex:1;accent-color:${accentColor};height:4px;cursor:pointer;" />
+                </div>`
+              : ""
+          }
+
+          ${tabsHtml}
+        </div>
       </ha-card>`;
 
     const entityId = selected;
