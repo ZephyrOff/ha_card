@@ -143,11 +143,12 @@ Points importants :
   défaut ; définir `background` dans l'éditeur le remplace par une couleur fixe. `primary_color`
   colore la température et la condition, `secondary_color` colore le min/max du jour.
 - **`type: classic` / `bars` / `chart`** : `days` (défaut 5) limite le nombre de jours de
-  prévision affichés. Ces trois styles lisent `weather.<entité>.attributes.forecast` — si
-  ton intégration météo n'expose pas cet attribut (certaines l'exposent uniquement via le
-  service `weather.get_forecasts`), le composant affiche « Prévisions indisponibles ».
-  `primary_color`/`secondary_color` retintent respectivement : le jour + le max (classic,
-  bars) ; la courbe max + la courbe min (chart).
+  prévision affichés. Les prévisions sont récupérées via l'abonnement WebSocket
+  `weather/subscribe_forecast` (méthode standard de HA depuis 2023.9, celle qu'utilise la
+  carte météo native) ; en repli, si l'entité ne le supporte pas, l'ancien attribut
+  `attributes.forecast` est lu une fois. Si aucun des deux n'est disponible, le composant
+  affiche « Prévisions indisponibles ». `primary_color`/`secondary_color` retintent
+  respectivement : le jour + le max (classic, bars) ; la courbe max + la courbe min (chart).
 - Les 4 styles viennent de gabarits `custom:button-card` fournis par l'utilisateur ;
   seule la lecture des prévisions (remplacement des données figées d'origine par les
   vraies données de l'entité) a été ajoutée par le plugin.
