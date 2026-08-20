@@ -334,15 +334,21 @@ type: custom:alex-clock-card
 show_time: true
 show_date: true
 alignment: left            # left / center / right
+time_size: 34              # optionnel, taille de l'heure en px (défaut 34)
+date_size: 14               # optionnel, taille de la date en px (défaut 14)
 primary_color: [255, 255, 255]   # optionnel, couleur de l'heure
 secondary_color: [150, 150, 150] # optionnel, couleur de la date
 ```
 
 - `show_time`/`show_date` : chacun indépendamment affichable ou non.
 - `alignment` : gauche / centre / droite, s'applique aux deux lignes.
+- `time_size`/`date_size` : taille de chaque ligne en pixels.
 - Personnalisation (panneau Customisation) : fond de la carte, couleur de l'heure
   (primary), couleur de la date (secondary) — pas de badge/icône ici, cette carte n'en a
   pas.
+- Police : une pile de polices système modernes (SF Pro / Segoe UI / Roboto selon l'OS),
+  en graisse fine (300 pour l'heure, 400 pour la date) plutôt qu'en gras, pour un rendu
+  fin/arrondi proche des horloges natives des OS.
 - La date est formatée dans la langue de l'interface HA (`hass.locale`, repli sur le
   français), au format « Jour J mois » (ex. « Mardi 16 septembre »). L'heure est
   affichée en 24 h.

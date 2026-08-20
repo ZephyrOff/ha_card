@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.20.0";
+const ALEX_CARDS_VERSION = "0.20.1";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -4238,27 +4238,42 @@ class ClockCard extends HTMLElement {
     // Majuscule en debut de phrase (Intl renvoie "mardi 16 septembre" en francais).
     const dateStr = dateRaw ? dateRaw.charAt(0).toUpperCase() + dateRaw.slice(1) : "";
 
-    // Ne re-render que si le texte affiche ou une couleur/alignement a change
-    // (evite de re-peindre le DOM chaque seconde alors que "HH:MM" est identique).
-    const sig = [c.background, c.primary_color, c.secondary_color, align, timeStr, dateStr].join("~");
+    // Ne re-render que si le texte affiche ou une couleur/alignement/taille a
+    // change (evite de re-peindre le DOM chaque seconde alors que "HH:MM" est
+    // identique).
+    const sig = [
+      c.background,
+      c.primary_color,
+      c.secondary_color,
+      align,
+      c.time_size,
+      c.date_size,
+      timeStr,
+      dateStr,
+    ].join("~");
     if (this._built && sig === this._lastSig) return;
     this._lastSig = sig;
 
     const cardBg = colorOr(c.background, "var(--ha-card-background, var(--card-background-color))");
     const primaryColor = colorOr(c.primary_color, "var(--primary-text-color)");
     const secondaryColor = colorOr(c.secondary_color, "var(--secondary-text-color)");
+    const timeSize = c.time_size != null ? c.time_size : 34;
+    const dateSize = c.date_size != null ? c.date_size : 14;
+    const clockFont =
+      "-apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI Variable', " +
+      "'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif";
 
     this.innerHTML = `
       <ha-card style="border-radius:20px;box-shadow:none;background:${cardBg};padding:16px 18px;">
-        <div style="text-align:${align};">
+        <div style="text-align:${align};font-family:${clockFont};">
           ${
             timeStr
-              ? `<div style="font-size:34px;font-weight:700;line-height:1.1;color:${primaryColor};">${escapeHtml(timeStr)}</div>`
+              ? `<div style="font-size:${timeSize}px;font-weight:300;line-height:1.1;letter-spacing:.5px;color:${primaryColor};">${escapeHtml(timeStr)}</div>`
               : ""
           }
           ${
             dateStr
-              ? `<div style="font-size:14px;margin-top:${timeStr ? "4px" : "0"};color:${secondaryColor};">${escapeHtml(dateStr)}</div>`
+              ? `<div style="font-size:${dateSize}px;font-weight:400;margin-top:${timeStr ? "4px" : "0"};color:${secondaryColor};">${escapeHtml(dateStr)}</div>`
               : ""
           }
         </div>
@@ -4279,6 +4294,14 @@ class ClockCardEditor extends AlexFormEditor {
         selector: { select: { mode: "dropdown", options: CLOCK_ALIGN_OPTIONS } },
       },
       {
+        name: "time_size",
+        selector: { number: { min: 10, max: 120, step: 1, mode: "box", unit_of_measurement: "px" } },
+      },
+      {
+        name: "date_size",
+        selector: { number: { min: 8, max: 60, step: 1, mode: "box", unit_of_measurement: "px" } },
+      },
+      {
         name: "customisation",
         type: "expandable",
         flatten: true,
@@ -4295,6 +4318,8 @@ class ClockCardEditor extends AlexFormEditor {
       show_time: "Afficher l'heure",
       show_date: "Afficher la date",
       alignment: "Alignement",
+      time_size: "Taille de l'heure",
+      date_size: "Taille de la date",
       background: "Fond de la carte",
       primary_color: "Couleur de l'heure",
       secondary_color: "Couleur de la date",
