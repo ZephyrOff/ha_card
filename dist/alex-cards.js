@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.9.13";
+const ALEX_CARDS_VERSION = "0.10.0";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -554,34 +554,144 @@ class AlexWrapperCard extends HTMLElement {
  */
 class AlexFormEditor extends HTMLElement {
   setConfig(config) {
-    this._config = config;
+    const incoming = JSON.stringify(config || {});
+    if (incoming === this._configStr) return;
+    this._config = JSON.parse(incoming);
+    this._configStr = incoming;
     this._render();
   }
 
   set hass(hass) {
     this._hass = hass;
-    if (this._form) this._form.hass = hass;
+    (this._forms || []).forEach((f) => (f.hass = hass));
+    (this._selectors || []).forEach((s) => (s.hass = hass));
+  }
+
+  _emit(patch) {
+    const cfg = { ...this._config, ...patch };
+    this._config = cfg;
+    this._configStr = JSON.stringify(cfg);
+    this.dispatchEvent(
+      new CustomEvent("config-changed", {
+        detail: { config: cfg },
+        bubbles: true,
+        composed: true,
+      })
+    );
+  }
+
+  _form(schema, data, labels, onChange) {
+    const f = document.createElement("ha-form");
+    f.schema = schema;
+    f.data = data || {};
+    f.computeLabel = (s) => (labels && labels[s.name]) || s.name;
+    if (this._hass) f.hass = this._hass;
+    f.addEventListener("value-changed", (ev) => {
+      ev.stopPropagation();
+      onChange(ev.detail.value);
+    });
+    this._forms.push(f);
+    return f;
+  }
+
+  // Ligne compacte : libellé à gauche, color-picker à droite — même gabarit
+  // partout, quel que soit le champ (fond de carte, icône, texte, bouton…).
+  _colorRow(label, value, onChange) {
+    const row = document.createElement("div");
+    row.style.cssText =
+      "display:flex;align-items:center;justify-content:space-between;gap:16px;" +
+      "min-height:40px;padding:6px 0;";
+    const lab = document.createElement("div");
+    lab.textContent = label;
+    lab.style.cssText =
+      "flex:1;min-width:0;font-size:14px;color:var(--primary-text-color);" +
+      "overflow:hidden;text-overflow:ellipsis;white-space:nowrap;";
+    const sel = document.createElement("ha-selector");
+    sel.selector = { color_rgb: {} };
+    sel.value = value;
+    if (this._hass) sel.hass = this._hass;
+    sel.style.cssText = "flex:0 0 auto;";
+    sel.addEventListener("value-changed", (ev) => {
+      ev.stopPropagation();
+      onChange(ev.detail.value);
+    });
+    this._selectors.push(sel);
+    row.append(lab, sel);
+    return row;
+  }
+
+  _panel(title, iconName, contentEl, expanded) {
+    const panel = document.createElement("ha-expansion-panel");
+    panel.outlined = true;
+    panel.expanded = !!expanded;
+    panel.style.cssText =
+      "display:block;margin-bottom:8px;" +
+      "--expansion-panel-summary-padding:0 12px;" +
+      "--expansion-panel-content-padding:0 12px 12px;";
+    const header = document.createElement("div");
+    header.setAttribute("slot", "header");
+    header.style.cssText =
+      "display:flex;align-items:center;gap:8px;height:32px;" +
+      "font-size:14px;font-weight:500;color:var(--primary-text-color);";
+    if (iconName) {
+      const ic = document.createElement("ha-icon");
+      ic.icon = iconName;
+      ic.style.cssText = "--mdc-icon-size:20px;color:var(--secondary-text-color);flex:0 0 auto;";
+      header.appendChild(ic);
+    }
+    const t = document.createElement("span");
+    t.textContent = title;
+    header.appendChild(t);
+    panel.appendChild(header);
+    panel.appendChild(contentEl);
+    return panel;
+  }
+
+  // Parcourt un schéma (champs + groupes "expandable") et route chaque champ
+  // color_rgb vers une ligne compacte, tout le reste vers un <ha-form> natif
+  // groupé — pour que Nom/Icône/Entité gardent leur style natif tandis que
+  // les couleurs sont toujours "libellé + pastille" sur la même ligne.
+  _mixed(schema, data, labels, onChange) {
+    const frag = document.createDocumentFragment();
+    let batch = [];
+    const flush = () => {
+      if (!batch.length) return;
+      frag.appendChild(this._form(batch, data, labels, onChange));
+      batch = [];
+    };
+    (schema || []).forEach((field) => {
+      if (field.type === "expandable") {
+        flush();
+        const content = this._mixed(field.schema, data, labels, onChange);
+        frag.appendChild(this._panel(field.title, field.icon, content));
+        return;
+      }
+      if (field.selector && field.selector.color_rgb) {
+        flush();
+        frag.appendChild(
+          this._colorRow(labels[field.name] || field.name, data[field.name], (val) =>
+            onChange({ [field.name]: val })
+          )
+        );
+        return;
+      }
+      batch.push(field);
+    });
+    flush();
+    return frag;
   }
 
   _render() {
-    if (!this._form) {
-      this._form = document.createElement("ha-form");
-      this._form.computeLabel = (s) => (this._labels && this._labels[s.name]) || s.name;
-      this._form.addEventListener("value-changed", (ev) => {
-        ev.stopPropagation();
-        this.dispatchEvent(
-          new CustomEvent("config-changed", {
-            detail: { config: ev.detail.value },
-            bubbles: true,
-            composed: true,
-          })
-        );
-      });
-      this.appendChild(this._form);
+    this._forms = [];
+    this._selectors = [];
+    this.innerHTML = "";
+    this.appendChild(
+      this._mixed(this._schema, this._config, this._labels, (v) => this._emit(v))
+    );
+    if (this._hass) {
+      this._forms.forEach((f) => (f.hass = this._hass));
+      this._selectors.forEach((s) => (s.hass = this._hass));
     }
-    this._form.schema = this._schema;
-    this._form.data = this._config;
-    if (this._hass) this._form.hass = this._hass;
   }
 }
 
@@ -608,6 +718,7 @@ class AlexListEditor extends HTMLElement {
   set hass(hass) {
     this._hass = hass;
     (this._forms || []).forEach((f) => (f.hass = hass));
+    (this._selectors || []).forEach((s) => (s.hass = hass));
   }
 
   _emit() {
@@ -655,6 +766,92 @@ class AlexListEditor extends HTMLElement {
     });
     this._forms.push(f);
     return f;
+  }
+
+  // Ligne compacte : libelle a gauche, color-picker a droite - meme gabarit
+  // que dans AlexFormEditor, pour un rendu identique sur toutes les cartes.
+  _colorRow(label, value, onChange) {
+    const row = document.createElement("div");
+    row.style.cssText =
+      "display:flex;align-items:center;justify-content:space-between;gap:16px;" +
+      "min-height:40px;padding:6px 0;";
+    const lab = document.createElement("div");
+    lab.textContent = label;
+    lab.style.cssText =
+      "flex:1;min-width:0;font-size:14px;color:var(--primary-text-color);" +
+      "overflow:hidden;text-overflow:ellipsis;white-space:nowrap;";
+    const sel = document.createElement("ha-selector");
+    sel.selector = { color_rgb: {} };
+    sel.value = value;
+    if (this._hass) sel.hass = this._hass;
+    sel.style.cssText = "flex:0 0 auto;";
+    sel.addEventListener("value-changed", (ev) => {
+      ev.stopPropagation();
+      onChange(ev.detail.value);
+    });
+    this._selectors = this._selectors || [];
+    this._selectors.push(sel);
+    row.append(lab, sel);
+    return row;
+  }
+
+  _panel(title, iconName, contentEl, expanded) {
+    const panel = document.createElement("ha-expansion-panel");
+    panel.outlined = true;
+    panel.expanded = !!expanded;
+    panel.style.cssText =
+      "display:block;margin-bottom:8px;" +
+      "--expansion-panel-summary-padding:0 12px;" +
+      "--expansion-panel-content-padding:0 12px 12px;";
+    const header = document.createElement("div");
+    header.setAttribute("slot", "header");
+    header.style.cssText =
+      "display:flex;align-items:center;gap:8px;height:32px;" +
+      "font-size:14px;font-weight:500;color:var(--primary-text-color);";
+    if (iconName) {
+      const ic = document.createElement("ha-icon");
+      ic.icon = iconName;
+      ic.style.cssText = "--mdc-icon-size:20px;color:var(--secondary-text-color);flex:0 0 auto;";
+      header.appendChild(ic);
+    }
+    const t = document.createElement("span");
+    t.textContent = title;
+    header.appendChild(t);
+    panel.appendChild(header);
+    panel.appendChild(contentEl);
+    return panel;
+  }
+
+  // Voir AlexFormEditor._mixed - meme logique, dupliquee ici car
+  // AlexListEditor ne partage pas la meme chaine d'heritage.
+  _mixed(schema, data, labels, onChange) {
+    const frag = document.createDocumentFragment();
+    let batch = [];
+    const flush = () => {
+      if (!batch.length) return;
+      frag.appendChild(this._form(batch, data, labels, onChange));
+      batch = [];
+    };
+    (schema || []).forEach((field) => {
+      if (field.type === "expandable") {
+        flush();
+        const content = this._mixed(field.schema, data, labels, onChange);
+        frag.appendChild(this._panel(field.title, field.icon, content));
+        return;
+      }
+      if (field.selector && field.selector.color_rgb) {
+        flush();
+        frag.appendChild(
+          this._colorRow(labels[field.name] || field.name, data[field.name], (val) =>
+            onChange({ [field.name]: val })
+          )
+        );
+        return;
+      }
+      batch.push(field);
+    });
+    flush();
+    return frag;
   }
 
   _row(icon, text, subtitle, onEdit, onDelete) {
@@ -1228,10 +1425,6 @@ const LIGHT_MAIN_SCHEMA = [
   { name: "name", selector: { text: {} } },
   { name: "icon", selector: { icon: {} } },
 ];
-const LIGHT_CUSTOM_SCHEMA = [
-  { name: "color", selector: { color_rgb: {} } },
-  { name: "submenu_background", selector: { color_rgb: {} } },
-];
 const LIGHT_ITEM_LABELS = Object.assign(
   {
     entity: "Entité",
@@ -1253,14 +1446,6 @@ const MEMBER_ITEM_SCHEMA = [
   { name: "entity", selector: { entity: { domain: "light" } } },
   { name: "name", selector: { text: {} } },
   { name: "icon", selector: { icon: {} } },
-  {
-    name: "customisation",
-    type: "expandable",
-    flatten: true,
-    title: "Customisation",
-    icon: "mdi:palette",
-    schema: [{ name: "color", selector: { color_rgb: {} } }],
-  },
 ];
 
 class LightCardEditor extends HTMLElement {
@@ -1279,6 +1464,7 @@ class LightCardEditor extends HTMLElement {
   set hass(hass) {
     this._hass = hass;
     (this._forms || []).forEach((f) => (f.hass = hass));
+    (this._selectors || []).forEach((s) => (s.hass = hass));
   }
 
   _emit() {
@@ -1329,6 +1515,41 @@ class LightCardEditor extends HTMLElement {
     });
     this._forms.push(f);
     return f;
+  }
+
+  // Ligne compacte : libellé à gauche, color-picker à droite — même gabarit
+  // que dans AlexFormEditor, pour un rendu identique sur toutes les cartes.
+  _colorRow(label, value, onChange) {
+    const row = document.createElement("div");
+    row.style.cssText =
+      "display:flex;align-items:center;justify-content:space-between;gap:16px;" +
+      "min-height:40px;padding:6px 0;";
+    const lab = document.createElement("div");
+    lab.textContent = label;
+    lab.style.cssText =
+      "flex:1;min-width:0;font-size:14px;color:var(--primary-text-color);" +
+      "overflow:hidden;text-overflow:ellipsis;white-space:nowrap;";
+    const sel = document.createElement("ha-selector");
+    sel.selector = { color_rgb: {} };
+    sel.value = value;
+    if (this._hass) sel.hass = this._hass;
+    sel.style.cssText = "flex:0 0 auto;";
+    sel.addEventListener("value-changed", (ev) => {
+      ev.stopPropagation();
+      onChange(ev.detail.value);
+    });
+    this._selectors = this._selectors || [];
+    this._selectors.push(sel);
+    row.append(lab, sel);
+    return row;
+  }
+
+  // Regroupe plusieurs lignes (ex. plusieurs _colorRow) dans un seul
+  // conteneur, pour les passer comme contenu unique à _panel().
+  _customFields(...rows) {
+    const wrap = document.createElement("div");
+    rows.forEach((r) => wrap.appendChild(r));
+    return wrap;
   }
 
   _row(icon, text, subtitle, onEdit, onDelete) {
@@ -1403,12 +1624,16 @@ class LightCardEditor extends HTMLElement {
 
   _render() {
     this._forms = [];
+    this._selectors = [];
     this.innerHTML = "";
     const p = this._validPath();
     if (p.length === 0) this._renderRoot();
     else if (p.length === 1) this._renderLight(p[0]);
     else this._renderMember(p[0], p[1]);
-    if (this._hass) this._forms.forEach((f) => (f.hass = this._hass));
+    if (this._hass) {
+      this._forms.forEach((f) => (f.hass = this._hass));
+      this._selectors.forEach((s) => (s.hass = this._hass));
+    }
   }
 
   _renderRoot() {
@@ -1525,11 +1750,11 @@ class LightCardEditor extends HTMLElement {
       this._panel(
         "Customisation",
         "mdi:palette",
-        this._form(
-          LIGHT_CUSTOM_SCHEMA,
-          { color: l.color, submenu_background: l.submenu_background },
-          LIGHT_ITEM_LABELS,
-          merge
+        this._customFields(
+          this._colorRow(LIGHT_ITEM_LABELS.color, l.color, (v) => merge({ color: v })),
+          this._colorRow(LIGHT_ITEM_LABELS.submenu_background, l.submenu_background, (v) =>
+            merge({ submenu_background: v })
+          )
         )
       )
     );
@@ -1644,6 +1869,14 @@ class LightCardEditor extends HTMLElement {
 
   _renderMember(i, j) {
     const m = (this._config.lights[i].members || [])[j] || {};
+    const mergeMember = (v) =>
+      this._update(
+        (c) =>
+          (c.lights[i].members[j] = {
+            ...c.lights[i].members[j],
+            ...v,
+          })
+      );
 
     this.appendChild(
       this._backHeader(m.name || m.entity || "Membre", () => {
@@ -1655,21 +1888,19 @@ class LightCardEditor extends HTMLElement {
     this.appendChild(
       this._form(
         MEMBER_ITEM_SCHEMA,
-        {
-          entity: m.entity,
-          name: m.name,
-          icon: m.icon,
-          color: m.color,
-        },
+        { entity: m.entity, name: m.name, icon: m.icon },
         MEMBER_ITEM_LABELS,
-        (v) =>
-          this._update(
-            (c) =>
-              (c.lights[i].members[j] = {
-                ...c.lights[i].members[j],
-                ...v,
-              })
-          )
+        mergeMember
+      )
+    );
+
+    this.appendChild(
+      this._panel(
+        "Customisation",
+        "mdi:palette",
+        this._customFields(
+          this._colorRow(MEMBER_ITEM_LABELS.color, m.color, (v) => mergeMember({ color: v }))
+        )
       )
     );
   }
@@ -1772,11 +2003,15 @@ class MultiGraphCardEditor extends AlexListEditor {
 
   _render() {
     this._forms = [];
+    this._selectors = [];
     this.innerHTML = "";
     const p = this._validPath();
     if (p.length === 0) this._renderRoot();
     else this._renderGraph(p[0]);
-    if (this._hass) this._forms.forEach((f) => (f.hass = this._hass));
+    if (this._hass) {
+      this._forms.forEach((f) => (f.hass = this._hass));
+      this._selectors.forEach((s) => (s.hass = this._hass));
+    }
   }
 
   _renderRoot() {
@@ -1823,7 +2058,7 @@ class MultiGraphCardEditor extends AlexListEditor {
       })
     );
     this.appendChild(
-      this._form(
+      this._mixed(
         MG_SCHEMA,
         {
           entities: g.entities || [],
