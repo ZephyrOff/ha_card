@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.16.1";
+const ALEX_CARDS_VERSION = "0.16.2";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -3269,34 +3269,6 @@ class SensorCardEditor extends AlexListEditor {
       )
     );
 
-    this.appendChild(
-      this._panel(
-        "Customisation",
-        "mdi:palette",
-        this._mixed(
-          [
-            { name: "icon_color", selector: { color_rgb: {} } },
-            { name: "background", selector: { color_rgb: {} } },
-            { name: "primary_color", selector: { color_rgb: {} } },
-            { name: "secondary_color", selector: { color_rgb: {} } },
-          ],
-          {
-            icon_color: cfg.icon_color,
-            background: cfg.background,
-            primary_color: cfg.primary_color,
-            secondary_color: cfg.secondary_color,
-          },
-          {
-            icon_color: "Couleur du badge",
-            background: "Fond de la carte",
-            primary_color: "Couleur du nom de la carte",
-            secondary_color: "Couleur des noms de catégorie",
-          },
-          (v) => this._update((c) => Object.assign(c, v))
-        )
-      )
-    );
-
     this.appendChild(this._sectionTitle("Catégories"));
     (cfg.categories || []).forEach((cat, i) => {
       this.appendChild(
@@ -3342,6 +3314,34 @@ class SensorCardEditor extends AlexListEditor {
           this._path = [idx];
           this._render();
         }
+      )
+    );
+
+    this.appendChild(
+      this._panel(
+        "Customisation",
+        "mdi:palette",
+        this._mixed(
+          [
+            { name: "icon_color", selector: { color_rgb: {} } },
+            { name: "background", selector: { color_rgb: {} } },
+            { name: "primary_color", selector: { color_rgb: {} } },
+            { name: "secondary_color", selector: { color_rgb: {} } },
+          ],
+          {
+            icon_color: cfg.icon_color,
+            background: cfg.background,
+            primary_color: cfg.primary_color,
+            secondary_color: cfg.secondary_color,
+          },
+          {
+            icon_color: "Couleur du badge",
+            background: "Fond de la carte",
+            primary_color: "Couleur du nom de la carte",
+            secondary_color: "Couleur des noms de catégorie",
+          },
+          (v) => this._update((c) => Object.assign(c, v))
+        )
       )
     );
   }
