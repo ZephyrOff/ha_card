@@ -17,6 +17,7 @@ Collection de cartes Lovelace custom pour Home Assistant, distribuée en **plugi
 | `custom:alex-weather-card`      | oui        | Météo actuelle et/ou prévisions (3 styles), à empiler librement. |
 | `custom:alex-sensor-card`       | oui        | Vue synthétique de capteurs par catégories (ouvrants, verrous…). |
 | `custom:alex-entity-card`       | oui        | Liste détaillée d'entités d'un même type (état, zone, dernier changement). |
+| `custom:alex-toggle-card`       | oui        | Liste d'entités basculables avec interrupteur cliquable par ligne. |
 
 Toutes les cartes apparaissent dans le sélecteur « Ajouter une carte » avec un éditeur
 visuel. La `alex-light-card` a un éditeur type « chips » (liste + crayon pour éditer chaque
@@ -279,6 +280,32 @@ icon_color: [74, 222, 128]        # optionnel, teinte du badge
 - Type `alarm` : chaque ligne affichera l'état littéral de son entité
   (`alarm_control_panel`), pas de limitation à une seule entité ici (contrairement à la
   catégorie Alarme de la Sensor Card) puisque chaque ligne montre sa propre entité.
+
+### Toggle Card
+
+Comme l'Entity Card, mais **interactive** : chaque ligne a un vrai interrupteur
+cliquable (au lieu d'une pastille en lecture seule) qui bascule directement
+l'entité (service `homeassistant.toggle`).
+
+```yaml
+type: custom:alex-toggle-card
+name: Morning
+icon: mdi:transit-connection-variant
+entities:
+  - input_boolean.morning_lights
+  - script.wake_up
+  - switch.coffee_machine
+on_color: [244, 169, 53]          # optionnel, couleur de l'interrupteur actif
+```
+
+- Pas de notion de « type » ici (contrairement à l'Entity Card) : n'importe quelle
+  entité avec un état `on`/`off` fonctionne (`input_boolean`, `switch`, `automation`,
+  `light`, `fan`…), le picker d'ajout suggère ces domaines à titre indicatif.
+- L'en-tête affiche « N/Total » (nombre d'entités actuellement actives).
+- Personnalisation (panneau Customisation racine) : badge, icône des lignes (vide =
+  icône du badge), fond de carte, couleur du nom, couleur des noms d'entité, **couleur
+  interrupteur actif** et **couleur interrupteur inactif** (remplacent respectivement
+  l'orange et le gris par défaut).
 
 ## Ajouter une nouvelle carte
 

@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.17.0";
+const ALEX_CARDS_VERSION = "0.18.0";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -3761,6 +3761,265 @@ window.customCards.push({
   type: "alex-entity-card",
   name: "Alex Entity Card",
   description: "Liste détaillée d'entités d'un même type (état, zone, dernier changement).",
+  preview: false,
+  documentationURL: "https://github.com/<user>/alex-cards",
+});
+
+/* =========================================================================
+ * === alex-toggle-card ====================================================
+ * Liste d'entites basculables (input_boolean, switch, automation, light...)
+ * avec un vrai interrupteur cliquable par ligne. Complement interactif de
+ * alex-entity-card (lecture seule) : meme gabarit visuel (badge, "N/Total"),
+ * mais chaque ligne agit reellement sur l'entite au clic.
+ * ========================================================================= */
+
+const TOGGLE_DOMAINS = ["input_boolean", "switch", "automation", "light", "fan"];
+
+function toggleEntityOn(stateObj) {
+  return !!stateObj && stateObj.state === "on";
+}
+
+class ToggleCard extends HTMLElement {
+  static getConfigElement() {
+    return document.createElement("alex-toggle-card-editor");
+  }
+  static getStubConfig() {
+    return { name: "Morning", icon: "mdi:transit-connection-variant", entities: [] };
+  }
+
+  setConfig(config) {
+    if (!config) throw new Error("Configuration invalide");
+    this._config = config;
+    this._built = false;
+    this._lastSig = null;
+  }
+
+  set hass(hass) {
+    this._hass = hass;
+    this._render();
+  }
+
+  getCardSize() {
+    return 1 + ((this._config && this._config.entities) || []).length;
+  }
+
+  _render() {
+    if (!this._config || !this._hass) return;
+    const c = this._config;
+    const entities = c.entities || [];
+    const hass = this._hass;
+
+    const rows = entities.map((entityId) => {
+      const stateObj = hass.states[entityId];
+      const on = toggleEntityOn(stateObj);
+      const name = (stateObj && stateObj.attributes && stateObj.attributes.friendly_name) || entityId;
+      const time = stateObj ? sensorRelativeTime(stateObj.last_changed) : "";
+      return { entityId, on, name, time };
+    });
+    const onCount = rows.filter((r) => r.on).length;
+
+    const sig = [
+      c.name,
+      c.icon,
+      c.entity_icon,
+      JSON.stringify(c.icon_color || null),
+      JSON.stringify(c.background || null),
+      JSON.stringify(c.primary_color || null),
+      JSON.stringify(c.secondary_color || null),
+      JSON.stringify(c.on_color || null),
+      JSON.stringify(c.off_color || null),
+      rows.map((r) => `${r.entityId}|${r.name}|${r.on}|${r.time}`).join(";"),
+    ].join("~");
+    if (this._built && sig === this._lastSig) return;
+    this._lastSig = sig;
+
+    const iconColor = colorOr(c.icon_color, "#8b7ae6");
+    const badgeRgb = Array.isArray(c.icon_color) ? c.icon_color : [139, 122, 230];
+    const badgeBg = `rgba(${badgeRgb[0]}, ${badgeRgb[1]}, ${badgeRgb[2]}, 0.16)`;
+    const cardBg = colorOr(c.background, "var(--ha-card-background, var(--card-background-color))");
+    const primaryColor = colorOr(c.primary_color, "var(--primary-text-color)");
+    const secondaryColor = colorOr(c.secondary_color, "var(--primary-text-color)");
+    const onColor = colorOr(c.on_color, "#f4a935");
+    const offColor = colorOr(c.off_color, "rgba(var(--rgb-primary-text-color,0,0,0),0.18)");
+    const rowIcon = c.entity_icon || c.icon || "mdi:toggle-switch-outline";
+
+    const rowsHtml = rows
+      .map((r, i) => {
+        const border =
+          i < rows.length - 1 ? "border-bottom:1px solid var(--divider-color);" : "";
+        const track = r.on ? onColor : offColor;
+        const thumbLeft = r.on ? "23px" : "3px";
+        return `
+          <div style="display:flex;align-items:center;gap:12px;padding:12px 2px;${border}">
+            <div style="width:32px;height:32px;border-radius:9px;
+                        background:rgba(var(--rgb-primary-text-color,0,0,0),0.06);
+                        display:flex;align-items:center;justify-content:center;flex:0 0 auto;">
+              <ha-icon icon="${rowIcon}" style="--mdc-icon-size:16px;color:${iconColor};"></ha-icon>
+            </div>
+            <div style="flex:1;min-width:0;">
+              <div style="font-size:14px;font-weight:600;color:${secondaryColor};
+                          overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(r.name)}</div>
+              ${
+                r.time
+                  ? `<div style="font-size:12px;color:var(--secondary-text-color);
+                                overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(r.time)}</div>`
+                  : ""
+              }
+            </div>
+            <div class="ac-toggle" data-entity="${escapeHtml(r.entityId)}"
+                style="flex:0 0 auto;width:44px;height:24px;border-radius:12px;background:${track};
+                       position:relative;cursor:pointer;transition:background .15s;">
+              <div style="width:18px;height:18px;border-radius:50%;background:#fff;position:absolute;
+                          top:3px;left:${thumbLeft};transition:left .15s;
+                          box-shadow:0 1px 3px rgba(0,0,0,.3);"></div>
+            </div>
+          </div>`;
+      })
+      .join("");
+
+    this.innerHTML = `
+      <ha-card style="border-radius:20px;box-shadow:none;
+                      background:${cardBg};
+                      padding:16px 18px;">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px;">
+          <div style="width:40px;height:40px;border-radius:12px;background:${badgeBg};
+                      display:flex;align-items:center;justify-content:center;flex:0 0 auto;">
+            <ha-icon icon="${c.icon || "mdi:transit-connection-variant"}" style="--mdc-icon-size:20px;color:${iconColor};"></ha-icon>
+          </div>
+          <div style="flex:1;min-width:0;font-size:17px;font-weight:700;color:${primaryColor};
+                      overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(c.name || "")}</div>
+          <div style="flex:0 0 auto;font-size:12px;color:var(--secondary-text-color);">${onCount}/${rows.length}</div>
+        </div>
+        <div>${rowsHtml}</div>
+      </ha-card>`;
+
+    this.querySelectorAll(".ac-toggle").forEach((el) => {
+      el.addEventListener("click", () => {
+        fireAction(this, this._hass, { action: "toggle" }, el.getAttribute("data-entity"));
+      });
+    });
+
+    this._built = true;
+  }
+}
+customElements.define("alex-toggle-card", ToggleCard);
+
+class ToggleCardEditor extends AlexListEditor {
+  static getStubConfig() {
+    return ToggleCard.getStubConfig();
+  }
+
+  _normalize() {
+    if (!Array.isArray(this._config.entities)) this._config.entities = [];
+  }
+
+  _addEntityRow(domains, onPick) {
+    return this._form(
+      [{ name: "entity", selector: { entity: { domain: domains } } }],
+      {},
+      { entity: "Ajouter une entité" },
+      (v) => {
+        if (v && v.entity) onPick(v.entity);
+      }
+    );
+  }
+
+  _render() {
+    this._forms = [];
+    this._selectors = [];
+    this.innerHTML = "";
+    const cfg = this._config;
+
+    this.appendChild(this._sectionTitle("En-tête"));
+    this.appendChild(
+      this._form(
+        [
+          { name: "name", selector: { text: {} } },
+          { name: "icon", selector: { icon: {} } },
+        ],
+        { name: cfg.name, icon: cfg.icon },
+        { name: "Nom", icon: "Icône" },
+        (v) => this._update((c) => Object.assign(c, v))
+      )
+    );
+
+    this.appendChild(this._sectionTitle("Entités"));
+    const entities = cfg.entities || [];
+    entities.forEach((entityId, j) => {
+      const st = this._hass && this._hass.states[entityId];
+      const friendly = st && st.attributes && st.attributes.friendly_name;
+      this.appendChild(
+        this._row(
+          cfg.entity_icon || cfg.icon || "mdi:toggle-switch-outline",
+          friendly || entityId,
+          friendly ? entityId : "",
+          null,
+          () => {
+            this._update((c) => c.entities.splice(j, 1));
+            this._render();
+          }
+        )
+      );
+    });
+    this.appendChild(
+      this._addEntityRow(TOGGLE_DOMAINS, (entityId) => {
+        this._update((c) => {
+          c.entities = c.entities || [];
+          c.entities.push(entityId);
+        });
+        this._render();
+      })
+    );
+
+    this.appendChild(
+      this._panel(
+        "Customisation",
+        "mdi:palette",
+        this._mixed(
+          [
+            { name: "entity_icon", selector: { icon: {} } },
+            { name: "icon_color", selector: { color_rgb: {} } },
+            { name: "background", selector: { color_rgb: {} } },
+            { name: "primary_color", selector: { color_rgb: {} } },
+            { name: "secondary_color", selector: { color_rgb: {} } },
+            { name: "on_color", selector: { color_rgb: {} } },
+            { name: "off_color", selector: { color_rgb: {} } },
+          ],
+          {
+            entity_icon: cfg.entity_icon,
+            icon_color: cfg.icon_color,
+            background: cfg.background,
+            primary_color: cfg.primary_color,
+            secondary_color: cfg.secondary_color,
+            on_color: cfg.on_color,
+            off_color: cfg.off_color,
+          },
+          {
+            entity_icon: "Icône des lignes (vide = icône du badge)",
+            icon_color: "Couleur du badge",
+            background: "Fond de la carte",
+            primary_color: "Couleur du nom de la carte",
+            secondary_color: "Couleur des noms d'entité",
+            on_color: "Couleur interrupteur actif",
+            off_color: "Couleur interrupteur inactif",
+          },
+          (v) => this._update((c) => Object.assign(c, v))
+        )
+      )
+    );
+
+    if (this._hass) {
+      this._forms.forEach((f) => (f.hass = this._hass));
+      this._selectors.forEach((s) => (s.hass = this._hass));
+    }
+  }
+}
+customElements.define("alex-toggle-card-editor", ToggleCardEditor);
+
+window.customCards.push({
+  type: "alex-toggle-card",
+  name: "Alex Toggle Card",
+  description: "Liste d'entités basculables avec interrupteur cliquable par ligne.",
   preview: false,
   documentationURL: "https://github.com/<user>/alex-cards",
 });
