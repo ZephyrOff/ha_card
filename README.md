@@ -21,6 +21,11 @@ visuel. La `light-card` a un éditeur type « chips » (liste + crayon pour édi
 entité, sous-liste de membres pour les groupes) ; le toggle « Éditeur de code » reste
 dispo pour éditer le YAML directement.
 
+Tous les color-pickers du package (Customisation, fonds de carte, etc.) combinent un
+sélecteur RGB natif avec un champ d'opacité (%) séparé — HA n'a pas de sélecteur
+couleur+alpha natif. Les deux se recombinent en `[r, g, b, a]` (`a` entre 0 et 1) dans
+la config ; un ancien `[r, g, b]` (sans 4ᵉ valeur) reste valide, l'opacité vaut alors 100 %.
+
 ## Dépendances (HACS)
 
 `graph-card`, `prise-card`, `shutter-card` et `light-card` génèrent en interne des cartes

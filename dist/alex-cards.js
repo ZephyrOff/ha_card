@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.13.1";
+const ALEX_CARDS_VERSION = "0.14.0";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -286,14 +286,6 @@ window.customCards.push({
  * Helpers partagés
  * ========================================================================= */
 
-// [r,g,b] (selector color_rgb) -> "#rrggbb"
-function rgbToHex(rgb, fallback) {
-  const a = Array.isArray(rgb) ? rgb : fallback;
-  const [r, g, b] = a;
-  const h = (n) => Math.max(0, Math.min(255, n | 0)).toString(16).padStart(2, "0");
-  return `#${h(r)}${h(g)}${h(b)}`;
-}
-
 // [r,g,b] -> "rgba(r, g, b, alpha)"
 function rgba(rgb, alpha, fallback) {
   const [r, g, b] = Array.isArray(rgb) ? rgb : fallback;
@@ -308,10 +300,17 @@ function escapeHtml(s) {
   );
 }
 
-// Résout une couleur optionnelle ([r,g,b] du picker, chaîne CSS, ou vide) vers
-// une valeur CSS, avec repli sur une variable de thème.
+// [r,g,b] ou [r,g,b,a] -> "rgba(r, g, b, a)" (a vaut 1 si absent).
+function rgbaCss(rgb) {
+  const [r, g, b, a] = rgb;
+  const alpha = a == null ? 1 : a;
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+// Résout une couleur optionnelle ([r,g,b]/[r,g,b,a] du picker, chaîne CSS, ou
+// vide) vers une valeur CSS, avec repli sur une variable de thème.
 function colorOr(v, fallback) {
-  if (Array.isArray(v)) return rgbToHex(v);
+  if (Array.isArray(v)) return rgbaCss(v);
   if (typeof v === "string" && v.trim()) return v;
   return fallback;
 }
@@ -597,26 +596,60 @@ class AlexFormEditor extends HTMLElement {
   // Ligne compacte : libellé à gauche, color-picker à droite — même gabarit
   // partout, quel que soit le champ (fond de carte, icône, texte, bouton…).
   _colorRow(label, value, onChange) {
+    const rgb = Array.isArray(value) ? [value[0], value[1], value[2]] : undefined;
+    const alphaPct =
+      Array.isArray(value) && value[3] != null ? Math.round(value[3] * 100) : 100;
+
     const row = document.createElement("div");
     row.style.cssText =
-      "display:flex;align-items:center;justify-content:space-between;gap:16px;" +
+      "display:flex;align-items:center;justify-content:space-between;gap:10px;" +
       "min-height:40px;padding:6px 0;";
     const lab = document.createElement("div");
     lab.textContent = label;
     lab.style.cssText =
       "flex:1;min-width:0;font-size:14px;color:var(--primary-text-color);" +
       "overflow:hidden;text-overflow:ellipsis;white-space:nowrap;";
-    const sel = document.createElement("ha-selector");
-    sel.selector = { color_rgb: {} };
-    sel.value = value;
-    if (this._hass) sel.hass = this._hass;
-    sel.style.cssText = "flex:0 0 auto;";
-    sel.addEventListener("value-changed", (ev) => {
+
+    const colorSel = document.createElement("ha-selector");
+    colorSel.selector = { color_rgb: {} };
+    colorSel.value = rgb;
+    if (this._hass) colorSel.hass = this._hass;
+    colorSel.style.cssText = "flex:0 0 auto;";
+
+    // Opacite en % : HA n'a pas de selecteur couleur+alpha natif, donc on
+    // combine le picker RGB avec un champ numerique dedie, recombines en
+    // [r, g, b, a] (a entre 0 et 1) a chaque changement.
+    const alphaSel = document.createElement("ha-selector");
+    alphaSel.selector = {
+      number: { min: 0, max: 100, step: 1, mode: "box", unit_of_measurement: "%" },
+    };
+    alphaSel.value = alphaPct;
+    if (this._hass) alphaSel.hass = this._hass;
+    alphaSel.style.cssText = "flex:0 0 64px;";
+
+    const emit = () => {
+      const cur = Array.isArray(colorSel.value) ? colorSel.value : null;
+      if (!cur) {
+        onChange(undefined);
+        return;
+      }
+      const a = alphaSel.value != null ? alphaSel.value / 100 : 1;
+      onChange([cur[0], cur[1], cur[2], a]);
+    };
+
+    colorSel.addEventListener("value-changed", (ev) => {
       ev.stopPropagation();
-      onChange(ev.detail.value);
+      colorSel.value = ev.detail.value;
+      emit();
     });
-    this._selectors.push(sel);
-    row.append(lab, sel);
+    alphaSel.addEventListener("value-changed", (ev) => {
+      ev.stopPropagation();
+      alphaSel.value = ev.detail.value;
+      emit();
+    });
+
+    this._selectors.push(colorSel, alphaSel);
+    row.append(lab, colorSel, alphaSel);
     return row;
   }
 
@@ -771,27 +804,61 @@ class AlexListEditor extends HTMLElement {
   // Ligne compacte : libelle a gauche, color-picker a droite - meme gabarit
   // que dans AlexFormEditor, pour un rendu identique sur toutes les cartes.
   _colorRow(label, value, onChange) {
+    const rgb = Array.isArray(value) ? [value[0], value[1], value[2]] : undefined;
+    const alphaPct =
+      Array.isArray(value) && value[3] != null ? Math.round(value[3] * 100) : 100;
+
     const row = document.createElement("div");
     row.style.cssText =
-      "display:flex;align-items:center;justify-content:space-between;gap:16px;" +
+      "display:flex;align-items:center;justify-content:space-between;gap:10px;" +
       "min-height:40px;padding:6px 0;";
     const lab = document.createElement("div");
     lab.textContent = label;
     lab.style.cssText =
       "flex:1;min-width:0;font-size:14px;color:var(--primary-text-color);" +
       "overflow:hidden;text-overflow:ellipsis;white-space:nowrap;";
-    const sel = document.createElement("ha-selector");
-    sel.selector = { color_rgb: {} };
-    sel.value = value;
-    if (this._hass) sel.hass = this._hass;
-    sel.style.cssText = "flex:0 0 auto;";
-    sel.addEventListener("value-changed", (ev) => {
+
+    const colorSel = document.createElement("ha-selector");
+    colorSel.selector = { color_rgb: {} };
+    colorSel.value = rgb;
+    if (this._hass) colorSel.hass = this._hass;
+    colorSel.style.cssText = "flex:0 0 auto;";
+
+    // Opacite en % : HA n'a pas de selecteur couleur+alpha natif, donc on
+    // combine le picker RGB avec un champ numerique dedie, recombines en
+    // [r, g, b, a] (a entre 0 et 1) a chaque changement.
+    const alphaSel = document.createElement("ha-selector");
+    alphaSel.selector = {
+      number: { min: 0, max: 100, step: 1, mode: "box", unit_of_measurement: "%" },
+    };
+    alphaSel.value = alphaPct;
+    if (this._hass) alphaSel.hass = this._hass;
+    alphaSel.style.cssText = "flex:0 0 64px;";
+
+    const emit = () => {
+      const cur = Array.isArray(colorSel.value) ? colorSel.value : null;
+      if (!cur) {
+        onChange(undefined);
+        return;
+      }
+      const a = alphaSel.value != null ? alphaSel.value / 100 : 1;
+      onChange([cur[0], cur[1], cur[2], a]);
+    };
+
+    colorSel.addEventListener("value-changed", (ev) => {
       ev.stopPropagation();
-      onChange(ev.detail.value);
+      colorSel.value = ev.detail.value;
+      emit();
     });
+    alphaSel.addEventListener("value-changed", (ev) => {
+      ev.stopPropagation();
+      alphaSel.value = ev.detail.value;
+      emit();
+    });
+
     this._selectors = this._selectors || [];
-    this._selectors.push(sel);
-    row.append(lab, sel);
+    this._selectors.push(colorSel, alphaSel);
+    row.append(lab, colorSel, alphaSel);
     return row;
   }
 
@@ -929,7 +996,7 @@ class GraphCard extends AlexWrapperCard {
     return { entity: "", name: "", icon: "mdi:chart-line", color: GRAPH_DEFAULT_RGB };
   }
   _innerConfig(c) {
-    const hex = rgbToHex(c.color, GRAPH_DEFAULT_RGB);
+    const iconColor = colorOr(c.color, rgbaCss(GRAPH_DEFAULT_RGB));
     const line = rgba(c.color, 0.5, GRAPH_DEFAULT_RGB);
     return {
       type: "custom:stack-in-card",
@@ -943,7 +1010,7 @@ class GraphCard extends AlexWrapperCard {
             secondary_info: "name",
             name: c.name || "",
             icon: c.icon || "mdi:chart-line",
-            icon_color: hex,
+            icon_color: iconColor,
             card_mod: { style: "ha-card {\n  z-index: 1;\n  --ha-card-border-width: 0;\n}\n" },
           },
           c
@@ -1021,7 +1088,7 @@ class PriseCard extends AlexWrapperCard {
   _innerConfig(c) {
     const sw = c.entity;
     const power = c.power_entity;
-    const hex = rgbToHex(c.color, PRISE_DEFAULT_RGB);
+    const iconColor = colorOr(c.color, rgbaCss(PRISE_DEFAULT_RGB));
     const line = rgba(c.color, 0.5, PRISE_DEFAULT_RGB);
     const icon = c.icon || "mdi:power-plug";
 
@@ -1036,7 +1103,7 @@ class PriseCard extends AlexWrapperCard {
         primary: c.name || "",
         secondary,
         icon,
-        icon_color: `{% if is_state('${sw}', 'on') %}${hex}{% endif %}`,
+        icon_color: `{% if is_state('${sw}', 'on') %}${iconColor}{% endif %}`,
         tap_action: c.tap_action || { action: "toggle" },
         hold_action:
           c.hold_action ||
@@ -1343,7 +1410,7 @@ class LightCard extends AlexWrapperCard {
     if (l.icon) tile.icon = l.icon;
     // Couleur fixe si définie, sinon on suit la couleur de l'ampoule.
     if (Array.isArray(l.color)) {
-      tile.icon_color = rgbToHex(l.color);
+      tile.icon_color = rgbaCss(l.color);
       tile.use_light_color = false;
     } else {
       tile.use_light_color = true;
@@ -1520,27 +1587,61 @@ class LightCardEditor extends HTMLElement {
   // Ligne compacte : libellé à gauche, color-picker à droite — même gabarit
   // que dans AlexFormEditor, pour un rendu identique sur toutes les cartes.
   _colorRow(label, value, onChange) {
+    const rgb = Array.isArray(value) ? [value[0], value[1], value[2]] : undefined;
+    const alphaPct =
+      Array.isArray(value) && value[3] != null ? Math.round(value[3] * 100) : 100;
+
     const row = document.createElement("div");
     row.style.cssText =
-      "display:flex;align-items:center;justify-content:space-between;gap:16px;" +
+      "display:flex;align-items:center;justify-content:space-between;gap:10px;" +
       "min-height:40px;padding:6px 0;";
     const lab = document.createElement("div");
     lab.textContent = label;
     lab.style.cssText =
       "flex:1;min-width:0;font-size:14px;color:var(--primary-text-color);" +
       "overflow:hidden;text-overflow:ellipsis;white-space:nowrap;";
-    const sel = document.createElement("ha-selector");
-    sel.selector = { color_rgb: {} };
-    sel.value = value;
-    if (this._hass) sel.hass = this._hass;
-    sel.style.cssText = "flex:0 0 auto;";
-    sel.addEventListener("value-changed", (ev) => {
+
+    const colorSel = document.createElement("ha-selector");
+    colorSel.selector = { color_rgb: {} };
+    colorSel.value = rgb;
+    if (this._hass) colorSel.hass = this._hass;
+    colorSel.style.cssText = "flex:0 0 auto;";
+
+    // Opacite en % : HA n'a pas de selecteur couleur+alpha natif, donc on
+    // combine le picker RGB avec un champ numerique dedie, recombines en
+    // [r, g, b, a] (a entre 0 et 1) a chaque changement.
+    const alphaSel = document.createElement("ha-selector");
+    alphaSel.selector = {
+      number: { min: 0, max: 100, step: 1, mode: "box", unit_of_measurement: "%" },
+    };
+    alphaSel.value = alphaPct;
+    if (this._hass) alphaSel.hass = this._hass;
+    alphaSel.style.cssText = "flex:0 0 64px;";
+
+    const emit = () => {
+      const cur = Array.isArray(colorSel.value) ? colorSel.value : null;
+      if (!cur) {
+        onChange(undefined);
+        return;
+      }
+      const a = alphaSel.value != null ? alphaSel.value / 100 : 1;
+      onChange([cur[0], cur[1], cur[2], a]);
+    };
+
+    colorSel.addEventListener("value-changed", (ev) => {
       ev.stopPropagation();
-      onChange(ev.detail.value);
+      colorSel.value = ev.detail.value;
+      emit();
     });
+    alphaSel.addEventListener("value-changed", (ev) => {
+      ev.stopPropagation();
+      alphaSel.value = ev.detail.value;
+      emit();
+    });
+
     this._selectors = this._selectors || [];
-    this._selectors.push(sel);
-    row.append(lab, sel);
+    this._selectors.push(colorSel, alphaSel);
+    row.append(lab, colorSel, alphaSel);
     return row;
   }
 
@@ -1926,11 +2027,7 @@ class MultiGraphCard extends AlexWrapperCard {
   }
 
   _graphCard(g) {
-    const color = Array.isArray(g.line_color)
-      ? rgbToHex(g.line_color)
-      : typeof g.line_color === "string" && g.line_color.trim()
-      ? g.line_color
-      : null;
+    const color = colorOr(g.line_color, null);
     const card = {
       type: "custom:mini-graph-card",
       name: g.name || "",
