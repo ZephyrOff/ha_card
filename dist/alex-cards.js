@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.13.0";
+const ALEX_CARDS_VERSION = "0.13.1";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -2525,7 +2525,7 @@ class WeatherCard extends AlexWrapperCard {
   }
 
   _forecastConfig(entity, comp, opts, keepsOwnBg, outerBg) {
-    // opts: { field, template, extraStyles, bg, height, gridArea }
+    // opts: { field, template, extraStyles, bg, height, gridArea, extraColors }
     const days = comp.days != null ? comp.days : 5;
     const primary = colorOr(comp.primary_color, opts.defaultPrimary);
     const secondary = colorOr(comp.secondary_color, opts.defaultSecondary);
@@ -2537,14 +2537,27 @@ class WeatherCard extends AlexWrapperCard {
     const visualBg = !keepsOwnBg ? outerBg : bg;
     const forecastJson = JSON.stringify(this._forecasts[entity] || []);
 
-    const body = fillTokens(opts.template, {
-      ENTITY: entity,
-      DAYS: days,
-      PRIMARY: primary,
-      SECONDARY: secondary,
-      BG: visualBg,
-      FORECAST_JSON: forecastJson,
+    // Couleurs additionnelles propres a certains styles (ex. piston du
+    // classic, jauge du bars) : repli sur primary ou secondary si l'utilisateur
+    // ne les personnalise pas individuellement.
+    const extraTokens = {};
+    (opts.extraColors || []).forEach(({ token, field, fallback }) => {
+      extraTokens[token] = colorOr(comp[field], fallback === "primary" ? primary : secondary);
     });
+
+    const tokenValues = Object.assign(
+      {
+        ENTITY: entity,
+        DAYS: days,
+        PRIMARY: primary,
+        SECONDARY: secondary,
+        BG: visualBg,
+        FORECAST_JSON: forecastJson,
+      },
+      extraTokens
+    );
+
+    const body = fillTokens(opts.template, tokenValues);
 
     const cfg = {
       type: "custom:button-card",
@@ -2584,11 +2597,7 @@ class WeatherCard extends AlexWrapperCard {
     };
 
     if (opts.extraStyles) {
-      cfg.extra_styles = fillTokens(opts.extraStyles, {
-        PRIMARY: primary,
-        SECONDARY: secondary,
-        BG: visualBg,
-      });
+      cfg.extra_styles = fillTokens(opts.extraStyles, tokenValues);
     }
 
     return cfg;
@@ -2603,8 +2612,8 @@ class WeatherCard extends AlexWrapperCard {
 .weather-icon { height:52px; width:100%; display:flex; align-items:center; justify-content:center; font-size:30px; margin-top:2px; }
 .temperature { font-size:16px; font-weight:500; color:@@PRIMARY@@; margin-top:3px; }
 .range { position:relative; width:9px; height:155px; margin-top:7px; }
-.range-bg { position:absolute; inset:0; width:9px; border-radius:20px; background:rgba(255,255,255,.11); }
-.range-value { position:absolute; left:0; width:9px; border-radius:20px; background:rgba(220,220,225,.68); }
+.range-bg { position:absolute; inset:0; width:9px; border-radius:20px; background:@@RANGE_TRACK@@; }
+.range-value { position:absolute; left:0; width:9px; border-radius:20px; background:@@RANGE_FILL@@; }
 .low { font-size:14px; font-weight:500; color:@@SECONDARY@@; margin-top:5px; }
 .rain { font-size:13px; color:#3877aa; margin-top:8px; }
 `.trim();
@@ -2619,6 +2628,10 @@ class WeatherCard extends AlexWrapperCard {
         defaultBg: "var(--ha-card-background, var(--card-background-color))",
         defaultPrimary: "var(--primary-text-color)",
         defaultSecondary: "var(--secondary-text-color)",
+        extraColors: [
+          { token: "RANGE_TRACK", field: "range_track_color", fallback: "secondary" },
+          { token: "RANGE_FILL", field: "range_fill_color", fallback: "primary" },
+        ],
         height: "255px",
         padding: "15px 10px",
       },
@@ -2634,7 +2647,7 @@ class WeatherCard extends AlexWrapperCard {
 .day { font-size:13px; font-weight:400; color:@@PRIMARY@@; white-space:nowrap; }
 .icon { display:flex; align-items:center; justify-content:center; color:@@PRIMARY@@; transform:translateX(-12px); }
 .bar { position:relative; width:100%; height:12px; border-radius:20px; background:linear-gradient(90deg, rgba(62,125,170,.35) 0%, rgba(82,151,181,.35) 25%, rgba(128,171,137,.35) 45%, rgba(205,183,87,.35) 65%, rgba(218,130,67,.35) 82%, rgba(190,75,60,.35) 100%); }
-.range { position:absolute; top:0; height:12px; border-radius:20px; background:rgba(220,220,220,.78); }
+.range { position:absolute; top:0; height:12px; border-radius:20px; background:@@RANGE_TRACK@@; }
 .point { position:absolute; top:50%; width:12px; height:12px; transform:translate(-50%,-50%); border-radius:50%; box-sizing:border-box; background:rgba(220,220,220,.95); border:1px solid rgba(0,0,0,.75); }
 .point.current { box-shadow:0 0 0 2px rgba(255,255,255,.28); }
 .temps { display:grid; grid-template-columns:28px 18px; align-items:center; justify-content:end; column-gap:4px; white-space:nowrap; }
@@ -2652,6 +2665,9 @@ class WeatherCard extends AlexWrapperCard {
         defaultBg: "var(--ha-card-background, var(--card-background-color))",
         defaultPrimary: "var(--primary-text-color)",
         defaultSecondary: "var(--secondary-text-color)",
+        extraColors: [
+          { token: "RANGE_TRACK", field: "range_track_color", fallback: "secondary" },
+        ],
         height: "235px",
         padding: "14px",
       },
@@ -2859,6 +2875,33 @@ class WeatherCardEditor extends AlexListEditor {
         merge({ secondary_color: v })
       )
     );
+
+    if (comp.type === "classic") {
+      rows.appendChild(
+        this._colorRow(
+          "Fond du piston (vide = secondaire)",
+          comp.range_track_color,
+          (v) => merge({ range_track_color: v })
+        )
+      );
+      rows.appendChild(
+        this._colorRow(
+          "Levier du piston (vide = primaire)",
+          comp.range_fill_color,
+          (v) => merge({ range_fill_color: v })
+        )
+      );
+    }
+
+    if (comp.type === "bars") {
+      rows.appendChild(
+        this._colorRow(
+          "Segment autour du point (vide = secondaire)",
+          comp.range_track_color,
+          (v) => merge({ range_track_color: v })
+        )
+      );
+    }
 
     this.appendChild(this._panel("Customisation", "mdi:palette", rows));
   }

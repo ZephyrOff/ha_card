@@ -169,6 +169,11 @@ Autres points :
 - `primary_color`/`secondary_color` (par composant) retintent respectivement : la
   température + la condition (current) ; le jour + le max (classic, bars) ; la courbe
   max + la courbe min (chart, valeurs par défaut bleu/orange non liées au thème).
+- **`classic`** a deux couleurs dédiées pour le « piston » vertical de chaque jour :
+  `range_track_color` (le fond du piston, vide = secondaire) et `range_fill_color`
+  (le levier à l'intérieur, vide = primaire).
+- **`bars`** a une couleur dédiée pour le segment qui entoure le point sur la jauge :
+  `range_track_color` (vide = secondaire).
 - Les 4 styles viennent de gabarits `custom:button-card` fournis par l'utilisateur ;
   seule la lecture des prévisions (remplacement des données figées d'origine par les
   vraies données de l'entité) a été ajoutée par le plugin.
