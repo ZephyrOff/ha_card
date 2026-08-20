@@ -18,6 +18,7 @@ Collection de cartes Lovelace custom pour Home Assistant, distribuée en **plugi
 | `custom:alex-sensor-card`       | oui        | Vue synthétique de capteurs par catégories (ouvrants, verrous…). |
 | `custom:alex-entity-card`       | oui        | Liste détaillée d'entités d'un même type (état, zone, dernier changement). |
 | `custom:alex-toggle-card`       | oui        | Liste d'entités basculables avec interrupteur cliquable par ligne. |
+| `custom:alex-clock-card`        | oui        | Horloge et date, alignables, avec la personnalisation du package. |
 
 Toutes les cartes apparaissent dans le sélecteur « Ajouter une carte » avec un éditeur
 visuel. La `alex-light-card` a un éditeur type « chips » (liste + crayon pour éditer chaque
@@ -321,6 +322,30 @@ on_color: [244, 169, 53]          # optionnel, couleur de l'interrupteur actif
   icône du badge), fond de carte, couleur du nom, couleur des noms d'entité, écartement
   entre les entités (px), **couleur interrupteur actif** et **couleur interrupteur
   inactif** (remplacent respectivement l'orange et le gris par défaut).
+
+### Clock Card
+
+Horloge et date, sans entité — se met à jour toute seule chaque seconde (indépendamment
+des mises à jour de `hass`). La plus simple structurellement : pas de badge, pas de
+liste, juste deux lignes de texte alignables.
+
+```yaml
+type: custom:alex-clock-card
+show_time: true
+show_date: true
+alignment: left            # left / center / right
+primary_color: [255, 255, 255]   # optionnel, couleur de l'heure
+secondary_color: [150, 150, 150] # optionnel, couleur de la date
+```
+
+- `show_time`/`show_date` : chacun indépendamment affichable ou non.
+- `alignment` : gauche / centre / droite, s'applique aux deux lignes.
+- Personnalisation (panneau Customisation) : fond de la carte, couleur de l'heure
+  (primary), couleur de la date (secondary) — pas de badge/icône ici, cette carte n'en a
+  pas.
+- La date est formatée dans la langue de l'interface HA (`hass.locale`, repli sur le
+  français), au format « Jour J mois » (ex. « Mardi 16 septembre »). L'heure est
+  affichée en 24 h.
 
 ## Ajouter une nouvelle carte
 

@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.19.1";
+const ALEX_CARDS_VERSION = "0.20.0";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -4162,6 +4162,152 @@ window.customCards.push({
   name: "Alex Toggle Card",
   description: "Liste d'entités basculables avec interrupteur cliquable par ligne.",
   preview: false,
+  documentationURL: "https://github.com/<user>/alex-cards",
+});
+
+/* =========================================================================
+ * === alex-clock-card =====================================================
+ * Horloge + date, alignables, avec la meme customisation (fond, couleurs
+ * primary/secondary) que les autres cartes. Contrairement aux autres cartes
+ * du package, elle n'est liee a aucune entite : elle se met a jour toute
+ * seule via un timer (demarre/arrete via les callbacks de cycle de vie du
+ * custom element), independamment des mises a jour de `hass`.
+ * ========================================================================= */
+
+const CLOCK_ALIGN_OPTIONS = [
+  { value: "left", label: "Gauche" },
+  { value: "center", label: "Centre" },
+  { value: "right", label: "Droite" },
+];
+
+class ClockCard extends HTMLElement {
+  static getConfigElement() {
+    return document.createElement("alex-clock-card-editor");
+  }
+  static getStubConfig() {
+    return { show_time: true, show_date: true, alignment: "left" };
+  }
+
+  setConfig(config) {
+    if (!config) throw new Error("Configuration invalide");
+    this._config = config;
+    this._built = false;
+    this._lastSig = null;
+    this._render();
+  }
+
+  set hass(hass) {
+    this._hass = hass;
+    this._render();
+  }
+
+  connectedCallback() {
+    if (!this._timer) {
+      this._timer = window.setInterval(() => this._render(), 1000);
+    }
+    this._render();
+  }
+
+  disconnectedCallback() {
+    if (this._timer) {
+      window.clearInterval(this._timer);
+      this._timer = null;
+    }
+  }
+
+  getCardSize() {
+    return 1;
+  }
+
+  _render() {
+    if (!this._config) return;
+    const c = this._config;
+    const now = new Date();
+    const locale = (this._hass && this._hass.locale && this._hass.locale.language) || "fr";
+
+    const showTime = c.show_time !== false;
+    const showDate = c.show_date !== false;
+    const align = c.alignment || "left";
+
+    const timeStr = showTime
+      ? new Intl.DateTimeFormat(locale, { hour: "2-digit", minute: "2-digit", hour12: false }).format(now)
+      : "";
+    const dateRaw = showDate
+      ? new Intl.DateTimeFormat(locale, { weekday: "long", day: "numeric", month: "long" }).format(now)
+      : "";
+    // Majuscule en debut de phrase (Intl renvoie "mardi 16 septembre" en francais).
+    const dateStr = dateRaw ? dateRaw.charAt(0).toUpperCase() + dateRaw.slice(1) : "";
+
+    // Ne re-render que si le texte affiche ou une couleur/alignement a change
+    // (evite de re-peindre le DOM chaque seconde alors que "HH:MM" est identique).
+    const sig = [c.background, c.primary_color, c.secondary_color, align, timeStr, dateStr].join("~");
+    if (this._built && sig === this._lastSig) return;
+    this._lastSig = sig;
+
+    const cardBg = colorOr(c.background, "var(--ha-card-background, var(--card-background-color))");
+    const primaryColor = colorOr(c.primary_color, "var(--primary-text-color)");
+    const secondaryColor = colorOr(c.secondary_color, "var(--secondary-text-color)");
+
+    this.innerHTML = `
+      <ha-card style="border-radius:20px;box-shadow:none;background:${cardBg};padding:16px 18px;">
+        <div style="text-align:${align};">
+          ${
+            timeStr
+              ? `<div style="font-size:34px;font-weight:700;line-height:1.1;color:${primaryColor};">${escapeHtml(timeStr)}</div>`
+              : ""
+          }
+          ${
+            dateStr
+              ? `<div style="font-size:14px;margin-top:${timeStr ? "4px" : "0"};color:${secondaryColor};">${escapeHtml(dateStr)}</div>`
+              : ""
+          }
+        </div>
+      </ha-card>`;
+    this._built = true;
+  }
+}
+customElements.define("alex-clock-card", ClockCard);
+
+class ClockCardEditor extends AlexFormEditor {
+  constructor() {
+    super();
+    this._schema = [
+      { name: "show_time", selector: { boolean: {} } },
+      { name: "show_date", selector: { boolean: {} } },
+      {
+        name: "alignment",
+        selector: { select: { mode: "dropdown", options: CLOCK_ALIGN_OPTIONS } },
+      },
+      {
+        name: "customisation",
+        type: "expandable",
+        flatten: true,
+        title: "Customisation",
+        icon: "mdi:palette",
+        schema: [
+          { name: "background", selector: { color_rgb: {} } },
+          { name: "primary_color", selector: { color_rgb: {} } },
+          { name: "secondary_color", selector: { color_rgb: {} } },
+        ],
+      },
+    ];
+    this._labels = {
+      show_time: "Afficher l'heure",
+      show_date: "Afficher la date",
+      alignment: "Alignement",
+      background: "Fond de la carte",
+      primary_color: "Couleur de l'heure",
+      secondary_color: "Couleur de la date",
+    };
+  }
+}
+customElements.define("alex-clock-card-editor", ClockCardEditor);
+
+window.customCards.push({
+  type: "alex-clock-card",
+  name: "Alex Clock Card",
+  description: "Horloge et date, alignables, avec la personnalisation du package.",
+  preview: true,
   documentationURL: "https://github.com/<user>/alex-cards",
 });
 
