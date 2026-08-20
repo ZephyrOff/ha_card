@@ -398,15 +398,14 @@ accent_color: [255, 255, 255]     # optionnel, couleur du bouton lecture/volume/
   sélectionné (accès à la sélection de source, etc., sans réinventer ce sélecteur).
 - **Pochette** agrandie (72×72px) pour rester lisible en avant-plan de la carte.
 - La carte est divisée en **deux panneaux visuellement distincts** : le haut (pochette +
-  infos du média) sur le fond de la carte, le bas (transport, volume, onglets) sur un
-  panneau légèrement teinté — même principe que le sous-panneau « Groupe » de la Light
-  Card.
-- Personnalisation (panneau Customisation) : fond de la carte, couleur du titre,
-  couleur de l'artiste/libellé/boutons de transport (primary), couleur d'accent (curseur
-  de volume + onglet actif uniquement — les boutons de transport suivent désormais la
-  couleur du titre, pas l'accent).
-- Rétrocompatible : une ancienne config avec `entities:` en simple liste de chaînes
-  reste valide, sans nom personnalisé.
+  infos du média) et le bas (transport, volume, onglets), chacun avec **son propre fond
+  personnalisable** — même principe que le sous-panneau « Groupe » de la Light Card.
+- Personnalisation (panneau Customisation) : **fond de la section infos** (haut, vide =
+  thème), **fond de la section contrôles** (bas, vide = légère teinte automatique dérivée
+  du thème), couleur du titre, couleur de l'artiste/libellé/boutons de transport
+  (primary), couleur d'accent (curseur de volume + onglet actif uniquement).
+- Rétrocompatible : une ancienne config avec `entities:` en simple liste de chaînes, ou
+  avec l'ancien champ `background` (désormais `top_background`), reste valide.
 
 ## Ajouter une nouvelle carte
 

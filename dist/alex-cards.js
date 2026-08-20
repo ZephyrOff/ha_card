@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.21.3";
+const ALEX_CARDS_VERSION = "0.22.0";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -4424,7 +4424,8 @@ class MediaPlayerCard extends HTMLElement {
     const showTabs = active.length > 1;
 
     const sig = [
-      JSON.stringify(c.background || null),
+      JSON.stringify(c.top_background || null),
+      JSON.stringify(c.bottom_background || null),
       JSON.stringify(c.primary_color || null),
       JSON.stringify(c.secondary_color || null),
       JSON.stringify(c.accent_color || null),
@@ -4442,7 +4443,12 @@ class MediaPlayerCard extends HTMLElement {
     if (this._built && sig === this._lastSig) return;
     this._lastSig = sig;
 
-    const cardBg = colorOr(c.background, "var(--ha-card-background, var(--card-background-color))");
+    const topBg = colorOr(
+      c.top_background,
+      colorOr(c.background, "var(--ha-card-background, var(--card-background-color))")
+    );
+    const bottomBgOverride = colorOr(c.bottom_background, null);
+    const bottomBg = bottomBgOverride || "rgba(var(--rgb-primary-text-color,0,0,0),0.05)";
     const primaryColor = colorOr(c.primary_color, "var(--primary-text-color)");
     const secondaryColor = colorOr(c.secondary_color, "var(--secondary-text-color)");
     const accentColor = colorOr(c.accent_color, "#ffffff");
@@ -4484,7 +4490,7 @@ class MediaPlayerCard extends HTMLElement {
       : "";
 
     this.innerHTML = `
-      <ha-card style="border-radius:22px;box-shadow:none;background:${cardBg};padding:0;overflow:hidden;">
+      <ha-card style="border-radius:22px;box-shadow:none;background:${topBg};padding:0;overflow:hidden;">
         <div style="padding:18px 20px 16px;">
           <div style="display:flex;align-items:flex-start;gap:14px;">
             ${artHtml}
@@ -4500,7 +4506,7 @@ class MediaPlayerCard extends HTMLElement {
           </div>
         </div>
 
-        <div style="background:rgba(var(--rgb-primary-text-color,0,0,0),0.05);padding:16px 20px 18px;">
+        <div style="background:${bottomBg};padding:16px 20px 18px;">
           <div style="display:flex;align-items:center;justify-content:center;gap:14px;">
             <div class="ac-mp-prev" style="width:40px;height:40px;border-radius:14px;
                         background:rgba(var(--rgb-primary-text-color,0,0,0),0.10);
@@ -4681,19 +4687,22 @@ class MediaPlayerCardEditor extends AlexListEditor {
         "mdi:palette",
         this._mixed(
           [
-            { name: "background", selector: { color_rgb: {} } },
+            { name: "top_background", selector: { color_rgb: {} } },
+            { name: "bottom_background", selector: { color_rgb: {} } },
             { name: "primary_color", selector: { color_rgb: {} } },
             { name: "secondary_color", selector: { color_rgb: {} } },
             { name: "accent_color", selector: { color_rgb: {} } },
           ],
           {
-            background: cfg.background,
+            top_background: cfg.top_background,
+            bottom_background: cfg.bottom_background,
             primary_color: cfg.primary_color,
             secondary_color: cfg.secondary_color,
             accent_color: cfg.accent_color,
           },
           {
-            background: "Fond de la carte",
+            top_background: "Fond section infos (haut)",
+            bottom_background: "Fond section contrôles (bas, vide = teinte auto)",
             primary_color: "Couleur du titre",
             secondary_color: "Couleur de l'artiste / du libellé",
             accent_color: "Couleur du bouton lecture / volume / onglet actif",
