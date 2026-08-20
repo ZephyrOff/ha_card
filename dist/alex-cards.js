@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.15.0";
+const ALEX_CARDS_VERSION = "0.16.0";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -3009,6 +3009,361 @@ window.customCards.push({
   type: "alex-weather-card",
   name: "Alex Weather Card",
   description: "Météo actuelle et/ou prévisions (3 styles), à empiler librement.",
+  preview: false,
+  documentationURL: "https://github.com/<user>/alex-cards",
+});
+
+/* =========================================================================
+ * === alex-sensor-card ====================================================
+ * Vision synthetique d'un groupe de capteurs, organises en categories
+ * (ouvrant, verrou, detecteur, booleen simple, alarme). Chaque categorie
+ * agrege plusieurs entites en une ligne de statut. Rendu "maison" (comme
+ * room-header-card), pas de custom:button-card ici : l'agregation par
+ * categorie est plus simple a exprimer en JS direct qu'en template imbrique.
+ * ========================================================================= */
+
+const SENSOR_CATEGORY_TYPES = {
+  opening: "Ouvrant (porte/fenêtre)",
+  lock: "Verrou",
+  detector: "Détecteur",
+  boolean: "Booléen simple",
+  alarm: "Alarme",
+};
+const SENSOR_TYPE_OPTIONS = Object.entries(SENSOR_CATEGORY_TYPES).map(([value, label]) => ({
+  value,
+  label,
+}));
+const SENSOR_TYPE_DEFAULT_ICON = {
+  opening: "mdi:window-closed-variant",
+  lock: "mdi:lock",
+  detector: "mdi:motion-sensor",
+  boolean: "mdi:checkbox-marked-circle-outline",
+  alarm: "mdi:shield-outline",
+};
+// Filtre de domaine propose par l'entity-picker selon le type de categorie
+// (juste une aide au choix ; rien n'empeche techniquement un autre domaine).
+const SENSOR_TYPE_DOMAINS = {
+  opening: ["binary_sensor", "cover"],
+  lock: ["lock", "binary_sensor"],
+  detector: ["binary_sensor"],
+  boolean: ["input_boolean", "binary_sensor", "switch"],
+  alarm: ["alarm_control_panel"],
+};
+
+const SENSOR_TONE_CSS = {
+  green: "var(--success-color, #22c55e)",
+  orange: "var(--warning-color, #f4a000)",
+  red: "var(--error-color, #ef4444)",
+  grey: "var(--secondary-text-color)",
+};
+
+const SENSOR_ALARM_STATES = {
+  disarmed: { text: "Désarmée", tone: "grey" },
+  armed_home: { text: "Armée (maison)", tone: "green" },
+  armed_away: { text: "Armée (absence)", tone: "green" },
+  armed_night: { text: "Armée (nuit)", tone: "green" },
+  armed_vacation: { text: "Armée (vacances)", tone: "green" },
+  armed_custom_bypass: { text: "Armée", tone: "green" },
+  arming: { text: "Activation…", tone: "orange" },
+  pending: { text: "En attente", tone: "orange" },
+  triggered: { text: "Déclenchée !", tone: "red" },
+};
+
+// Une entite est "active" (probleme potentiel a signaler) selon le type de
+// sa categorie : porte/fenetre ouverte, serrure deverrouillee, detecteur
+// declenche, booleen a "on". Gere binary_sensor (on/off), cover (open/closed)
+// et lock (locked/unlocked) sans distinction de domaine.
+function sensorEntityActive(type, stateObj) {
+  if (!stateObj) return false;
+  const s = stateObj.state;
+  if (s == null || s === "unavailable" || s === "unknown") return false;
+  if (type === "opening") return s === "on" || s === "open";
+  if (type === "lock") return s === "unlocked" || s === "on";
+  if (type === "detector") return s === "on";
+  if (type === "boolean") return s === "on";
+  return s === "on";
+}
+
+function pluralFr(n, word) {
+  return n > 1 ? `${word}s` : word;
+}
+
+// Calcule { text, tone, dotTone } pour une categorie donnee.
+function sensorCategorySummary(hass, cat) {
+  const entities = cat.entities || [];
+
+  if (cat.type === "alarm") {
+    const st = entities.length && hass ? hass.states[entities[0]] : null;
+    if (!st) return { text: "Indisponible", tone: "grey" };
+    return SENSOR_ALARM_STATES[st.state] || { text: st.state, tone: "grey" };
+  }
+
+  const activeCount = entities.filter((e) =>
+    sensorEntityActive(cat.type, hass && hass.states[e])
+  ).length;
+
+  if (cat.type === "opening") {
+    return activeCount === 0
+      ? { text: "Tout fermé", tone: "green" }
+      : { text: `${activeCount} ${pluralFr(activeCount, "ouvert")}`, tone: "red" };
+  }
+  if (cat.type === "lock") {
+    return activeCount === 0
+      ? { text: "Tout verrouillé", tone: "green" }
+      : { text: `${activeCount} déverrouillé${activeCount > 1 ? "s" : ""}`, tone: "red" };
+  }
+  if (cat.type === "detector") {
+    return activeCount === 0
+      ? { text: "Aucune détection", tone: "green" }
+      : { text: `${activeCount} détecté${activeCount > 1 ? "s" : ""}`, tone: "orange" };
+  }
+  // boolean (par defaut) : neutre - le point signale la presence d'actifs,
+  // le texte reste informatif (pas d'alerte de securite implicite).
+  return activeCount === 0
+    ? { text: "Tout inactif", tone: "grey", dotTone: "grey" }
+    : { text: `${activeCount} actif${activeCount > 1 ? "s" : ""}`, tone: "grey", dotTone: "green" };
+}
+
+class SensorCard extends HTMLElement {
+  static getConfigElement() {
+    return document.createElement("alex-sensor-card-editor");
+  }
+  static getStubConfig() {
+    return { name: "Sécurité", icon: "mdi:shield-home", categories: [] };
+  }
+
+  setConfig(config) {
+    if (!config) throw new Error("Configuration invalide");
+    this._config = config;
+    this._built = false;
+    this._lastSig = null;
+  }
+
+  set hass(hass) {
+    this._hass = hass;
+    this._render();
+  }
+
+  getCardSize() {
+    return 1 + ((this._config && this._config.categories) || []).length;
+  }
+
+  _render() {
+    if (!this._config || !this._hass) return;
+    const c = this._config;
+    const cats = c.categories || [];
+    const hass = this._hass;
+
+    const summaries = cats.map((cat) => sensorCategorySummary(hass, cat));
+
+    // Ne re-render que si un element affiche a reellement change (nom,
+    // icone, ou le texte/couleur resultant d'au moins une categorie).
+    const sig = [
+      c.name,
+      c.icon,
+      JSON.stringify(c.icon_color || null),
+      cats.map((cat) => `${cat.name}|${cat.icon}|${cat.type}`).join(";"),
+      summaries.map((s) => `${s.text}|${s.tone}|${s.dotTone || ""}`).join(";"),
+    ].join("~");
+    if (this._built && sig === this._lastSig) return;
+    this._lastSig = sig;
+
+    const iconColor = colorOr(c.icon_color, "#e6a34a");
+    const badgeRgb = Array.isArray(c.icon_color) ? c.icon_color : [230, 163, 74];
+    const badgeBg = `rgba(${badgeRgb[0]}, ${badgeRgb[1]}, ${badgeRgb[2]}, 0.16)`;
+
+    const rowsHtml = cats
+      .map((cat, i) => {
+        const info = summaries[i];
+        const dotTone = info.dotTone || info.tone;
+        const dotColor = SENSOR_TONE_CSS[dotTone] || SENSOR_TONE_CSS.grey;
+        const textColor = SENSOR_TONE_CSS[info.tone] || SENSOR_TONE_CSS.grey;
+        const icon = cat.icon || SENSOR_TYPE_DEFAULT_ICON[cat.type] || "mdi:help-circle-outline";
+        const border =
+          i < cats.length - 1 ? "border-bottom:1px solid var(--divider-color);" : "";
+        return `
+          <div style="display:flex;align-items:center;gap:10px;padding:12px 2px;${border}">
+            <div style="width:8px;height:8px;border-radius:50%;background:${dotColor};flex:0 0 auto;"></div>
+            <ha-icon icon="${icon}" style="--mdc-icon-size:18px;color:var(--secondary-text-color);flex:0 0 auto;"></ha-icon>
+            <div style="flex:1;min-width:0;font-size:14px;font-weight:600;color:var(--primary-text-color);
+                        overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(cat.name || "")}</div>
+            <div style="flex:0 0 auto;font-family:var(--code-font-family, ui-monospace, monospace);
+                        font-size:13px;color:${textColor};white-space:nowrap;">${escapeHtml(info.text)}</div>
+          </div>`;
+      })
+      .join("");
+
+    this.innerHTML = `
+      <ha-card style="border-radius:20px;box-shadow:none;
+                      background:var(--ha-card-background, var(--card-background-color));
+                      padding:16px 18px;">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px;">
+          <div style="width:40px;height:40px;border-radius:12px;background:${badgeBg};
+                      display:flex;align-items:center;justify-content:center;flex:0 0 auto;">
+            <ha-icon icon="${c.icon || "mdi:shield-home"}" style="--mdc-icon-size:20px;color:${iconColor};"></ha-icon>
+          </div>
+          <div style="font-size:17px;font-weight:700;color:var(--primary-text-color);
+                      overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(c.name || "")}</div>
+        </div>
+        <div>${rowsHtml}</div>
+      </ha-card>`;
+    this._built = true;
+  }
+}
+customElements.define("alex-sensor-card", SensorCard);
+
+class SensorCardEditor extends AlexListEditor {
+  static getStubConfig() {
+    return SensorCard.getStubConfig();
+  }
+
+  _normalize() {
+    if (!Array.isArray(this._config.categories)) this._config.categories = [];
+  }
+
+  _validPath() {
+    const p = this._path || [];
+    if (p.length >= 1 && !this._config.categories[p[0]]) return [];
+    return p;
+  }
+
+  _render() {
+    this._forms = [];
+    this._selectors = [];
+    this.innerHTML = "";
+    const p = this._validPath();
+    if (p.length === 0) this._renderRoot();
+    else this._renderCategory(p[0]);
+    if (this._hass) {
+      this._forms.forEach((f) => (f.hass = this._hass));
+      this._selectors.forEach((s) => (s.hass = this._hass));
+    }
+  }
+
+  _renderRoot() {
+    const cfg = this._config;
+
+    this.appendChild(this._sectionTitle("En-tête"));
+    this.appendChild(
+      this._mixed(
+        [
+          { name: "name", selector: { text: {} } },
+          { name: "icon", selector: { icon: {} } },
+          { name: "icon_color", selector: { color_rgb: {} } },
+        ],
+        { name: cfg.name, icon: cfg.icon, icon_color: cfg.icon_color },
+        { name: "Nom", icon: "Icône", icon_color: "Couleur du badge" },
+        (v) => this._update((c) => Object.assign(c, v))
+      )
+    );
+
+    this.appendChild(this._sectionTitle("Catégories"));
+    (cfg.categories || []).forEach((cat, i) => {
+      this.appendChild(
+        this._row(
+          cat.icon || SENSOR_TYPE_DEFAULT_ICON[cat.type] || "mdi:help-circle-outline",
+          cat.name || "(sans nom)",
+          SENSOR_CATEGORY_TYPES[cat.type] || cat.type,
+          () => {
+            this._path = [i];
+            this._render();
+          },
+          () => {
+            this._update((c) => c.categories.splice(i, 1));
+            this._render();
+          }
+        )
+      );
+    });
+
+    this.appendChild(
+      this._form(
+        [
+          {
+            name: "add_type",
+            selector: { select: { mode: "dropdown", options: SENSOR_TYPE_OPTIONS } },
+          },
+        ],
+        {},
+        { add_type: "Ajouter une catégorie" },
+        (v) => {
+          if (!v || !v.add_type) return;
+          let idx;
+          this._update((c) => {
+            c.categories = c.categories || [];
+            c.categories.push({
+              name: "",
+              type: v.add_type,
+              icon: SENSOR_TYPE_DEFAULT_ICON[v.add_type],
+              entities: [],
+            });
+            idx = c.categories.length - 1;
+          });
+          this._path = [idx];
+          this._render();
+        }
+      )
+    );
+  }
+
+  _renderCategory(i) {
+    const cat = this._config.categories[i] || {};
+    const merge = (v) => this._update((c) => (c.categories[i] = { ...c.categories[i], ...v }));
+
+    this.appendChild(
+      this._backHeader(cat.name || SENSOR_CATEGORY_TYPES[cat.type] || "Catégorie", () => {
+        this._path = [];
+        this._render();
+      })
+    );
+
+    this.appendChild(
+      this._form(
+        [
+          { name: "name", selector: { text: {} } },
+          { name: "icon", selector: { icon: {} } },
+          {
+            name: "type",
+            selector: { select: { mode: "dropdown", options: SENSOR_TYPE_OPTIONS } },
+          },
+        ],
+        { name: cat.name, icon: cat.icon, type: cat.type },
+        { name: "Nom", icon: "Icône", type: "Type" },
+        merge
+      )
+    );
+
+    this.appendChild(
+      this._form(
+        [
+          {
+            name: "entities",
+            selector: {
+              entity: { multiple: true, domain: SENSOR_TYPE_DOMAINS[cat.type] || undefined },
+            },
+          },
+        ],
+        { entities: cat.entities || [] },
+        { entities: "Entités à surveiller" },
+        merge
+      )
+    );
+
+    if (cat.type === "alarm" && (cat.entities || []).length > 1) {
+      const hint = document.createElement("div");
+      hint.textContent =
+        "⚠ Seule la première entité est prise en compte pour une catégorie Alarme.";
+      hint.style.cssText = "font-size:12px;color:var(--warning-color,#f4a000);margin:4px 0;";
+      this.appendChild(hint);
+    }
+  }
+}
+customElements.define("alex-sensor-card-editor", SensorCardEditor);
+
+window.customCards.push({
+  type: "alex-sensor-card",
+  name: "Alex Sensor Card",
+  description: "Vue synthétique de capteurs par catégories (ouvrants, verrous, détecteurs…).",
   preview: false,
   documentationURL: "https://github.com/<user>/alex-cards",
 });

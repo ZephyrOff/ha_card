@@ -15,6 +15,7 @@ Collection de cartes Lovelace custom pour Home Assistant, distribuée en **plugi
 | `custom:alex-multi-graph-card`  | oui        | Pile de mini-graphes configurables (fond de card du thème).      |
 | `custom:alex-pill-card`         | oui        | Pastille nom + sous-titre avec icône ronde et chevron.           |
 | `custom:alex-weather-card`      | oui        | Météo actuelle et/ou prévisions (3 styles), à empiler librement. |
+| `custom:alex-sensor-card`       | oui        | Vue synthétique de capteurs par catégories (ouvrants, verrous…). |
 
 Toutes les cartes apparaissent dans le sélecteur « Ajouter une carte » avec un éditeur
 visuel. La `alex-light-card` a un éditeur type « chips » (liste + crayon pour éditer chaque
@@ -182,6 +183,59 @@ Autres points :
 - Les 4 styles viennent de gabarits `custom:button-card` fournis par l'utilisateur ;
   seule la lecture des prévisions (remplacement des données figées d'origine par les
   vraies données de l'entité) a été ajoutée par le plugin.
+
+### Sensor Card
+
+Vue synthétique par catégories : chaque catégorie agrège plusieurs entités en une seule
+ligne de statut (icône + point coloré + texte). Rendu « maison » (pas de dépendance
+externe), directement basé sur `hass.states`.
+
+```yaml
+type: custom:alex-sensor-card
+name: Sécurité
+icon: mdi:shield-home
+icon_color: [230, 163, 74]        # optionnel, teinte du badge (défaut ambré)
+categories:
+  - name: Alarme
+    type: alarm
+    icon: mdi:shield-outline
+    entities: [alarm_control_panel.maison]
+  - name: Porte d'entrée
+    type: lock
+    icon: mdi:lock
+    entities: [lock.porte_entree]
+  - name: Fenêtres
+    type: opening
+    icon: mdi:window-closed-variant
+    entities: [binary_sensor.fenetre_cuisine, binary_sensor.fenetre_chambre]
+  - name: Mouvement
+    type: detector
+    icon: mdi:motion-sensor
+    entities: [binary_sensor.mouvement_couloir]
+  - name: Caméras
+    type: boolean
+    icon: mdi:cctv
+    entities: [binary_sensor.camera_avant_active]
+```
+
+Types de catégorie et agrégation :
+
+- **`opening`** (ouvrant) — "Tout fermé" (vert) ou "N ouvert(s)" (rouge). Accepte
+  `binary_sensor` (`on` = ouvert) et `cover` (`open`/`closed`).
+- **`lock`** (verrou) — "Tout verrouillé" (vert) ou "N déverrouillé(s)" (rouge). Accepte
+  `lock` (`locked`/`unlocked`) et `binary_sensor` classe verrou (`on` = déverrouillé).
+- **`detector`** (détecteur) — "Aucune détection" (vert) ou "N détecté(s)" (orange).
+  `binary_sensor`, `on` = détecté.
+- **`boolean`** (booléen simple) — texte neutre "Tout inactif"/"N actif(s)" (gris), mais
+  le **point** passe au vert dès qu'au moins une entité est active — utile pour un statut
+  informatif (caméras actives, etc.) sans connotation d'alerte.
+- **`alarm`** (alarme) — affiche l'état littéral de la **première** entité
+  (`alarm_control_panel`) : Désarmée (gris), Armée (vert), En attente/Activation (orange),
+  Déclenchée (rouge). Les entités suivantes de la même catégorie sont ignorées.
+
+Chaque catégorie a sa propre icône (optionnelle, sinon une icône par défaut selon le
+type). Il n'y a pas encore d'action au clic sur une ligne (more-info, etc.) — à ajouter
+si besoin.
 
 ## Ajouter une nouvelle carte
 
