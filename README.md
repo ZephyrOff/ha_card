@@ -263,15 +263,21 @@ name: Portes
 icon: mdi:door
 entity_type: opening              # opening / lock / detector / boolean / alarm
 entities:
-  - binary_sensor.porte_entree
-  - binary_sensor.porte_garage
+  - entity: binary_sensor.porte_entree
+    name: Entrée                  # optionnel, sinon le nom convivial HA
+    icon: mdi:door                # optionnel, sinon l'icône par défaut du type
+    color: [74, 222, 128]         # optionnel, sinon la couleur du texte secondaire
+  - entity: binary_sensor.porte_garage
 icon_color: [74, 222, 128]        # optionnel, teinte du badge
 ```
 
-- Chaque ligne affiche : nom convivial de l'entité, sa zone HA (si l'entité ou son
-  appareil en a une), une pastille avec son état libellé selon `entity_type` (ex.
-  « Fermé »/« Ouvert » pour `opening`, « Verrouillé »/« Déverrouillé » pour `lock`), et
-  le temps écoulé depuis `last_changed`.
+- Chaque ligne affiche : nom convivial de l'entité (ou le nom personnalisé), sa zone HA
+  (si l'entité ou son appareil en a une), une pastille avec son état libellé selon
+  `entity_type` (ex. « Fermé »/« Ouvert » pour `opening`, « Verrouillé »/« Déverrouillé »
+  pour `lock`), et le temps écoulé depuis `last_changed`.
+- Chaque entité de la liste a son propre **nom**, **icône** et **couleur d'icône**
+  personnalisables (crayon sur sa ligne dans l'éditeur) — tous optionnels, avec repli sur
+  le nom convivial HA / l'icône par défaut du type / la couleur de texte secondaire.
 - Le nombre total d'entités s'affiche à droite de l'en-tête (« N total »).
 - Mêmes options de personnalisation que la Sensor Card (panneau Customisation racine :
   badge, fond de carte, couleur du nom, couleur des noms d'entité, couleur succès,
@@ -280,6 +286,8 @@ icon_color: [74, 222, 128]        # optionnel, teinte du badge
 - Type `alarm` : chaque ligne affichera l'état littéral de son entité
   (`alarm_control_panel`), pas de limitation à une seule entité ici (contrairement à la
   catégorie Alarme de la Sensor Card) puisque chaque ligne montre sa propre entité.
+- Rétrocompatible : une ancienne config avec `entities:` en simple liste de chaînes
+  (`- binary_sensor.porte_entree`) reste valide, sans personnalisation par entité.
 
 ### Toggle Card
 
@@ -292,16 +300,22 @@ type: custom:alex-toggle-card
 name: Morning
 icon: mdi:transit-connection-variant
 entities:
-  - input_boolean.morning_lights
-  - script.wake_up
-  - switch.coffee_machine
+  - entity: input_boolean.morning_lights
+    name: Lumières du matin       # optionnel, sinon le nom convivial HA
+    icon: mdi:lightbulb           # optionnel, sinon l'icône du badge
+    color: [244, 169, 53]         # optionnel, sinon la couleur du badge
+  - entity: switch.coffee_machine
 on_color: [244, 169, 53]          # optionnel, couleur de l'interrupteur actif
 ```
 
 - Pas de notion de « type » ici (contrairement à l'Entity Card) : n'importe quelle
   entité avec un état `on`/`off` fonctionne (`input_boolean`, `switch`, `automation`,
   `light`, `fan`…), le picker d'ajout suggère ces domaines à titre indicatif.
+- Chaque entité de la liste a son propre **nom**, **icône** et **couleur d'icône**
+  personnalisables (crayon sur sa ligne dans l'éditeur).
 - L'en-tête affiche « N/Total » (nombre d'entités actuellement actives).
+- Rétrocompatible : une ancienne config avec `entities:` en simple liste de chaînes
+  reste valide, sans personnalisation par entité.
 - Personnalisation (panneau Customisation racine) : badge, icône des lignes (vide =
   icône du badge), fond de carte, couleur du nom, couleur des noms d'entité, **couleur
   interrupteur actif** et **couleur interrupteur inactif** (remplacent respectivement

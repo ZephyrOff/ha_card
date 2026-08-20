@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.18.0";
+const ALEX_CARDS_VERSION = "0.19.0";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -3547,13 +3547,16 @@ class EntityCard extends HTMLElement {
     const hass = this._hass;
     const type = c.entity_type || "opening";
 
-    const rows = entities.map((entityId) => {
+    const rows = entities.map((entry) => {
+      const e = typeof entry === "string" ? { entity: entry } : entry || {};
+      const entityId = e.entity;
       const stateObj = hass.states[entityId];
       const info = sensorEntityStateLabel(type, stateObj);
-      const name = (stateObj && stateObj.attributes && stateObj.attributes.friendly_name) || entityId;
+      const name =
+        e.name || (stateObj && stateObj.attributes && stateObj.attributes.friendly_name) || entityId;
       const area = sensorEntityArea(hass, entityId);
       const time = stateObj ? sensorRelativeTime(stateObj.last_changed) : "";
-      return { entityId, info, name, area, time };
+      return { entityId, info, name, area, time, icon: e.icon, color: e.color };
     });
 
     // Ne re-render que si un element affiche a reellement change.
@@ -3567,7 +3570,12 @@ class EntityCard extends HTMLElement {
       JSON.stringify(c.success_color || null),
       JSON.stringify(c.failed_color || null),
       type,
-      rows.map((r) => `${r.entityId}|${r.name}|${r.area}|${r.info.text}|${r.info.tone}|${r.time}`).join(";"),
+      rows
+        .map(
+          (r) =>
+            `${r.entityId}|${r.name}|${r.icon}|${JSON.stringify(r.color || null)}|${r.area}|${r.info.text}|${r.info.tone}|${r.time}`
+        )
+        .join(";"),
     ].join("~");
     if (this._built && sig === this._lastSig) return;
     this._lastSig = sig;
@@ -3593,12 +3601,14 @@ class EntityCard extends HTMLElement {
         const pillBg = `rgba(${tintRgb[0]}, ${tintRgb[1]}, ${tintRgb[2]}, 0.14)`;
         const border =
           i < rows.length - 1 ? "border-bottom:1px solid var(--divider-color);" : "";
+        const entIcon = r.icon || rowIcon;
+        const entIconColor = colorOr(r.color, "var(--secondary-text-color)");
         return `
           <div style="display:flex;align-items:center;gap:12px;padding:12px 2px;${border}">
             <div style="width:32px;height:32px;border-radius:9px;
                         background:rgba(var(--rgb-primary-text-color,0,0,0),0.06);
                         display:flex;align-items:center;justify-content:center;flex:0 0 auto;">
-              <ha-icon icon="${rowIcon}" style="--mdc-icon-size:16px;color:var(--secondary-text-color);"></ha-icon>
+              <ha-icon icon="${entIcon}" style="--mdc-icon-size:16px;color:${entIconColor};"></ha-icon>
             </div>
             <div style="flex:1;min-width:0;">
               <div style="font-size:14px;font-weight:600;color:${secondaryColor};
@@ -3651,6 +3661,16 @@ class EntityCardEditor extends AlexListEditor {
 
   _normalize() {
     if (!Array.isArray(this._config.entities)) this._config.entities = [];
+    // Migration : ancien format (tableau de chaines) -> objets {entity, ...}.
+    this._config.entities = this._config.entities.map((e) =>
+      typeof e === "string" ? { entity: e } : e
+    );
+  }
+
+  _validPath() {
+    const p = this._path || [];
+    if (p.length >= 1 && !this._config.entities[p[0]]) return [];
+    return p;
   }
 
   _addEntityRow(domains, onPick) {
@@ -3668,6 +3688,16 @@ class EntityCardEditor extends AlexListEditor {
     this._forms = [];
     this._selectors = [];
     this.innerHTML = "";
+    const p = this._validPath();
+    if (p.length === 0) this._renderRoot();
+    else this._renderEntity(p[0]);
+    if (this._hass) {
+      this._forms.forEach((f) => (f.hass = this._hass));
+      this._selectors.forEach((s) => (s.hass = this._hass));
+    }
+  }
+
+  _renderRoot() {
     const cfg = this._config;
 
     this.appendChild(this._sectionTitle("En-tête"));
@@ -3689,15 +3719,18 @@ class EntityCardEditor extends AlexListEditor {
 
     this.appendChild(this._sectionTitle("Entités"));
     const entities = cfg.entities || [];
-    entities.forEach((entityId, j) => {
-      const st = this._hass && this._hass.states[entityId];
-      const friendly = st && st.attributes && st.attributes.friendly_name;
+    entities.forEach((e, j) => {
+      const st = this._hass && this._hass.states[e.entity];
+      const friendly = e.name || (st && st.attributes && st.attributes.friendly_name);
       this.appendChild(
         this._row(
-          SENSOR_TYPE_DEFAULT_ICON[cfg.entity_type] || "mdi:door",
-          friendly || entityId,
-          friendly ? entityId : "",
-          null,
+          e.icon || SENSOR_TYPE_DEFAULT_ICON[cfg.entity_type] || "mdi:door",
+          friendly || e.entity || "(sans entité)",
+          friendly ? e.entity : "",
+          () => {
+            this._path = [j];
+            this._render();
+          },
           () => {
             this._update((c) => c.entities.splice(j, 1));
             this._render();
@@ -3707,10 +3740,13 @@ class EntityCardEditor extends AlexListEditor {
     });
     this.appendChild(
       this._addEntityRow(SENSOR_TYPE_DOMAINS[cfg.entity_type], (entityId) => {
+        let idx;
         this._update((c) => {
           c.entities = c.entities || [];
-          c.entities.push(entityId);
+          c.entities.push({ entity: entityId });
+          idx = c.entities.length - 1;
         });
+        this._path = [idx];
         this._render();
       })
     );
@@ -3748,11 +3784,38 @@ class EntityCardEditor extends AlexListEditor {
         )
       )
     );
+  }
 
-    if (this._hass) {
-      this._forms.forEach((f) => (f.hass = this._hass));
-      this._selectors.forEach((s) => (s.hass = this._hass));
-    }
+  _renderEntity(i) {
+    const cfg = this._config;
+    const e = cfg.entities[i] || {};
+    const merge = (v) => this._update((c) => (c.entities[i] = { ...c.entities[i], ...v }));
+
+    this.appendChild(
+      this._backHeader(e.name || e.entity || "Entité", () => {
+        this._path = [];
+        this._render();
+      })
+    );
+
+    this.appendChild(
+      this._mixed(
+        [
+          { name: "entity", selector: { entity: { domain: SENSOR_TYPE_DOMAINS[cfg.entity_type] } } },
+          { name: "name", selector: { text: {} } },
+          { name: "icon", selector: { icon: {} } },
+          { name: "color", selector: { color_rgb: {} } },
+        ],
+        { entity: e.entity, name: e.name, icon: e.icon, color: e.color },
+        {
+          entity: "Entité",
+          name: "Nom (vide = nom convivial)",
+          icon: "Icône (vide = icône du type)",
+          color: "Couleur de l'icône",
+        },
+        merge
+      )
+    );
   }
 }
 customElements.define("alex-entity-card-editor", EntityCardEditor);
@@ -3809,12 +3872,15 @@ class ToggleCard extends HTMLElement {
     const entities = c.entities || [];
     const hass = this._hass;
 
-    const rows = entities.map((entityId) => {
+    const rows = entities.map((entry) => {
+      const e = typeof entry === "string" ? { entity: entry } : entry || {};
+      const entityId = e.entity;
       const stateObj = hass.states[entityId];
       const on = toggleEntityOn(stateObj);
-      const name = (stateObj && stateObj.attributes && stateObj.attributes.friendly_name) || entityId;
+      const name =
+        e.name || (stateObj && stateObj.attributes && stateObj.attributes.friendly_name) || entityId;
       const time = stateObj ? sensorRelativeTime(stateObj.last_changed) : "";
-      return { entityId, on, name, time };
+      return { entityId, on, name, time, icon: e.icon, color: e.color };
     });
     const onCount = rows.filter((r) => r.on).length;
 
@@ -3828,7 +3894,12 @@ class ToggleCard extends HTMLElement {
       JSON.stringify(c.secondary_color || null),
       JSON.stringify(c.on_color || null),
       JSON.stringify(c.off_color || null),
-      rows.map((r) => `${r.entityId}|${r.name}|${r.on}|${r.time}`).join(";"),
+      rows
+        .map(
+          (r) =>
+            `${r.entityId}|${r.name}|${r.icon}|${JSON.stringify(r.color || null)}|${r.on}|${r.time}`
+        )
+        .join(";"),
     ].join("~");
     if (this._built && sig === this._lastSig) return;
     this._lastSig = sig;
@@ -3849,12 +3920,14 @@ class ToggleCard extends HTMLElement {
           i < rows.length - 1 ? "border-bottom:1px solid var(--divider-color);" : "";
         const track = r.on ? onColor : offColor;
         const thumbLeft = r.on ? "23px" : "3px";
+        const entIcon = r.icon || rowIcon;
+        const entIconColor = colorOr(r.color, iconColor);
         return `
           <div style="display:flex;align-items:center;gap:12px;padding:12px 2px;${border}">
             <div style="width:32px;height:32px;border-radius:9px;
                         background:rgba(var(--rgb-primary-text-color,0,0,0),0.06);
                         display:flex;align-items:center;justify-content:center;flex:0 0 auto;">
-              <ha-icon icon="${rowIcon}" style="--mdc-icon-size:16px;color:${iconColor};"></ha-icon>
+              <ha-icon icon="${entIcon}" style="--mdc-icon-size:16px;color:${entIconColor};"></ha-icon>
             </div>
             <div style="flex:1;min-width:0;">
               <div style="font-size:14px;font-weight:600;color:${secondaryColor};
@@ -3911,6 +3984,16 @@ class ToggleCardEditor extends AlexListEditor {
 
   _normalize() {
     if (!Array.isArray(this._config.entities)) this._config.entities = [];
+    // Migration : ancien format (tableau de chaines) -> objets {entity, ...}.
+    this._config.entities = this._config.entities.map((e) =>
+      typeof e === "string" ? { entity: e } : e
+    );
+  }
+
+  _validPath() {
+    const p = this._path || [];
+    if (p.length >= 1 && !this._config.entities[p[0]]) return [];
+    return p;
   }
 
   _addEntityRow(domains, onPick) {
@@ -3928,6 +4011,16 @@ class ToggleCardEditor extends AlexListEditor {
     this._forms = [];
     this._selectors = [];
     this.innerHTML = "";
+    const p = this._validPath();
+    if (p.length === 0) this._renderRoot();
+    else this._renderEntity(p[0]);
+    if (this._hass) {
+      this._forms.forEach((f) => (f.hass = this._hass));
+      this._selectors.forEach((s) => (s.hass = this._hass));
+    }
+  }
+
+  _renderRoot() {
     const cfg = this._config;
 
     this.appendChild(this._sectionTitle("En-tête"));
@@ -3945,15 +4038,18 @@ class ToggleCardEditor extends AlexListEditor {
 
     this.appendChild(this._sectionTitle("Entités"));
     const entities = cfg.entities || [];
-    entities.forEach((entityId, j) => {
-      const st = this._hass && this._hass.states[entityId];
-      const friendly = st && st.attributes && st.attributes.friendly_name;
+    entities.forEach((e, j) => {
+      const st = this._hass && this._hass.states[e.entity];
+      const friendly = e.name || (st && st.attributes && st.attributes.friendly_name);
       this.appendChild(
         this._row(
-          cfg.entity_icon || cfg.icon || "mdi:toggle-switch-outline",
-          friendly || entityId,
-          friendly ? entityId : "",
-          null,
+          e.icon || cfg.entity_icon || cfg.icon || "mdi:toggle-switch-outline",
+          friendly || e.entity || "(sans entité)",
+          friendly ? e.entity : "",
+          () => {
+            this._path = [j];
+            this._render();
+          },
           () => {
             this._update((c) => c.entities.splice(j, 1));
             this._render();
@@ -3963,10 +4059,13 @@ class ToggleCardEditor extends AlexListEditor {
     });
     this.appendChild(
       this._addEntityRow(TOGGLE_DOMAINS, (entityId) => {
+        let idx;
         this._update((c) => {
           c.entities = c.entities || [];
-          c.entities.push(entityId);
+          c.entities.push({ entity: entityId });
+          idx = c.entities.length - 1;
         });
+        this._path = [idx];
         this._render();
       })
     );
@@ -4007,11 +4106,38 @@ class ToggleCardEditor extends AlexListEditor {
         )
       )
     );
+  }
 
-    if (this._hass) {
-      this._forms.forEach((f) => (f.hass = this._hass));
-      this._selectors.forEach((s) => (s.hass = this._hass));
-    }
+  _renderEntity(i) {
+    const cfg = this._config;
+    const e = cfg.entities[i] || {};
+    const merge = (v) => this._update((c) => (c.entities[i] = { ...c.entities[i], ...v }));
+
+    this.appendChild(
+      this._backHeader(e.name || e.entity || "Entité", () => {
+        this._path = [];
+        this._render();
+      })
+    );
+
+    this.appendChild(
+      this._mixed(
+        [
+          { name: "entity", selector: { entity: { domain: TOGGLE_DOMAINS } } },
+          { name: "name", selector: { text: {} } },
+          { name: "icon", selector: { icon: {} } },
+          { name: "color", selector: { color_rgb: {} } },
+        ],
+        { entity: e.entity, name: e.name, icon: e.icon, color: e.color },
+        {
+          entity: "Entité",
+          name: "Nom (vide = nom convivial)",
+          icon: "Icône (vide = icône du badge)",
+          color: "Couleur de l'icône",
+        },
+        merge
+      )
+    );
   }
 }
 customElements.define("alex-toggle-card-editor", ToggleCardEditor);
