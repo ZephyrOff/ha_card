@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.22.0";
+const ALEX_CARDS_VERSION = "0.22.1";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -4506,7 +4506,7 @@ class MediaPlayerCard extends HTMLElement {
           </div>
         </div>
 
-        <div style="background:${bottomBg};padding:16px 20px 18px;">
+        <div style="background:${bottomBg};padding:10px 20px 12px;">
           <div style="display:flex;align-items:center;justify-content:center;gap:14px;">
             <div class="ac-mp-prev" style="width:40px;height:40px;border-radius:14px;
                         background:rgba(var(--rgb-primary-text-color,0,0,0),0.10);
