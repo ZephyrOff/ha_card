@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.23.0";
+const ALEX_CARDS_VERSION = "0.23.1";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -2616,7 +2616,7 @@ class WeatherCard extends AlexWrapperCard {
   }
 
   _forecastConfig(entity, comp, opts, keepsOwnBg, outerBg) {
-    // opts: { field, template, extraStyles, bg, height, gridArea, extraColors }
+    // opts: { field, template, extraStyles, bg, height, gridArea, extraColors, extraValues }
     const days = comp.days != null ? comp.days : 5;
     const primary = colorOr(comp.primary_color, opts.defaultPrimary);
     const secondary = colorOr(comp.secondary_color, opts.defaultSecondary);
@@ -2634,6 +2634,11 @@ class WeatherCard extends AlexWrapperCard {
     const extraTokens = {};
     (opts.extraColors || []).forEach(({ token, field, fallback }) => {
       extraTokens[token] = colorOr(comp[field], fallback === "primary" ? primary : secondary);
+    });
+    // Valeurs additionnelles non-couleur (ex. ecartement entre les lignes),
+    // avec repli sur une valeur par defaut si l'utilisateur ne la definit pas.
+    (opts.extraValues || []).forEach(({ token, field, fallback }) => {
+      extraTokens[token] = comp[field] != null ? comp[field] : fallback;
     });
 
     const tokenValues = Object.assign(
@@ -2733,7 +2738,7 @@ class WeatherCard extends AlexWrapperCard {
 
   _barsConfig(entity, comp, keepsOwnBg, outerBg) {
     const extraStyles = `
-.daily { display:flex; flex-direction:column; justify-content:space-between; width:100%; height:100%; }
+.daily { display:flex; flex-direction:column; justify-content:flex-start; gap:@@ROW_GAP@@px; width:100%; height:100%; overflow:hidden; }
 .row { display:grid; grid-template-columns:72px 28px minmax(0,1fr) 58px; align-items:center; column-gap:0px; margin-left:-10px; width:100%; height:30px; }
 .day { font-size:13px; font-weight:400; color:@@PRIMARY@@; white-space:nowrap; }
 .icon { display:flex; align-items:center; justify-content:center; color:@@PRIMARY@@; transform:translateX(-12px); }
@@ -2759,6 +2764,7 @@ class WeatherCard extends AlexWrapperCard {
         extraColors: [
           { token: "RANGE_TRACK", field: "range_track_color", fallback: "secondary" },
         ],
+        extraValues: [{ token: "ROW_GAP", field: "row_spacing", fallback: 10 }],
         height: "235px",
         padding: "14px",
       },
@@ -2990,6 +2996,19 @@ class WeatherCardEditor extends AlexListEditor {
           "Segment autour du point (vide = secondaire)",
           comp.range_track_color,
           (v) => merge({ range_track_color: v })
+        )
+      );
+      rows.appendChild(
+        this._form(
+          [
+            {
+              name: "row_spacing",
+              selector: { number: { min: 0, max: 40, step: 1, mode: "box" } },
+            },
+          ],
+          { row_spacing: comp.row_spacing != null ? comp.row_spacing : 10 },
+          { row_spacing: "Écartement entre les lignes (px)" },
+          (v) => merge(v)
         )
       );
     }

@@ -184,7 +184,11 @@ Autres points :
   `range_track_color` (le fond du piston, vide = secondaire) et `range_fill_color`
   (le levier à l'intérieur, vide = primaire).
 - **`bars`** a une couleur dédiée pour le segment qui entoure le point sur la jauge :
-  `range_track_color` (vide = secondaire).
+  `range_track_color` (vide = secondaire), et un champ `row_spacing` (px, défaut 10) pour
+  l'écartement entre les lignes. Avant cet ajout, les lignes étaient réparties
+  automatiquement pour remplir toute la hauteur du composant (`space-between`) ; avec un
+  écartement fixe, le contenu ne remplit plus forcément toute la hauteur si peu de jours
+  sont affichés — les lignes s'alignent en haut avec l'espacement défini.
 - Les 4 styles viennent de gabarits `custom:button-card` fournis par l'utilisateur ;
   seule la lecture des prévisions (remplacement des données figées d'origine par les
   vraies données de l'entité) a été ajoutée par le plugin.
