@@ -381,9 +381,16 @@ accent_color: [255, 255, 255]     # optionnel, couleur du bouton lecture/volume/
   défini, sinon le nom convivial HA de l'entité) plutôt qu'une simple icône — crayon sur
   la ligne d'un lecteur dans l'éditeur pour le renommer.
 - **Précédent/Suivant** appellent `media_player.media_previous_track`/`media_next_track`
-  (changement de piste) plutôt que rewind/fast-forward, pour rester compatible avec le
-  plus grand nombre d'intégrations. Les trois boutons (précédent/lecture-pause/suivant)
-  partagent le même style de pastille circulaire, comme sur l'image de référence.
+  (changement de piste) — les icônes en chevrons doubles (rewind/fast-forward) restent un
+  choix purement visuel (comme dans Spotify), pas un vrai rembobinage. Les trois boutons
+  (précédent/lecture-pause/suivant) partagent désormais exactement le même style : même
+  taille, même fond translucide, mêmes coins arrondis en carré — pas de bouton central
+  mis en avant.
+- **Lecture/Pause optimiste** : l'icône bascule immédiatement au clic, sans attendre la
+  confirmation de HA. Utile avec les intégrations qui ne remontent l'état réel que par
+  sondage (ex. Alexa Media Player, qui peut mettre plusieurs dizaines de secondes) — sans
+  ça, le bouton semblerait ne rien faire pendant tout ce délai. L'affichage optimiste
+  s'efface dès que l'état réel confirme le changement, ou après 8 secondes sinon.
 - **Volume** : le curseur n'apparaît que si l'entité expose `volume_level` ; cliquer sur
   l'icône bascule le mute. Le service `volume_set` n'est appelé qu'au relâchement du
   curseur (pas en continu pendant le glissement), pour éviter de spammer l'entité.
@@ -391,13 +398,11 @@ accent_color: [255, 255, 255]     # optionnel, couleur du bouton lecture/volume/
   sélectionné (accès à la sélection de source, etc., sans réinventer ce sélecteur).
 - **Pochette** agrandie (72×72px) pour rester lisible en avant-plan de la carte.
 - Personnalisation (panneau Customisation) : fond de la carte, couleur du titre,
-  couleur de l'artiste/libellé, couleur du bouton lecture + curseur de volume + onglet
-  actif.
+  couleur de l'artiste/libellé/boutons de transport (primary), couleur d'accent (curseur
+  de volume + onglet actif uniquement — les boutons de transport suivent désormais la
+  couleur du titre, pas l'accent).
 - Rétrocompatible : une ancienne config avec `entities:` en simple liste de chaînes
   reste valide, sans nom personnalisé.
-- Note de contraste : le bouton lecture/pause et les onglets actifs utilisent une icône
-  noire fixe sur la couleur d'accent — pense à choisir une couleur d'accent claire pour
-  garder l'icône lisible.
 
 ## Ajouter une nouvelle carte
 

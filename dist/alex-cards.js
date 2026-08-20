@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.21.1";
+const ALEX_CARDS_VERSION = "0.21.2";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -4405,7 +4405,19 @@ class MediaPlayerCard extends HTMLElement {
     const title = attrs.media_title || "Aucune lecture en cours";
     const artist = attrs.media_artist || "";
     const picture = attrs.entity_picture || "";
-    const isPlaying = stateObj && stateObj.state === "playing";
+    let isPlaying = stateObj && stateObj.state === "playing";
+    // Affichage optimiste : certaines integrations (ex. Alexa Media Player)
+    // ne remontent l'etat reel que par sondage, avec plusieurs dizaines de
+    // secondes de retard. On force l'icone au clic (voir plus bas) et on ne
+    // laisse l'etat reel reprendre la main que s'il confirme l'optimisme, ou
+    // apres expiration d'un delai de securite.
+    if (this._optimistic && this._optimistic.entity === selected) {
+      if (Date.now() - this._optimistic.ts < 8000) {
+        isPlaying = this._optimistic.playing;
+      } else {
+        this._optimistic = null;
+      }
+    }
     const muted = !!attrs.is_volume_muted;
     const volume = attrs.volume_level != null ? attrs.volume_level : 1;
     const hasVolume = attrs.volume_level != null;
@@ -4486,20 +4498,21 @@ class MediaPlayerCard extends HTMLElement {
           </div>
         </div>
 
-        <div style="display:flex;align-items:center;justify-content:center;gap:18px;margin-top:18px;">
-          <div class="ac-mp-prev" style="width:38px;height:38px;border-radius:50%;
-                      background:rgba(var(--rgb-primary-text-color,0,0,0),0.08);
+        <div style="display:flex;align-items:center;justify-content:center;gap:14px;margin-top:18px;">
+          <div class="ac-mp-prev" style="width:40px;height:40px;border-radius:14px;
+                      background:rgba(var(--rgb-primary-text-color,0,0,0),0.10);
                       display:flex;align-items:center;justify-content:center;cursor:pointer;">
-            <ha-icon icon="mdi:skip-previous" style="--mdc-icon-size:20px;color:${primaryColor};"></ha-icon>
+            <ha-icon icon="mdi:rewind" style="--mdc-icon-size:20px;color:${primaryColor};"></ha-icon>
           </div>
-          <div class="ac-mp-playpause" style="width:48px;height:48px;border-radius:50%;background:${accentColor};
+          <div class="ac-mp-playpause" style="width:40px;height:40px;border-radius:14px;
+                      background:rgba(var(--rgb-primary-text-color,0,0,0),0.10);
                       display:flex;align-items:center;justify-content:center;cursor:pointer;">
-            <ha-icon icon="${isPlaying ? "mdi:pause" : "mdi:play"}" style="--mdc-icon-size:24px;color:#000;"></ha-icon>
+            <ha-icon icon="${isPlaying ? "mdi:pause" : "mdi:play"}" style="--mdc-icon-size:20px;color:${primaryColor};"></ha-icon>
           </div>
-          <div class="ac-mp-next" style="width:38px;height:38px;border-radius:50%;
-                      background:rgba(var(--rgb-primary-text-color,0,0,0),0.08);
+          <div class="ac-mp-next" style="width:40px;height:40px;border-radius:14px;
+                      background:rgba(var(--rgb-primary-text-color,0,0,0),0.10);
                       display:flex;align-items:center;justify-content:center;cursor:pointer;">
-            <ha-icon icon="mdi:skip-next" style="--mdc-icon-size:20px;color:${primaryColor};"></ha-icon>
+            <ha-icon icon="mdi:fast-forward" style="--mdc-icon-size:20px;color:${primaryColor};"></ha-icon>
           </div>
         </div>
 
@@ -4531,7 +4544,20 @@ class MediaPlayerCard extends HTMLElement {
     const nextEl = this.querySelector(".ac-mp-next");
     if (nextEl) nextEl.addEventListener("click", () => call("media_player.media_next_track"));
     const ppEl = this.querySelector(".ac-mp-playpause");
-    if (ppEl) ppEl.addEventListener("click", () => call("media_player.media_play_pause"));
+    if (ppEl)
+      ppEl.addEventListener("click", () => {
+        this._optimistic = { entity: entityId, playing: !isPlaying, ts: Date.now() };
+        this._lastSig = null;
+        call("media_player.media_play_pause");
+        this._render();
+        // Filet de securite : si aucune mise a jour de hass ne survient
+        // avant l'expiration de la fenetre optimiste, on force quand meme
+        // un nouveau rendu pour laisser l'etat reel reprendre la main.
+        window.setTimeout(() => {
+          this._lastSig = null;
+          this._render();
+        }, 8100);
+      });
     const moreEl = this.querySelector(".ac-mp-more");
     if (moreEl) moreEl.addEventListener("click", () => fireAction(this, hass, { action: "more-info" }, entityId));
     const muteEl = this.querySelector(".ac-mp-mute");
