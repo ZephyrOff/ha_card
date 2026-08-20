@@ -119,15 +119,17 @@ lights:
 
 ### Weather Card
 
-Une carte, plusieurs « composants » empilés verticalement. Chaque composant est un des
-4 styles ci-dessous ; on peut en mettre plusieurs (ex. météo actuelle + un style de
-prévisions) dans la même carte.
+Une carte, plusieurs « composants » empilés verticalement et **visuellement unifiés**
+(un seul fond, un seul contour arrondi). Chaque composant est un des 4 styles
+ci-dessous ; on peut en mettre plusieurs (ex. météo actuelle + un style de prévisions)
+dans la même carte.
 
 ```yaml
 type: custom:alex-weather-card
 entity: weather.forecast_maison
+background: [48, 48, 63]        # optionnel : fond unique pour toute la carte
 components:
-  - type: current          # météo actuelle (fond dégradé dynamique par défaut)
+  - type: current          # météo actuelle
     # background/primary_color/secondary_color : optionnels (color picker dans l'éditeur)
   - type: classic           # prévisions, icônes emoji + barre min/max par jour
     days: 5
@@ -137,19 +139,36 @@ components:
     days: 5
 ```
 
-Points importants :
+**Fond de la carte — priorité, du plus spécifique au plus général :**
 
-- **`type: current`** : le fond est le dégradé dynamique selon la condition météo par
-  défaut ; définir `background` dans l'éditeur le remplace par une couleur fixe. `primary_color`
-  colore la température et la condition, `secondary_color` colore le min/max du jour.
-- **`type: classic` / `bars` / `chart`** : le fond par défaut suit le fond de card du
-  thème (`--ha-card-background`) ; définir `background` dans l'éditeur le remplace par
-  une couleur fixe. `days` (défaut 5) limite le nombre de jours de prévision affichés. Les prévisions sont récupérées via l'abonnement WebSocket
-  `weather/subscribe_forecast` (méthode standard de HA depuis 2023.9, celle qu'utilise la
-  carte météo native) ; en repli, si l'entité ne le supporte pas, l'ancien attribut
-  `attributes.forecast` est lu une fois. Si aucun des deux n'est disponible, le composant
-  affiche « Prévisions indisponibles ». `primary_color`/`secondary_color` retintent
-  respectivement : le jour + le max (classic, bars) ; la courbe max + la courbe min (chart).
+1. Un composant avec **son propre `background`** défini (dans son panneau
+   Customisation) garde toujours sa couleur et ses coins arrondis — override
+   volontaire, visuellement distinct des autres.
+2. Sinon, si la carte a un **`background` racine** défini (champ « Apparence » en
+   haut de l'éditeur) : tous les composants (y compris `current`) deviennent
+   transparents et suivent cette couleur unique → unité totale.
+3. Sinon (rien de défini nulle part) :
+   - `current` garde son **dégradé dynamique** selon la météo (comportement
+     historique), avec ses propres coins arrondis.
+   - Les composants de prévision (`classic`/`bars`/`chart`) deviennent transparents
+     et suivent le **fond de thème** du conteneur externe → unifiés entre eux, même
+     si `current` reste visuellement à part (son dégradé ne peut pas se fondre dans
+     un fond partagé statique, puisqu'il dépend de l'état météo en direct).
+
+Pour une unité complète même avec `current` dans le lot, définis un `background`
+racine explicite (les couleurs météo dynamiques ne s'appliquent alors plus).
+
+Autres points :
+
+- `days` (défaut 5) limite le nombre de jours de prévision affichés sur les 3 styles
+  de prévisions. Elles sont récupérées via l'abonnement WebSocket
+  `weather/subscribe_forecast` (méthode standard de HA depuis 2023.9, celle qu'utilise
+  la carte météo native) ; en repli, si l'entité ne le supporte pas, l'ancien attribut
+  `attributes.forecast` est lu une fois. Si aucun des deux n'est disponible, le
+  composant affiche « Prévisions indisponibles ».
+- `primary_color`/`secondary_color` (par composant) retintent respectivement : la
+  température + la condition (current) ; le jour + le max (classic, bars) ; la courbe
+  max + la courbe min (chart, valeurs par défaut bleu/orange non liées au thème).
 - Les 4 styles viennent de gabarits `custom:button-card` fournis par l'utilisateur ;
   seule la lecture des prévisions (remplacement des données figées d'origine par les
   vraies données de l'entité) a été ajoutée par le plugin.

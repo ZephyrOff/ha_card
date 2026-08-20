@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.12.3";
+const ALEX_CARDS_VERSION = "0.13.0";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -2359,7 +2359,7 @@ class WeatherCard extends AlexWrapperCard {
       });
   }
 
-  _currentConfig(entity, comp) {
+  _currentConfig(entity, comp, keepsOwnBg) {
     const primary = colorOr(comp.primary_color, null);
     const secondary = colorOr(comp.secondary_color, null);
     const bgOverride = colorOr(comp.background, null);
@@ -2371,6 +2371,12 @@ class WeatherCard extends AlexWrapperCard {
     const forecastJson = JSON.stringify(this._forecasts[entity] || []);
     const t = (tpl) => fillTokens(tpl, { ENTITY: entity, FORECAST_JSON: forecastJson });
 
+    const bgValue = !keepsOwnBg
+      ? "transparent"
+      : bgOverride
+      ? bgOverride
+      : "[[[ " + t(TPL_CURRENT_BG) + " ]]]";
+
     return {
       type: "custom:button-card",
       entity,
@@ -2381,13 +2387,9 @@ class WeatherCard extends AlexWrapperCard {
       styles: {
         card: [
           { height: "120px" },
-          { "border-radius": "22px" },
+          { "border-radius": keepsOwnBg ? "22px" : "0" },
           { padding: "8px 16px" },
-          {
-            background: bgOverride
-              ? bgOverride
-              : "[[[ " + t(TPL_CURRENT_BG) + " ]]]",
-          },
+          { background: bgValue },
           { "box-shadow": "none" },
           { border: "none" },
           { overflow: "visible" },
@@ -2522,12 +2524,17 @@ class WeatherCard extends AlexWrapperCard {
     };
   }
 
-  _forecastConfig(entity, comp, opts) {
+  _forecastConfig(entity, comp, opts, keepsOwnBg, outerBg) {
     // opts: { field, template, extraStyles, bg, height, gridArea }
     const days = comp.days != null ? comp.days : 5;
     const primary = colorOr(comp.primary_color, opts.defaultPrimary);
     const secondary = colorOr(comp.secondary_color, opts.defaultSecondary);
-    const bg = colorOr(comp.background, opts.defaultBg);
+    const ownBg = colorOr(comp.background, null);
+    const bg = !keepsOwnBg ? "transparent" : ownBg || opts.defaultBg;
+    // Pour les elements decoratifs (ex. contour des points de la courbe) qui
+    // doivent visuellement se fondre dans ce qui est REELLEMENT affiche
+    // derriere le composant (le fond du conteneur externe quand transparent).
+    const visualBg = !keepsOwnBg ? outerBg : bg;
     const forecastJson = JSON.stringify(this._forecasts[entity] || []);
 
     const body = fillTokens(opts.template, {
@@ -2535,7 +2542,7 @@ class WeatherCard extends AlexWrapperCard {
       DAYS: days,
       PRIMARY: primary,
       SECONDARY: secondary,
-      BG: bg,
+      BG: visualBg,
       FORECAST_JSON: forecastJson,
     });
 
@@ -2548,7 +2555,7 @@ class WeatherCard extends AlexWrapperCard {
       styles: {
         card: [
           { height: opts.height },
-          { "border-radius": "22px" },
+          { "border-radius": keepsOwnBg ? "22px" : "0" },
           { padding: opts.padding },
           { background: bg },
           { border: "none" },
@@ -2580,14 +2587,14 @@ class WeatherCard extends AlexWrapperCard {
       cfg.extra_styles = fillTokens(opts.extraStyles, {
         PRIMARY: primary,
         SECONDARY: secondary,
-        BG: bg,
+        BG: visualBg,
       });
     }
 
     return cfg;
   }
 
-  _classicConfig(entity, comp) {
+  _classicConfig(entity, comp, keepsOwnBg, outerBg) {
     const extraStyles = `
 .forecast { display:flex; width:100%; height:100%; justify-content:space-between; align-items:stretch; gap:0; }
 .day { flex:1 1 0; min-width:0; width:0; display:flex; flex-direction:column; align-items:center; text-align:center; }
@@ -2602,19 +2609,25 @@ class WeatherCard extends AlexWrapperCard {
 .rain { font-size:13px; color:#3877aa; margin-top:8px; }
 `.trim();
 
-    return this._forecastConfig(entity, comp, {
-      field: "forecast",
-      template: TPL_FORECAST_CLASSIC,
-      extraStyles,
-      defaultBg: "var(--ha-card-background, var(--card-background-color))",
-      defaultPrimary: "var(--primary-text-color)",
-      defaultSecondary: "var(--secondary-text-color)",
-      height: "255px",
-      padding: "15px 10px",
-    });
+    return this._forecastConfig(
+      entity,
+      comp,
+      {
+        field: "forecast",
+        template: TPL_FORECAST_CLASSIC,
+        extraStyles,
+        defaultBg: "var(--ha-card-background, var(--card-background-color))",
+        defaultPrimary: "var(--primary-text-color)",
+        defaultSecondary: "var(--secondary-text-color)",
+        height: "255px",
+        padding: "15px 10px",
+      },
+      keepsOwnBg,
+      outerBg
+    );
   }
 
-  _barsConfig(entity, comp) {
+  _barsConfig(entity, comp, keepsOwnBg, outerBg) {
     const extraStyles = `
 .daily { display:flex; flex-direction:column; justify-content:space-between; width:100%; height:100%; }
 .row { display:grid; grid-template-columns:72px 28px minmax(0,1fr) 58px; align-items:center; column-gap:0px; margin-left:-10px; width:100%; height:30px; }
@@ -2629,45 +2642,75 @@ class WeatherCard extends AlexWrapperCard {
 .min { font-size:9px; font-weight:400; color:@@SECONDARY@@; text-align:left; margin-bottom:5px; }
 `.trim();
 
-    return this._forecastConfig(entity, comp, {
-      field: "daily",
-      template: TPL_FORECAST_BARS,
-      extraStyles,
-      defaultBg: "var(--ha-card-background, var(--card-background-color))",
-      defaultPrimary: "var(--primary-text-color)",
-      defaultSecondary: "var(--secondary-text-color)",
-      height: "235px",
-      padding: "14px",
-    });
+    return this._forecastConfig(
+      entity,
+      comp,
+      {
+        field: "daily",
+        template: TPL_FORECAST_BARS,
+        extraStyles,
+        defaultBg: "var(--ha-card-background, var(--card-background-color))",
+        defaultPrimary: "var(--primary-text-color)",
+        defaultSecondary: "var(--secondary-text-color)",
+        height: "235px",
+        padding: "14px",
+      },
+      keepsOwnBg,
+      outerBg
+    );
   }
 
-  _chartConfig(entity, comp) {
-    return this._forecastConfig(entity, comp, {
-      field: "chart",
-      template: TPL_FORECAST_CHART,
-      extraStyles: null,
-      defaultBg: "var(--ha-card-background, var(--card-background-color))",
-      defaultPrimary: "#18a6d5",
-      defaultSecondary: "#e8a52c",
-      height: "245px",
-      padding: "9px 12px",
-    });
+  _chartConfig(entity, comp, keepsOwnBg, outerBg) {
+    return this._forecastConfig(
+      entity,
+      comp,
+      {
+        field: "chart",
+        template: TPL_FORECAST_CHART,
+        extraStyles: null,
+        defaultBg: "var(--ha-card-background, var(--card-background-color))",
+        defaultPrimary: "#18a6d5",
+        defaultSecondary: "#e8a52c",
+        height: "245px",
+        padding: "9px 12px",
+      },
+      keepsOwnBg,
+      outerBg
+    );
   }
 
   _innerConfig(c) {
     const entity = c.entity || "";
     const comps = c.components || [];
+    const cardBg = colorOr(c.background, null);
+    const outerBg = cardBg || "var(--ha-card-background, var(--card-background-color))";
+
     const cards = comps.map((comp) => {
-      if (comp.type === "classic") return this._classicConfig(entity, comp);
-      if (comp.type === "bars") return this._barsConfig(entity, comp);
-      if (comp.type === "chart") return this._chartConfig(entity, comp);
-      return this._currentConfig(entity, comp);
+      const ownBg = colorOr(comp.background, null);
+      // Un composant garde son PROPRE fond (et ses coins arrondis) seulement
+      // s'il a un override explicite, ou si c'est "current" sans fond de
+      // carte defini (il conserve alors son degrade dynamique). Sinon, il
+      // devient transparent et suit le fond unique du conteneur externe.
+      const keepsOwnBg = !!ownBg || (comp.type === "current" && !cardBg);
+
+      if (comp.type === "classic")
+        return this._classicConfig(entity, comp, keepsOwnBg, outerBg);
+      if (comp.type === "bars")
+        return this._barsConfig(entity, comp, keepsOwnBg, outerBg);
+      if (comp.type === "chart")
+        return this._chartConfig(entity, comp, keepsOwnBg, outerBg);
+      return this._currentConfig(entity, comp, keepsOwnBg);
     });
+
     return {
       type: "custom:vertical-stack-in-card",
       card_mod: {
         style:
-          "ha-card {\n  background: transparent;\n  box-shadow: none;\n  border: none;\n}\n",
+          "ha-card {\n  background: " +
+          outerBg +
+          ";\n  border-radius: 22px;\n  overflow: hidden;\n  box-shadow: none;\n  border: none;\n}\n" +
+          "#root {\n  gap: 0px !important;\n}\n" +
+          "#root > * {\n  margin: 0 !important;\n}\n",
       },
       cards,
     };
@@ -2713,6 +2756,15 @@ class WeatherCardEditor extends AlexListEditor {
         { entity: cfg.entity || "" },
         { entity: "Entité météo" },
         (v) => this._update((c) => (c.entity = v.entity))
+      )
+    );
+
+    this.appendChild(this._sectionTitle("Apparence"));
+    this.appendChild(
+      this._colorRow(
+        "Fond de la carte (vide = unifié, thème ou dégradé météo)",
+        cfg.background,
+        (v) => this._update((c) => (c.background = v))
       )
     );
 
