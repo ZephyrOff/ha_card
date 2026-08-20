@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.21.0";
+const ALEX_CARDS_VERSION = "0.21.1";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -4390,13 +4390,15 @@ class MediaPlayerCard extends HTMLElement {
     if (!this._config || !this._hass) return;
     const c = this._config;
     const hass = this._hass;
-    const configured = c.entities || [];
+    // Normalise : ancien format (tableau de chaines) -> objets {entity, name}.
+    const configuredEntries = (c.entities || []).map((e) => (typeof e === "string" ? { entity: e } : e));
+    const configuredIds = configuredEntries.map((e) => e.entity);
 
-    const active = configured.filter((e) => {
+    const active = configuredIds.filter((e) => {
       const st = hass.states[e];
       return st && MEDIA_ACTIVE_STATES.includes(st.state);
     });
-    const selected = this._pickSelected(hass, configured, active);
+    const selected = this._pickSelected(hass, configuredIds, active);
     const stateObj = selected ? hass.states[selected] : null;
     const attrs = (stateObj && stateObj.attributes) || {};
 
@@ -4415,6 +4417,7 @@ class MediaPlayerCard extends HTMLElement {
       JSON.stringify(c.secondary_color || null),
       JSON.stringify(c.accent_color || null),
       c.now_playing_label,
+      configuredEntries.map((e) => `${e.entity}|${e.name || ""}`).join(";"),
       selected,
       title,
       artist,
@@ -4434,28 +4437,34 @@ class MediaPlayerCard extends HTMLElement {
     const label = c.now_playing_label != null ? c.now_playing_label : "À l'écoute";
 
     const artHtml = picture
-      ? `<div style="width:48px;height:48px;border-radius:12px;background-image:url('${escapeHtml(picture)}');
+      ? `<div style="width:72px;height:72px;border-radius:16px;background-image:url('${escapeHtml(picture)}');
                      background-size:cover;background-position:center;flex:0 0 auto;"></div>`
-      : `<div style="width:48px;height:48px;border-radius:12px;
+      : `<div style="width:72px;height:72px;border-radius:16px;
                      background:rgba(var(--rgb-primary-text-color,0,0,0),0.08);
                      display:flex;align-items:center;justify-content:center;flex:0 0 auto;">
-           <ha-icon icon="mdi:music" style="--mdc-icon-size:22px;color:${secondaryColor};"></ha-icon>
+           <ha-icon icon="mdi:music" style="--mdc-icon-size:30px;color:${secondaryColor};"></ha-icon>
          </div>`;
 
+    const nameFor = (entityId) => {
+      const entry = configuredEntries.find((e) => e.entity === entityId);
+      if (entry && entry.name) return entry.name;
+      const st = hass.states[entityId];
+      return (st && st.attributes && st.attributes.friendly_name) || entityId;
+    };
+
     const tabsHtml = showTabs
-      ? `<div class="ac-mp-tabs" style="display:flex;justify-content:center;gap:8px;margin-top:14px;">
+      ? `<div class="ac-mp-tabs" style="display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin-top:16px;">
           ${active
             .map((e) => {
-              const st = hass.states[e];
-              const icon = (st && st.attributes.icon) || "mdi:speaker";
               const isSel = e === selected;
               const bg = isSel ? accentColor : "rgba(var(--rgb-primary-text-color,0,0,0),0.10)";
               const col = isSel ? "#000" : secondaryColor;
               return `
                 <div class="ac-mp-tab" data-entity="${escapeHtml(e)}"
-                    style="width:30px;height:30px;border-radius:9px;background:${bg};cursor:pointer;
-                           display:flex;align-items:center;justify-content:center;">
-                  <ha-icon icon="${icon}" style="--mdc-icon-size:16px;color:${col};"></ha-icon>
+                    style="padding:6px 14px;border-radius:999px;background:${bg};cursor:pointer;
+                           font-size:12px;font-weight:600;color:${col};white-space:nowrap;
+                           max-width:140px;overflow:hidden;text-overflow:ellipsis;">
+                  ${escapeHtml(nameFor(e))}
                 </div>`;
             })
             .join("")}
@@ -4463,36 +4472,40 @@ class MediaPlayerCard extends HTMLElement {
       : "";
 
     this.innerHTML = `
-      <ha-card style="border-radius:22px;box-shadow:none;background:${cardBg};padding:16px 18px;">
-        <div style="display:flex;align-items:flex-start;gap:12px;">
+      <ha-card style="border-radius:22px;box-shadow:none;background:${cardBg};padding:18px 20px;">
+        <div style="display:flex;align-items:flex-start;gap:14px;">
           ${artHtml}
-          <div style="flex:1;min-width:0;">
+          <div style="flex:1;min-width:0;padding-top:2px;">
             <div style="font-size:12px;color:${secondaryColor};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(label)}</div>
-            <div style="font-size:16px;font-weight:700;color:${primaryColor};margin-top:2px;
+            <div style="font-size:17px;font-weight:700;color:${primaryColor};margin-top:3px;
                         overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(title)}</div>
-            <div style="font-size:13px;color:${secondaryColor};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(artist)}</div>
+            <div style="font-size:13px;color:${secondaryColor};margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(artist)}</div>
           </div>
           <div class="ac-mp-more" style="flex:0 0 auto;cursor:pointer;padding:4px;">
             <ha-icon icon="mdi:cast" style="--mdc-icon-size:18px;color:${secondaryColor};"></ha-icon>
           </div>
         </div>
 
-        <div style="display:flex;align-items:center;justify-content:center;gap:22px;margin-top:16px;">
-          <div class="ac-mp-prev" style="cursor:pointer;">
-            <ha-icon icon="mdi:skip-previous" style="--mdc-icon-size:26px;color:${primaryColor};"></ha-icon>
-          </div>
-          <div class="ac-mp-playpause" style="width:44px;height:44px;border-radius:50%;background:${accentColor};
+        <div style="display:flex;align-items:center;justify-content:center;gap:18px;margin-top:18px;">
+          <div class="ac-mp-prev" style="width:38px;height:38px;border-radius:50%;
+                      background:rgba(var(--rgb-primary-text-color,0,0,0),0.08);
                       display:flex;align-items:center;justify-content:center;cursor:pointer;">
-            <ha-icon icon="${isPlaying ? "mdi:pause" : "mdi:play"}" style="--mdc-icon-size:22px;color:#000;"></ha-icon>
+            <ha-icon icon="mdi:skip-previous" style="--mdc-icon-size:20px;color:${primaryColor};"></ha-icon>
           </div>
-          <div class="ac-mp-next" style="cursor:pointer;">
-            <ha-icon icon="mdi:skip-next" style="--mdc-icon-size:26px;color:${primaryColor};"></ha-icon>
+          <div class="ac-mp-playpause" style="width:48px;height:48px;border-radius:50%;background:${accentColor};
+                      display:flex;align-items:center;justify-content:center;cursor:pointer;">
+            <ha-icon icon="${isPlaying ? "mdi:pause" : "mdi:play"}" style="--mdc-icon-size:24px;color:#000;"></ha-icon>
+          </div>
+          <div class="ac-mp-next" style="width:38px;height:38px;border-radius:50%;
+                      background:rgba(var(--rgb-primary-text-color,0,0,0),0.08);
+                      display:flex;align-items:center;justify-content:center;cursor:pointer;">
+            <ha-icon icon="mdi:skip-next" style="--mdc-icon-size:20px;color:${primaryColor};"></ha-icon>
           </div>
         </div>
 
         ${
           hasVolume
-            ? `<div style="display:flex;align-items:center;gap:10px;margin-top:16px;">
+            ? `<div style="display:flex;align-items:center;gap:10px;margin-top:18px;">
                 <div class="ac-mp-mute" style="cursor:pointer;flex:0 0 auto;">
                   <ha-icon icon="${mediaVolumeIcon(muted, volume)}" style="--mdc-icon-size:18px;color:${secondaryColor};"></ha-icon>
                 </div>
@@ -4549,6 +4562,16 @@ class MediaPlayerCardEditor extends AlexListEditor {
 
   _normalize() {
     if (!Array.isArray(this._config.entities)) this._config.entities = [];
+    // Migration : ancien format (tableau de chaines) -> objets {entity, name}.
+    this._config.entities = this._config.entities.map((e) =>
+      typeof e === "string" ? { entity: e } : e
+    );
+  }
+
+  _validPath() {
+    const p = this._path || [];
+    if (p.length >= 1 && !this._config.entities[p[0]]) return [];
+    return p;
   }
 
   _addEntityRow(onPick) {
@@ -4566,6 +4589,16 @@ class MediaPlayerCardEditor extends AlexListEditor {
     this._forms = [];
     this._selectors = [];
     this.innerHTML = "";
+    const p = this._validPath();
+    if (p.length === 0) this._renderRoot();
+    else this._renderEntity(p[0]);
+    if (this._hass) {
+      this._forms.forEach((f) => (f.hass = this._hass));
+      this._selectors.forEach((s) => (s.hass = this._hass));
+    }
+  }
+
+  _renderRoot() {
     const cfg = this._config;
 
     this.appendChild(this._sectionTitle("Options"));
@@ -4580,15 +4613,18 @@ class MediaPlayerCardEditor extends AlexListEditor {
 
     this.appendChild(this._sectionTitle("Lecteurs"));
     const entities = cfg.entities || [];
-    entities.forEach((entityId, j) => {
-      const st = this._hass && this._hass.states[entityId];
-      const friendly = st && st.attributes && st.attributes.friendly_name;
+    entities.forEach((e, j) => {
+      const st = this._hass && this._hass.states[e.entity];
+      const friendly = e.name || (st && st.attributes && st.attributes.friendly_name);
       this.appendChild(
         this._row(
           (st && st.attributes && st.attributes.icon) || "mdi:speaker",
-          friendly || entityId,
-          friendly ? entityId : "",
-          null,
+          friendly || e.entity || "(sans entité)",
+          friendly ? e.entity : "",
+          () => {
+            this._path = [j];
+            this._render();
+          },
           () => {
             this._update((c) => c.entities.splice(j, 1));
             this._render();
@@ -4598,10 +4634,13 @@ class MediaPlayerCardEditor extends AlexListEditor {
     });
     this.appendChild(
       this._addEntityRow((entityId) => {
+        let idx;
         this._update((c) => {
           c.entities = c.entities || [];
-          c.entities.push(entityId);
+          c.entities.push({ entity: entityId });
+          idx = c.entities.length - 1;
         });
+        this._path = [idx];
         this._render();
       })
     );
@@ -4633,11 +4672,31 @@ class MediaPlayerCardEditor extends AlexListEditor {
         )
       )
     );
+  }
 
-    if (this._hass) {
-      this._forms.forEach((f) => (f.hass = this._hass));
-      this._selectors.forEach((s) => (s.hass = this._hass));
-    }
+  _renderEntity(i) {
+    const cfg = this._config;
+    const e = cfg.entities[i] || {};
+    const merge = (v) => this._update((c) => (c.entities[i] = { ...c.entities[i], ...v }));
+
+    this.appendChild(
+      this._backHeader(e.name || e.entity || "Lecteur", () => {
+        this._path = [];
+        this._render();
+      })
+    );
+
+    this.appendChild(
+      this._form(
+        [
+          { name: "entity", selector: { entity: { domain: "media_player" } } },
+          { name: "name", selector: { text: {} } },
+        ],
+        { entity: e.entity, name: e.name },
+        { entity: "Entité", name: "Nom du média (vide = nom convivial)" },
+        merge
+      )
+    );
   }
 }
 customElements.define("alex-media-player-card-editor", MediaPlayerCardEditor);

@@ -364,8 +364,10 @@ entre eux.
 ```yaml
 type: custom:alex-media-player-card
 entities:
-  - media_player.salon
-  - media_player.spotify
+  - entity: media_player.salon
+    name: Salon                     # optionnel, sinon le nom convivial HA
+  - entity: media_player.spotify
+    name: Spotify Web
 now_playing_label: "À l'écoute"   # optionnel, texte au-dessus du titre
 accent_color: [255, 255, 255]     # optionnel, couleur du bouton lecture/volume/onglet actif
 ```
@@ -375,17 +377,24 @@ accent_color: [255, 255, 255]     # optionnel, couleur du bouton lecture/volume/
   permettent de choisir lequel afficher. La sélection est un état d'affichage (pas
   sauvegardé dans la config) : elle revient au comportement automatique après un
   rechargement de la page.
+- **Onglets de bascule** : affichent le **nom du média** (le `name` personnalisé s'il est
+  défini, sinon le nom convivial HA de l'entité) plutôt qu'une simple icône — crayon sur
+  la ligne d'un lecteur dans l'éditeur pour le renommer.
 - **Précédent/Suivant** appellent `media_player.media_previous_track`/`media_next_track`
   (changement de piste) plutôt que rewind/fast-forward, pour rester compatible avec le
-  plus grand nombre d'intégrations.
+  plus grand nombre d'intégrations. Les trois boutons (précédent/lecture-pause/suivant)
+  partagent le même style de pastille circulaire, comme sur l'image de référence.
 - **Volume** : le curseur n'apparaît que si l'entité expose `volume_level` ; cliquer sur
   l'icône bascule le mute. Le service `volume_set` n'est appelé qu'au relâchement du
   curseur (pas en continu pendant le glissement), pour éviter de spammer l'entité.
 - **Icône « cast »** en haut à droite : ouvre le more-info natif de HA sur le lecteur
   sélectionné (accès à la sélection de source, etc., sans réinventer ce sélecteur).
+- **Pochette** agrandie (72×72px) pour rester lisible en avant-plan de la carte.
 - Personnalisation (panneau Customisation) : fond de la carte, couleur du titre,
   couleur de l'artiste/libellé, couleur du bouton lecture + curseur de volume + onglet
   actif.
+- Rétrocompatible : une ancienne config avec `entities:` en simple liste de chaînes
+  reste valide, sans nom personnalisé.
 - Note de contraste : le bouton lecture/pause et les onglets actifs utilisent une icône
   noire fixe sur la couleur d'accent — pense à choisir une couleur d'accent claire pour
   garder l'icône lisible.
