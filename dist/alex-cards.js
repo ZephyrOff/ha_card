@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.16.2";
+const ALEX_CARDS_VERSION = "0.17.0";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -3444,6 +3444,323 @@ window.customCards.push({
   type: "alex-sensor-card",
   name: "Alex Sensor Card",
   description: "Vue synthétique de capteurs par catégories (ouvrants, verrous, détecteurs…).",
+  preview: false,
+  documentationURL: "https://github.com/<user>/alex-cards",
+});
+
+/* =========================================================================
+ * === alex-entity-card ====================================================
+ * Liste detaillee d'entites d'un meme type (ouvrant, verrou, detecteur,
+ * booleen, alarme) : une ligne par entite, avec son etat individuel, sa
+ * zone (si connue) et le temps depuis le dernier changement. Complement de
+ * alex-sensor-card, qui affiche un resume agrege par categorie plutot
+ * qu'une ligne par entite. Reutilise les memes types/tons/couleurs.
+ * ========================================================================= */
+
+// Tons approximatifs (RGB) utilises uniquement pour teinter le fond des
+// pastilles d'etat quand aucune couleur success/failed n'est definie par
+// l'utilisateur (le texte, lui, passe toujours par resolveSensorTone/CSS).
+const ENTITY_TONE_RGB = {
+  green: [34, 197, 94],
+  orange: [244, 160, 0],
+  red: [239, 68, 68],
+  grey: [144, 144, 144],
+};
+
+// Libelle + ton pour UNE entite (par opposition a sensorCategorySummary qui
+// agrege une liste). Reutilise sensorEntityActive/SENSOR_ALARM_STATES.
+function sensorEntityStateLabel(type, stateObj) {
+  if (!stateObj) return { text: "Indisponible", tone: "grey" };
+  const s = stateObj.state;
+  if (s == null || s === "unavailable" || s === "unknown") {
+    return { text: "Indisponible", tone: "grey" };
+  }
+  if (type === "alarm") {
+    return SENSOR_ALARM_STATES[s] || { text: s, tone: "grey" };
+  }
+  const active = sensorEntityActive(type, stateObj);
+  if (type === "opening") return active ? { text: "Ouvert", tone: "red" } : { text: "Fermé", tone: "green" };
+  if (type === "lock") return active ? { text: "Déverrouillé", tone: "red" } : { text: "Verrouillé", tone: "green" };
+  if (type === "detector") return active ? { text: "Détecté", tone: "orange" } : { text: "Clair", tone: "green" };
+  // boolean
+  return active ? { text: "Actif", tone: "green" } : { text: "Inactif", tone: "grey" };
+}
+
+// Temps relatif en francais, a partir de last_changed (ISO).
+function sensorRelativeTime(iso) {
+  if (!iso) return "";
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return "";
+  const diffSec = Math.max(0, Math.floor((Date.now() - then) / 1000));
+  if (diffSec < 60) return "à l'instant";
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return `il y a ${diffMin} min`;
+  const diffH = Math.floor(diffMin / 60);
+  if (diffH < 24) return `il y a ${diffH} h`;
+  const diffD = Math.floor(diffH / 24);
+  return `il y a ${diffD} j`;
+}
+
+// Zone (piece) d'une entite, via les registres entities/devices/areas
+// exposes par le frontend HA. Renvoie "" si indisponible.
+function sensorEntityArea(hass, entityId) {
+  if (!hass) return "";
+  const entReg = hass.entities && hass.entities[entityId];
+  let areaId = entReg && entReg.area_id;
+  if (!areaId && entReg && entReg.device_id) {
+    const dev = hass.devices && hass.devices[entReg.device_id];
+    areaId = dev && dev.area_id;
+  }
+  if (!areaId) return "";
+  const area = hass.areas && hass.areas[areaId];
+  return (area && area.name) || "";
+}
+
+class EntityCard extends HTMLElement {
+  static getConfigElement() {
+    return document.createElement("alex-entity-card-editor");
+  }
+  static getStubConfig() {
+    return { name: "Portes", icon: "mdi:door", entity_type: "opening", entities: [] };
+  }
+
+  setConfig(config) {
+    if (!config) throw new Error("Configuration invalide");
+    this._config = config;
+    this._built = false;
+    this._lastSig = null;
+  }
+
+  set hass(hass) {
+    this._hass = hass;
+    this._render();
+  }
+
+  getCardSize() {
+    return 1 + ((this._config && this._config.entities) || []).length;
+  }
+
+  _render() {
+    if (!this._config || !this._hass) return;
+    const c = this._config;
+    const entities = c.entities || [];
+    const hass = this._hass;
+    const type = c.entity_type || "opening";
+
+    const rows = entities.map((entityId) => {
+      const stateObj = hass.states[entityId];
+      const info = sensorEntityStateLabel(type, stateObj);
+      const name = (stateObj && stateObj.attributes && stateObj.attributes.friendly_name) || entityId;
+      const area = sensorEntityArea(hass, entityId);
+      const time = stateObj ? sensorRelativeTime(stateObj.last_changed) : "";
+      return { entityId, info, name, area, time };
+    });
+
+    // Ne re-render que si un element affiche a reellement change.
+    const sig = [
+      c.name,
+      c.icon,
+      JSON.stringify(c.icon_color || null),
+      JSON.stringify(c.background || null),
+      JSON.stringify(c.primary_color || null),
+      JSON.stringify(c.secondary_color || null),
+      JSON.stringify(c.success_color || null),
+      JSON.stringify(c.failed_color || null),
+      type,
+      rows.map((r) => `${r.entityId}|${r.name}|${r.area}|${r.info.text}|${r.info.tone}|${r.time}`).join(";"),
+    ].join("~");
+    if (this._built && sig === this._lastSig) return;
+    this._lastSig = sig;
+
+    const iconColor = colorOr(c.icon_color, "#e6a34a");
+    const badgeRgb = Array.isArray(c.icon_color) ? c.icon_color : [230, 163, 74];
+    const badgeBg = `rgba(${badgeRgb[0]}, ${badgeRgb[1]}, ${badgeRgb[2]}, 0.16)`;
+    const cardBg = colorOr(c.background, "var(--ha-card-background, var(--card-background-color))");
+    const primaryColor = colorOr(c.primary_color, "var(--primary-text-color)");
+    const secondaryColor = colorOr(c.secondary_color, "var(--primary-text-color)");
+    const rowIcon = c.entity_icon || SENSOR_TYPE_DEFAULT_ICON[type] || "mdi:help-circle-outline";
+
+    const rowsHtml = rows
+      .map((r, i) => {
+        const textColor = resolveSensorTone(r.info.tone, c);
+        const tintRgb = Array.isArray(
+          r.info.tone === "green" ? c.success_color : c.failed_color
+        )
+          ? r.info.tone === "green"
+            ? c.success_color
+            : c.failed_color
+          : ENTITY_TONE_RGB[r.info.tone] || ENTITY_TONE_RGB.grey;
+        const pillBg = `rgba(${tintRgb[0]}, ${tintRgb[1]}, ${tintRgb[2]}, 0.14)`;
+        const border =
+          i < rows.length - 1 ? "border-bottom:1px solid var(--divider-color);" : "";
+        return `
+          <div style="display:flex;align-items:center;gap:12px;padding:12px 2px;${border}">
+            <div style="width:32px;height:32px;border-radius:9px;
+                        background:rgba(var(--rgb-primary-text-color,0,0,0),0.06);
+                        display:flex;align-items:center;justify-content:center;flex:0 0 auto;">
+              <ha-icon icon="${rowIcon}" style="--mdc-icon-size:16px;color:var(--secondary-text-color);"></ha-icon>
+            </div>
+            <div style="flex:1;min-width:0;">
+              <div style="font-size:14px;font-weight:600;color:${secondaryColor};
+                          overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(r.name)}</div>
+              ${
+                r.area
+                  ? `<div style="font-size:12px;color:var(--secondary-text-color);
+                                overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(r.area)}</div>`
+                  : ""
+              }
+            </div>
+            <div style="flex:0 0 auto;text-align:right;">
+              <div style="display:inline-block;padding:2px 10px;border-radius:999px;
+                          background:${pillBg};color:${textColor};font-size:12px;font-weight:600;
+                          white-space:nowrap;">${escapeHtml(r.info.text)}</div>
+              ${
+                r.time
+                  ? `<div style="font-size:11px;color:var(--secondary-text-color);margin-top:3px;white-space:nowrap;">${escapeHtml(r.time)}</div>`
+                  : ""
+              }
+            </div>
+          </div>`;
+      })
+      .join("");
+
+    this.innerHTML = `
+      <ha-card style="border-radius:20px;box-shadow:none;
+                      background:${cardBg};
+                      padding:16px 18px;">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px;">
+          <div style="width:40px;height:40px;border-radius:12px;background:${badgeBg};
+                      display:flex;align-items:center;justify-content:center;flex:0 0 auto;">
+            <ha-icon icon="${c.icon || "mdi:door"}" style="--mdc-icon-size:20px;color:${iconColor};"></ha-icon>
+          </div>
+          <div style="flex:1;min-width:0;font-size:17px;font-weight:700;color:${primaryColor};
+                      overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(c.name || "")}</div>
+          <div style="flex:0 0 auto;font-size:12px;color:var(--secondary-text-color);">${rows.length} total</div>
+        </div>
+        <div>${rowsHtml}</div>
+      </ha-card>`;
+    this._built = true;
+  }
+}
+customElements.define("alex-entity-card", EntityCard);
+
+class EntityCardEditor extends AlexListEditor {
+  static getStubConfig() {
+    return EntityCard.getStubConfig();
+  }
+
+  _normalize() {
+    if (!Array.isArray(this._config.entities)) this._config.entities = [];
+  }
+
+  _addEntityRow(domains, onPick) {
+    return this._form(
+      [{ name: "entity", selector: { entity: { domain: domains } } }],
+      {},
+      { entity: "Ajouter une entité" },
+      (v) => {
+        if (v && v.entity) onPick(v.entity);
+      }
+    );
+  }
+
+  _render() {
+    this._forms = [];
+    this._selectors = [];
+    this.innerHTML = "";
+    const cfg = this._config;
+
+    this.appendChild(this._sectionTitle("En-tête"));
+    this.appendChild(
+      this._form(
+        [
+          { name: "name", selector: { text: {} } },
+          { name: "icon", selector: { icon: {} } },
+          {
+            name: "entity_type",
+            selector: { select: { mode: "dropdown", options: SENSOR_TYPE_OPTIONS } },
+          },
+        ],
+        { name: cfg.name, icon: cfg.icon, entity_type: cfg.entity_type || "opening" },
+        { name: "Nom", icon: "Icône", entity_type: "Type" },
+        (v) => this._update((c) => Object.assign(c, v))
+      )
+    );
+
+    this.appendChild(this._sectionTitle("Entités"));
+    const entities = cfg.entities || [];
+    entities.forEach((entityId, j) => {
+      const st = this._hass && this._hass.states[entityId];
+      const friendly = st && st.attributes && st.attributes.friendly_name;
+      this.appendChild(
+        this._row(
+          SENSOR_TYPE_DEFAULT_ICON[cfg.entity_type] || "mdi:door",
+          friendly || entityId,
+          friendly ? entityId : "",
+          null,
+          () => {
+            this._update((c) => c.entities.splice(j, 1));
+            this._render();
+          }
+        )
+      );
+    });
+    this.appendChild(
+      this._addEntityRow(SENSOR_TYPE_DOMAINS[cfg.entity_type], (entityId) => {
+        this._update((c) => {
+          c.entities = c.entities || [];
+          c.entities.push(entityId);
+        });
+        this._render();
+      })
+    );
+
+    this.appendChild(
+      this._panel(
+        "Customisation",
+        "mdi:palette",
+        this._mixed(
+          [
+            { name: "icon_color", selector: { color_rgb: {} } },
+            { name: "background", selector: { color_rgb: {} } },
+            { name: "primary_color", selector: { color_rgb: {} } },
+            { name: "secondary_color", selector: { color_rgb: {} } },
+            { name: "success_color", selector: { color_rgb: {} } },
+            { name: "failed_color", selector: { color_rgb: {} } },
+          ],
+          {
+            icon_color: cfg.icon_color,
+            background: cfg.background,
+            primary_color: cfg.primary_color,
+            secondary_color: cfg.secondary_color,
+            success_color: cfg.success_color,
+            failed_color: cfg.failed_color,
+          },
+          {
+            icon_color: "Couleur du badge",
+            background: "Fond de la carte",
+            primary_color: "Couleur du nom de la carte",
+            secondary_color: "Couleur des noms d'entité",
+            success_color: "Couleur succès (vert)",
+            failed_color: "Couleur échec (rouge/orange)",
+          },
+          (v) => this._update((c) => Object.assign(c, v))
+        )
+      )
+    );
+
+    if (this._hass) {
+      this._forms.forEach((f) => (f.hass = this._hass));
+      this._selectors.forEach((s) => (s.hass = this._hass));
+    }
+  }
+}
+customElements.define("alex-entity-card-editor", EntityCardEditor);
+
+window.customCards.push({
+  type: "alex-entity-card",
+  name: "Alex Entity Card",
+  description: "Liste détaillée d'entités d'un même type (état, zone, dernier changement).",
   preview: false,
   documentationURL: "https://github.com/<user>/alex-cards",
 });

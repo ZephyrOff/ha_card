@@ -16,6 +16,7 @@ Collection de cartes Lovelace custom pour Home Assistant, distribuée en **plugi
 | `custom:alex-pill-card`         | oui        | Pastille nom + sous-titre avec icône ronde et chevron.           |
 | `custom:alex-weather-card`      | oui        | Météo actuelle et/ou prévisions (3 styles), à empiler librement. |
 | `custom:alex-sensor-card`       | oui        | Vue synthétique de capteurs par catégories (ouvrants, verrous…). |
+| `custom:alex-entity-card`       | oui        | Liste détaillée d'entités d'un même type (état, zone, dernier changement). |
 
 Toutes les cartes apparaissent dans le sélecteur « Ajouter une carte » avec un éditeur
 visuel. La `alex-light-card` a un éditeur type « chips » (liste + crayon pour éditer chaque
@@ -246,6 +247,38 @@ d'action au clic sur une ligne (more-info, etc.) — à ajouter si besoin.
   le vert par défaut) et couleur d'échec (remplace le rouge/orange par défaut — le
   détecteur en alerte et l'ouvrant/verrou en défaut partagent la même couleur d'échec,
   pour rester sur une logique binaire succès/échec).
+
+### Entity Card
+
+Complément de la Sensor Card : au lieu d'agréger plusieurs entités en une ligne de
+résumé, liste **chaque entité individuellement** — état, zone (si connue dans HA),
+temps depuis le dernier changement. Toute la carte partage **un seul type**
+(contrairement à la Sensor Card qui a plusieurs catégories, chacune avec son propre
+type).
+
+```yaml
+type: custom:alex-entity-card
+name: Portes
+icon: mdi:door
+entity_type: opening              # opening / lock / detector / boolean / alarm
+entities:
+  - binary_sensor.porte_entree
+  - binary_sensor.porte_garage
+icon_color: [74, 222, 128]        # optionnel, teinte du badge
+```
+
+- Chaque ligne affiche : nom convivial de l'entité, sa zone HA (si l'entité ou son
+  appareil en a une), une pastille avec son état libellé selon `entity_type` (ex.
+  « Fermé »/« Ouvert » pour `opening`, « Verrouillé »/« Déverrouillé » pour `lock`), et
+  le temps écoulé depuis `last_changed`.
+- Le nombre total d'entités s'affiche à droite de l'en-tête (« N total »).
+- Mêmes options de personnalisation que la Sensor Card (panneau Customisation racine :
+  badge, fond de carte, couleur du nom, couleur des noms d'entité, couleur succès,
+  couleur échec) — la couleur succès/échec ici colore la **pastille d'état** de chaque
+  ligne (teinte de fond légère + texte).
+- Type `alarm` : chaque ligne affichera l'état littéral de son entité
+  (`alarm_control_panel`), pas de limitation à une seule entité ici (contrairement à la
+  catégorie Alarme de la Sensor Card) puisque chaque ligne montre sa propre entité.
 
 ## Ajouter une nouvelle carte
 
