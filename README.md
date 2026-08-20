@@ -243,7 +243,8 @@ d'action au clic sur une ligne (more-info, etc.) — à ajouter si besoin.
 **Personnalisation (color-pickers avec opacité, comme le reste du package) :**
 
 - Racine → panneau **Customisation** : couleur du badge, fond de la carte (vide = thème),
-  couleur du nom de la carte, couleur des noms de catégorie.
+  couleur du nom de la carte, couleur des noms de catégorie, écartement entre les
+  catégories (px, défaut 12).
 - Chaque catégorie → son propre panneau **Customisation** : couleur de succès (remplace
   le vert par défaut) et couleur d'échec (remplace le rouge/orange par défaut — le
   détecteur en alerte et l'ouvrant/verrou en défaut partagent la même couleur d'échec,
@@ -281,8 +282,8 @@ icon_color: [74, 222, 128]        # optionnel, teinte du badge
 - Le nombre total d'entités s'affiche à droite de l'en-tête (« N total »).
 - Mêmes options de personnalisation que la Sensor Card (panneau Customisation racine :
   badge, fond de carte, couleur du nom, couleur des noms d'entité, couleur succès,
-  couleur échec) — la couleur succès/échec ici colore la **pastille d'état** de chaque
-  ligne (teinte de fond légère + texte).
+  couleur échec, écartement entre les entités en px) — la couleur succès/échec ici
+  colore la **pastille d'état** de chaque ligne (teinte de fond légère + texte).
 - Type `alarm` : chaque ligne affichera l'état littéral de son entité
   (`alarm_control_panel`), pas de limitation à une seule entité ici (contrairement à la
   catégorie Alarme de la Sensor Card) puisque chaque ligne montre sa propre entité.
@@ -317,9 +318,9 @@ on_color: [244, 169, 53]          # optionnel, couleur de l'interrupteur actif
 - Rétrocompatible : une ancienne config avec `entities:` en simple liste de chaînes
   reste valide, sans personnalisation par entité.
 - Personnalisation (panneau Customisation racine) : badge, icône des lignes (vide =
-  icône du badge), fond de carte, couleur du nom, couleur des noms d'entité, **couleur
-  interrupteur actif** et **couleur interrupteur inactif** (remplacent respectivement
-  l'orange et le gris par défaut).
+  icône du badge), fond de carte, couleur du nom, couleur des noms d'entité, écartement
+  entre les entités (px), **couleur interrupteur actif** et **couleur interrupteur
+  inactif** (remplacent respectivement l'orange et le gris par défaut).
 
 ## Ajouter une nouvelle carte
 

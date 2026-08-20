@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.19.0";
+const ALEX_CARDS_VERSION = "0.19.1";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -3170,6 +3170,7 @@ class SensorCard extends HTMLElement {
       JSON.stringify(c.background || null),
       JSON.stringify(c.primary_color || null),
       JSON.stringify(c.secondary_color || null),
+      c.row_spacing,
       cats
         .map((cat) => `${cat.name}|${cat.icon}|${cat.type}|${cat.success_color}|${cat.failed_color}`)
         .join(";"),
@@ -3184,6 +3185,7 @@ class SensorCard extends HTMLElement {
     const cardBg = colorOr(c.background, "var(--ha-card-background, var(--card-background-color))");
     const primaryColor = colorOr(c.primary_color, "var(--primary-text-color)");
     const secondaryColor = colorOr(c.secondary_color, "var(--primary-text-color)");
+    const rowSpacing = c.row_spacing != null ? c.row_spacing : 12;
 
     const rowsHtml = cats
       .map((cat, i) => {
@@ -3195,7 +3197,7 @@ class SensorCard extends HTMLElement {
         const border =
           i < cats.length - 1 ? "border-bottom:1px solid var(--divider-color);" : "";
         return `
-          <div style="display:flex;align-items:center;gap:10px;padding:12px 2px;${border}">
+          <div style="display:flex;align-items:center;gap:10px;padding:${rowSpacing}px 2px;${border}">
             <div style="width:8px;height:8px;border-radius:50%;background:${dotColor};flex:0 0 auto;"></div>
             <ha-icon icon="${icon}" style="--mdc-icon-size:18px;color:var(--secondary-text-color);flex:0 0 auto;"></ha-icon>
             <div style="flex:1;min-width:0;font-size:14px;font-weight:600;color:${secondaryColor};
@@ -3323,18 +3325,21 @@ class SensorCardEditor extends AlexListEditor {
         "mdi:palette",
         this._mixed(
           [
+            { name: "row_spacing", selector: { number: { min: 0, max: 40, step: 1, mode: "box" } } },
             { name: "icon_color", selector: { color_rgb: {} } },
             { name: "background", selector: { color_rgb: {} } },
             { name: "primary_color", selector: { color_rgb: {} } },
             { name: "secondary_color", selector: { color_rgb: {} } },
           ],
           {
+            row_spacing: cfg.row_spacing != null ? cfg.row_spacing : 12,
             icon_color: cfg.icon_color,
             background: cfg.background,
             primary_color: cfg.primary_color,
             secondary_color: cfg.secondary_color,
           },
           {
+            row_spacing: "Écartement entre les catégories (px)",
             icon_color: "Couleur du badge",
             background: "Fond de la carte",
             primary_color: "Couleur du nom de la carte",
@@ -3576,6 +3581,7 @@ class EntityCard extends HTMLElement {
             `${r.entityId}|${r.name}|${r.icon}|${JSON.stringify(r.color || null)}|${r.area}|${r.info.text}|${r.info.tone}|${r.time}`
         )
         .join(";"),
+      c.row_spacing,
     ].join("~");
     if (this._built && sig === this._lastSig) return;
     this._lastSig = sig;
@@ -3587,6 +3593,7 @@ class EntityCard extends HTMLElement {
     const primaryColor = colorOr(c.primary_color, "var(--primary-text-color)");
     const secondaryColor = colorOr(c.secondary_color, "var(--primary-text-color)");
     const rowIcon = c.entity_icon || SENSOR_TYPE_DEFAULT_ICON[type] || "mdi:help-circle-outline";
+    const rowSpacing = c.row_spacing != null ? c.row_spacing : 12;
 
     const rowsHtml = rows
       .map((r, i) => {
@@ -3604,7 +3611,7 @@ class EntityCard extends HTMLElement {
         const entIcon = r.icon || rowIcon;
         const entIconColor = colorOr(r.color, "var(--secondary-text-color)");
         return `
-          <div style="display:flex;align-items:center;gap:12px;padding:12px 2px;${border}">
+          <div style="display:flex;align-items:center;gap:12px;padding:${rowSpacing}px 2px;${border}">
             <div style="width:32px;height:32px;border-radius:9px;
                         background:rgba(var(--rgb-primary-text-color,0,0,0),0.06);
                         display:flex;align-items:center;justify-content:center;flex:0 0 auto;">
@@ -3757,6 +3764,7 @@ class EntityCardEditor extends AlexListEditor {
         "mdi:palette",
         this._mixed(
           [
+            { name: "row_spacing", selector: { number: { min: 0, max: 40, step: 1, mode: "box" } } },
             { name: "icon_color", selector: { color_rgb: {} } },
             { name: "background", selector: { color_rgb: {} } },
             { name: "primary_color", selector: { color_rgb: {} } },
@@ -3765,6 +3773,7 @@ class EntityCardEditor extends AlexListEditor {
             { name: "failed_color", selector: { color_rgb: {} } },
           ],
           {
+            row_spacing: cfg.row_spacing != null ? cfg.row_spacing : 12,
             icon_color: cfg.icon_color,
             background: cfg.background,
             primary_color: cfg.primary_color,
@@ -3773,6 +3782,7 @@ class EntityCardEditor extends AlexListEditor {
             failed_color: cfg.failed_color,
           },
           {
+            row_spacing: "Écartement entre les entités (px)",
             icon_color: "Couleur du badge",
             background: "Fond de la carte",
             primary_color: "Couleur du nom de la carte",
@@ -3900,6 +3910,7 @@ class ToggleCard extends HTMLElement {
             `${r.entityId}|${r.name}|${r.icon}|${JSON.stringify(r.color || null)}|${r.on}|${r.time}`
         )
         .join(";"),
+      c.row_spacing,
     ].join("~");
     if (this._built && sig === this._lastSig) return;
     this._lastSig = sig;
@@ -3913,6 +3924,7 @@ class ToggleCard extends HTMLElement {
     const onColor = colorOr(c.on_color, "#f4a935");
     const offColor = colorOr(c.off_color, "rgba(var(--rgb-primary-text-color,0,0,0),0.18)");
     const rowIcon = c.entity_icon || c.icon || "mdi:toggle-switch-outline";
+    const rowSpacing = c.row_spacing != null ? c.row_spacing : 12;
 
     const rowsHtml = rows
       .map((r, i) => {
@@ -3923,7 +3935,7 @@ class ToggleCard extends HTMLElement {
         const entIcon = r.icon || rowIcon;
         const entIconColor = colorOr(r.color, iconColor);
         return `
-          <div style="display:flex;align-items:center;gap:12px;padding:12px 2px;${border}">
+          <div style="display:flex;align-items:center;gap:12px;padding:${rowSpacing}px 2px;${border}">
             <div style="width:32px;height:32px;border-radius:9px;
                         background:rgba(var(--rgb-primary-text-color,0,0,0),0.06);
                         display:flex;align-items:center;justify-content:center;flex:0 0 auto;">
@@ -4076,6 +4088,7 @@ class ToggleCardEditor extends AlexListEditor {
         "mdi:palette",
         this._mixed(
           [
+            { name: "row_spacing", selector: { number: { min: 0, max: 40, step: 1, mode: "box" } } },
             { name: "entity_icon", selector: { icon: {} } },
             { name: "icon_color", selector: { color_rgb: {} } },
             { name: "background", selector: { color_rgb: {} } },
@@ -4085,6 +4098,7 @@ class ToggleCardEditor extends AlexListEditor {
             { name: "off_color", selector: { color_rgb: {} } },
           ],
           {
+            row_spacing: cfg.row_spacing != null ? cfg.row_spacing : 12,
             entity_icon: cfg.entity_icon,
             icon_color: cfg.icon_color,
             background: cfg.background,
@@ -4094,6 +4108,7 @@ class ToggleCardEditor extends AlexListEditor {
             off_color: cfg.off_color,
           },
           {
+            row_spacing: "Écartement entre les entités (px)",
             entity_icon: "Icône des lignes (vide = icône du badge)",
             icon_color: "Couleur du badge",
             background: "Fond de la carte",
