@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.10.1";
+const ALEX_CARDS_VERSION = "0.11.0";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -2213,6 +2213,514 @@ window.customCards.push({
   name: "Pill Card",
   description: "Pastille nom + sous-titre avec icône et chevron.",
   preview: true,
+  documentationURL: "https://github.com/<user>/alex-cards",
+});
+
+// Corps de templates button-card ([[[ ... ]]]) generes depuis les 4 YAML
+// fournis par l'utilisateur. Jetons remplaces a l'execution de _innerConfig:
+// @@ENTITY@@, @@DAYS@@, @@PRIMARY@@, @@SECONDARY@@, @@BG@@.
+const TPL_CURRENT_BG = "const w = states['@@ENTITY@@'];\n\nif (!w)\n  return 'linear-gradient(135deg, #71869a 0%, #506579 50%, #303f50 100%)';\n\nconst backgrounds = {\n  sunny: 'linear-gradient(135deg, #438bb8 0%, #28658e 50%, #1d3e5b 100%)',\n  'clear-night': 'linear-gradient(135deg, #5965a5 0%, #363c72 50%, #20233f 100%)',\n  partlycloudy: 'linear-gradient(135deg, #5fa8d3 0%, #438bb8 50%, #52677d 100%)',\n  cloudy: 'linear-gradient(135deg, #71869a 0%, #506579 50%, #303f50 100%)',\n  rainy: 'linear-gradient(135deg, #71869a 0%, #506579 50%, #303f50 100%)',\n  pouring: 'linear-gradient(135deg, #71869a 0%, #506579 50%, #303f50 100%)',\n  snowy: 'linear-gradient(135deg, #b8d8eb 0%, #79a9c5 50%, #496c82 100%)',\n  'snowy-rainy': 'linear-gradient(135deg, #78aabd 0%, #507f98 50%, #304f63 100%)',\n  fog: 'linear-gradient(135deg, #a5adb2 0%, #747f86 50%, #4c565d 100%)',\n  windy: 'linear-gradient(135deg, #48a6b8 0%, #327f91 50%, #235566 100%)',\n  'windy-variant': 'linear-gradient(135deg, #48a6b8 0%, #327f91 50%, #235566 100%)'\n};\n\nreturn backgrounds[w.state] || backgrounds.cloudy;";
+const TPL_CURRENT_TEMP = "const w = states['@@ENTITY@@'];\n\nreturn w && w.attributes.temperature !== undefined\n  ? `${w.attributes.temperature}\u00b0`\n  : '--\u00b0';";
+const TPL_CURRENT_CONDITION = "const w = states['@@ENTITY@@'];\n\nif (!w) return '';\n\nconst conditions = {\n  sunny: 'Ensoleill\u00e9',\n  'clear-night': 'Nuit claire',\n  partlycloudy: 'Partiellement nuageux',\n  cloudy: 'Nuageux',\n  rainy: 'Pluie',\n  pouring: 'Forte pluie',\n  snowy: 'Neige',\n  'snowy-rainy': 'Neige et pluie',\n  fog: 'Brouillard',\n  windy: 'Venteux',\n  'windy-variant': 'Venteux'\n};\n\nreturn conditions[w.state] || w.state;";
+const TPL_CURRENT_RANGE = "const w = states['@@ENTITY@@'];\n\nif (!w) return '';\n\nconst fc = (w.attributes.forecast || [])[0];\n\nif (fc && fc.temperature !== undefined) {\n  const max = Math.round(fc.temperature);\n  const min = fc.templow !== undefined ? Math.round(fc.templow) : max - 6;\n  return `\u2191 ${max}\u00b0   \u2193 ${min}\u00b0`;\n}\n\nif (w.attributes.temperature === undefined) return '';\n\nconst t = Number(w.attributes.temperature);\nreturn `\u2191 ${Math.round(t + 2)}\u00b0   \u2193 ${Math.round(t - 6)}\u00b0`;";
+const TPL_CURRENT_ICON = "const w = states['@@ENTITY@@'];\n\nif (!w)\n  return 'mdi:weather-cloudy';\n\nconst icons = {\n  sunny: 'mdi:weather-sunny',\n  'clear-night': 'mdi:weather-night',\n  partlycloudy: 'mdi:weather-partly-cloudy',\n  cloudy: 'mdi:weather-cloudy',\n  rainy: 'mdi:weather-rainy',\n  pouring: 'mdi:weather-pouring',\n  snowy: 'mdi:weather-snowy',\n  'snowy-rainy': 'mdi:weather-snowy-rainy',\n  fog: 'mdi:weather-fog',\n  windy: 'mdi:weather-windy',\n  'windy-variant': 'mdi:weather-windy-variant'\n};\n\nreturn icons[w.state] || 'mdi:weather-cloudy';";
+const TPL_FORECAST_CLASSIC = "const w = states['@@ENTITY@@'];\nconst raw = (w && w.attributes && w.attributes.forecast) || [];\n\nif (!raw.length) {\n  return '<div style=\"display:flex;align-items:center;justify-content:center;height:100%;color:rgba(255,255,255,.4);font-size:13px;text-align:center;padding:0 12px;\">Pr\u00e9visions indisponibles pour cette entit\u00e9</div>';\n}\n\nconst DAY_NAMES = ['Di.', 'Lu.', 'Ma.', 'Me.', 'Je.', 'Ve.', 'Sa.'];\nconst EMOJI = {\n  sunny: '\u2600\ufe0f', 'clear-night': '\ud83c\udf19', partlycloudy: '\u26c5', cloudy: '\u2601\ufe0f',\n  rainy: '\ud83c\udf27\ufe0f', pouring: '\ud83c\udf27\ufe0f', snowy: '\u2744\ufe0f', 'snowy-rainy': '\ud83c\udf28\ufe0f',\n  fog: '\ud83c\udf2b\ufe0f', windy: '\ud83d\udca8', 'windy-variant': '\ud83d\udca8',\n  exceptional: '\u26a0\ufe0f', hail: '\ud83c\udf28\ufe0f', lightning: '\u26c8\ufe0f', 'lightning-rainy': '\u26c8\ufe0f'\n};\n\nconst data = raw.slice(0, @@DAYS@@).map(f => {\n  const d = new Date(f.datetime);\n  const max = f.temperature !== undefined ? Math.round(f.temperature) : null;\n  const min = f.templow !== undefined\n    ? Math.round(f.templow)\n    : (max !== null ? max - 5 : null);\n\n  return {\n    day: DAY_NAMES[d.getDay()],\n    date: String(d.getDate()).padStart(2, '0'),\n    icon: EMOJI[f.condition] || '\u2601\ufe0f',\n    max: max !== null ? max : '--',\n    min: min !== null ? min : '--',\n    rain: (f.precipitation !== undefined ? f.precipitation : 0).toFixed(1)\n  };\n});\n\nconst nums = key => data.map(x => x[key]).filter(v => typeof v === 'number');\nconst mins = nums('min');\nconst maxs = nums('max');\nconst globalMin = mins.length ? Math.min(...mins) : 0;\nconst globalMax = maxs.length ? Math.max(...maxs) : 1;\nconst range = (globalMax - globalMin) || 1;\n\nreturn `\n  <div class=\"forecast\">\n    ${data.map(item => {\n\n      const top = typeof item.max === 'number'\n        ? ((globalMax - item.max) / range) * 100\n        : 0;\n\n      const bottom = typeof item.min === 'number'\n        ? ((globalMax - item.min) / range) * 100\n        : 100;\n\n      const height = bottom - top;\n\n      return `\n        <div class=\"day\">\n\n          <div class=\"day-name\">\n            ${item.day}\n          </div>\n\n          <div class=\"date\">\n            ${item.date}\n          </div>\n\n          <div class=\"weather-icon\">\n            ${item.icon}\n          </div>\n\n          <div class=\"temperature\">\n            ${item.max}\u00b0\n          </div>\n\n          <div class=\"range\">\n            <div class=\"range-bg\"></div>\n\n            <div\n              class=\"range-value\"\n              style=\"\n                top:${top}%;\n                height:${height}%;\n              \"\n            ></div>\n          </div>\n\n          <div class=\"low\">\n            ${item.min}\u00b0\n          </div>\n\n          <div class=\"rain\">\n            ${item.rain}\n          </div>\n\n        </div>\n      `;\n    }).join('')}\n  </div>\n`;";
+const TPL_FORECAST_BARS = "const w = states['@@ENTITY@@'];\nconst raw = (w && w.attributes && w.attributes.forecast) || [];\n\nif (!raw.length) {\n  return '<div style=\"display:flex;align-items:center;justify-content:center;height:100%;color:rgba(255,255,255,.4);font-size:13px;text-align:center;padding:0 12px;\">Pr\u00e9visions indisponibles pour cette entit\u00e9</div>';\n}\n\nconst DAY_NAMES = ['Dim.', 'Lun.', 'Mar.', 'Mer.', 'Jeu.', 'Ven.', 'Sam.'];\nconst ICONS = {\n  sunny: 'mdi:weather-sunny', 'clear-night': 'mdi:weather-night',\n  partlycloudy: 'mdi:weather-partly-cloudy', cloudy: 'mdi:weather-cloudy',\n  rainy: 'mdi:weather-rainy', pouring: 'mdi:weather-pouring',\n  snowy: 'mdi:weather-snowy', 'snowy-rainy': 'mdi:weather-snowy-rainy',\n  fog: 'mdi:weather-fog', windy: 'mdi:weather-windy',\n  'windy-variant': 'mdi:weather-windy-variant',\n  exceptional: 'mdi:alert', hail: 'mdi:weather-hail',\n  lightning: 'mdi:weather-lightning', 'lightning-rainy': 'mdi:weather-lightning-rainy'\n};\n\nconst data = raw.slice(0, @@DAYS@@).map((f, i) => {\n  const d = new Date(f.datetime);\n  const max = f.temperature !== undefined ? Math.round(f.temperature) : 0;\n  const min = f.templow !== undefined ? Math.round(f.templow) : max - 5;\n\n  return {\n    day: DAY_NAMES[d.getDay()],\n    icon: ICONS[f.condition] || 'mdi:weather-cloudy',\n    min,\n    max,\n    current: i === 0\n  };\n});\n\n/*\n * \u00c9chelle thermique : -10\u00b0C = 0%, 55\u00b0C = 100%\n */\nconst minTemp = -10;\nconst maxTemp = 55;\n\nconst getPosition = temp => {\n  const position = ((temp - minTemp) / (maxTemp - minTemp)) * 100;\n  return Math.max(0, Math.min(100, position));\n};\n\nreturn `\n  <div class=\"daily\">\n\n    ${data.map(item => {\n\n      const minPosition = getPosition(item.min);\n      const maxPosition = getPosition(item.max);\n      const rangeWidth = maxPosition - minPosition;\n\n      return `\n        <div class=\"row\">\n\n          <div class=\"day\">\n            ${item.day}\n          </div>\n\n          <div class=\"icon\">\n            <ha-icon\n              icon=\"${item.icon}\"\n              style=\"\n                --mdc-icon-size:22px;\n              \"\n            ></ha-icon>\n          </div>\n\n          <div class=\"bar\">\n\n            <div\n              class=\"range\"\n              style=\"\n                left:${minPosition}%;\n                width:${rangeWidth}%;\n              \"\n            ></div>\n\n            <div\n              class=\"point ${item.current ? 'current' : ''}\"\n              style=\"\n                left:${minPosition}%;\n              \"\n            ></div>\n\n          </div>\n\n          <div class=\"temps\">\n            <span class=\"max\">\n              ${item.max}\u00b0\n            </span>\n\n            <span class=\"min\">\n              ${item.min}\u00b0\n            </span>\n          </div>\n\n        </div>\n      `;\n\n    }).join('')}\n\n  </div>\n`;";
+const TPL_FORECAST_CHART = "const w = states['@@ENTITY@@'];\nconst raw = (w && w.attributes && w.attributes.forecast) || [];\n\nif (!raw.length) {\n  return '<div style=\"display:flex;align-items:center;justify-content:center;height:100%;color:rgba(255,255,255,.4);font-size:13px;text-align:center;padding:0 12px;\">Pr\u00e9visions indisponibles pour cette entit\u00e9</div>';\n}\n\nconst DAY_NAMES = ['Di', 'Lu', 'Ma', 'Me', 'Je', 'Ve', 'Sa'];\nconst EMOJI = {\n  sunny: '\u2600\ufe0f', 'clear-night': '\ud83c\udf19', partlycloudy: '\ud83c\udf24\ufe0f', cloudy: '\u2601\ufe0f',\n  rainy: '\ud83c\udf27\ufe0f', pouring: '\ud83c\udf27\ufe0f', snowy: '\u2744\ufe0f', 'snowy-rainy': '\ud83c\udf28\ufe0f',\n  fog: '\ud83c\udf2b\ufe0f', windy: '\ud83d\udca8', 'windy-variant': '\ud83d\udca8',\n  exceptional: '\u26a0\ufe0f', hail: '\ud83c\udf28\ufe0f', lightning: '\u26c8\ufe0f', 'lightning-rainy': '\u26c8\ufe0f'\n};\n\nconst data = raw.slice(0, @@DAYS@@).map(f => {\n  const d = new Date(f.datetime);\n  const max = f.temperature !== undefined ? Math.round(f.temperature) : 0;\n  const min = f.templow !== undefined ? Math.round(f.templow) : max - 5;\n\n  return {\n    day: DAY_NAMES[d.getDay()],\n    icon: EMOJI[f.condition] || '\u2601\ufe0f',\n    max,\n    min,\n    rain: f.precipitation !== undefined ? f.precipitation : 0\n  };\n});\n\n/*\n * ==========================\n * DIMENSIONS\n * ==========================\n */\n\nconst width = 500;\nconst height = 225;\n\nconst left = 35;\nconst right = 465;\n\nconst graphTop = 78;\nconst graphBottom = 154;\n\nconst rainBottom = 203;\nconst rainMaxHeight = 22;\n\n/*\n * ==========================\n * ECHELLE TEMPERATURE\n * ==========================\n */\n\nconst temperatures = [\n  ...data.map(item => item.max),\n  ...data.map(item => item.min)\n];\n\nconst dataMin = Math.min(...temperatures);\nconst dataMax = Math.max(...temperatures);\n\nconst minTemp = dataMin - 2;\nconst maxTemp = dataMax + 2;\n\nconst y = temp => {\n\n  const ratio =\n    (maxTemp - temp) /\n    (maxTemp - minTemp);\n\n  return graphTop +\n    ratio *\n    (graphBottom - graphTop);\n};\n\n/*\n * ==========================\n * POSITIONS\n * ==========================\n */\n\nconst step =\n  data.length > 1\n    ? (right - left) / (data.length - 1)\n    : 0;\n\nconst x = i =>\n  data.length > 1 ? left + i * step : (left + right) / 2;\n\n/*\n * ==========================\n * COURBES DE BEZIER\n * ==========================\n */\n\nconst createSmoothPath = values => {\n\n  if (values.length === 0)\n    return '';\n\n  let path =\n    `M ${x(0)} ${y(values[0])}`;\n\n  for (let i = 0; i < values.length - 1; i++) {\n\n    const x1 = x(i);\n    const y1 = y(values[i]);\n\n    const x2 = x(i + 1);\n    const y2 = y(values[i + 1]);\n\n    const controlOffset =\n      (x2 - x1) * 0.35;\n\n    path += `\n      C\n      ${x1 + controlOffset} ${y1},\n      ${x2 - controlOffset} ${y2},\n      ${x2} ${y2}\n    `;\n  }\n\n  return path;\n};\n\nconst maxPath =\n  createSmoothPath(\n    data.map(item => item.max)\n  );\n\nconst minPath =\n  createSmoothPath(\n    data.map(item => item.min)\n  );\n\n/*\n * ==========================\n * JOURS + ICONES\n * ==========================\n */\n\nconst days = data.map((item, i) => `\n  <text\n    x=\"${x(i)}\"\n    y=\"18\"\n    text-anchor=\"middle\"\n    font-size=\"15\"\n    font-weight=\"400\"\n    fill=\"rgba(255,255,255,.82)\"\n  >\n    ${item.day}\n  </text>\n\n  <text\n    x=\"${x(i)}\"\n    y=\"52\"\n    text-anchor=\"middle\"\n    font-size=\"27\"\n  >\n    ${item.icon}\n  </text>\n`).join('');\n\n/*\n * ==========================\n * TEMPERATURE MAX (couleur primaire)\n * ==========================\n */\n\nconst maxLabels = data.map((item, i) => `\n  <text\n    x=\"${x(i)}\"\n    y=\"${y(item.max) - 9}\"\n    text-anchor=\"middle\"\n    font-size=\"14\"\n    font-weight=\"500\"\n    fill=\"@@PRIMARY@@\"\n  >\n    ${item.max}\u00b0\n  </text>\n`).join('');\n\n/*\n * ==========================\n * TEMPERATURE MIN (couleur secondaire)\n * ==========================\n */\n\nconst minLabels = data.map((item, i) => `\n  <text\n    x=\"${x(i)}\"\n    y=\"${y(item.min) + 16}\"\n    text-anchor=\"middle\"\n    font-size=\"11\"\n    font-weight=\"400\"\n    fill=\"@@SECONDARY@@\"\n  >\n    ${item.min}\u00b0\n  </text>\n`).join('');\n\n/*\n * ==========================\n * POINTS\n * ==========================\n */\n\nconst maxCircles = data.map((item, i) => `\n  <circle\n    cx=\"${x(i)}\"\n    cy=\"${y(item.max)}\"\n    r=\"4\"\n    fill=\"@@PRIMARY@@\"\n    stroke=\"@@BG@@\"\n    stroke-width=\"2\"\n  />\n`).join('');\n\nconst minCircles = data.map((item, i) => `\n  <circle\n    cx=\"${x(i)}\"\n    cy=\"${y(item.min)}\"\n    r=\"4\"\n    fill=\"@@SECONDARY@@\"\n    stroke=\"@@BG@@\"\n    stroke-width=\"2\"\n  />\n`).join('');\n\n/*\n * ==========================\n * PLUIE\n * ==========================\n */\n\nconst maxRain =\n  Math.max(\n    ...data.map(item => item.rain),\n    1\n  );\n\nconst rain = data.map((item, i) => {\n\n  if (item.rain <= 0) {\n    return `\n      <text\n        x=\"${x(i)}\"\n        y=\"${rainBottom + 10}\"\n        text-anchor=\"middle\"\n        font-size=\"10\"\n        fill=\"rgba(255,255,255,.20)\"\n      >\n        \u2014\n      </text>\n    `;\n  }\n\n  const barHeight =\n    (item.rain / maxRain) *\n    rainMaxHeight;\n\n  return `\n    <rect\n      x=\"${x(i) - 8}\"\n      y=\"${rainBottom - barHeight}\"\n      width=\"16\"\n      height=\"${barHeight}\"\n      rx=\"4\"\n      fill=\"rgba(57,124,168,.60)\"\n    />\n\n    <text\n      x=\"${x(i)}\"\n      y=\"${rainBottom + 10}\"\n      text-anchor=\"middle\"\n      font-size=\"10\"\n      fill=\"rgba(100,160,200,.78)\"\n    >\n      ${item.rain}\n    </text>\n  `;\n}).join('');\n\n/*\n * ==========================\n * SVG\n * ==========================\n */\n\nreturn `\n  <svg\n    xmlns=\"http://www.w3.org/2000/svg\"\n    viewBox=\"0 0 ${width} ${height}\"\n    preserveAspectRatio=\"none\"\n    style=\"\n      display:block;\n      width:100%;\n      height:100%;\n    \"\n  >\n\n    ${days}\n\n    <line x1=\"${left}\" x2=\"${right}\" y1=\"95\" y2=\"95\" stroke=\"rgba(255,255,255,.035)\" stroke-width=\"1\" />\n    <line x1=\"${left}\" x2=\"${right}\" y1=\"125\" y2=\"125\" stroke=\"rgba(255,255,255,.035)\" stroke-width=\"1\" />\n    <line x1=\"${left}\" x2=\"${right}\" y1=\"154\" y2=\"154\" stroke=\"rgba(255,255,255,.035)\" stroke-width=\"1\" />\n\n    <path d=\"${maxPath}\" fill=\"none\" stroke=\"@@PRIMARY@@\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\" />\n    <path d=\"${minPath}\" fill=\"none\" stroke=\"@@SECONDARY@@\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\" />\n\n    ${maxCircles}\n    ${minCircles}\n\n    ${maxLabels}\n    ${minLabels}\n\n    ${rain}\n\n  </svg>\n`;";
+/* =========================================================================
+ * === weather-card ========================================================
+ * Empile un ou plusieurs "composants" meteo (actuelle + 3 styles de
+ * previsions) dans une seule carte. Chaque composant est un
+ * custom:button-card genere a partir des templates ci-dessus.
+ * ========================================================================= */
+
+const WEATHER_COMPONENT_LABELS = {
+  current: "Météo actuelle",
+  classic: "Prévisions (icônes + barres)",
+  bars: "Prévisions (lignes + jauge)",
+  chart: "Prévisions (graphique courbes)",
+};
+const WEATHER_COMPONENT_OPTIONS = Object.entries(WEATHER_COMPONENT_LABELS).map(
+  ([value, label]) => ({ value, label })
+);
+const WEATHER_COMPONENT_ICONS = {
+  current: "mdi:weather-partly-cloudy",
+  classic: "mdi:calendar-week",
+  bars: "mdi:chart-timeline-variant",
+  chart: "mdi:chart-bell-curve",
+};
+
+// Remplace les jetons @@X@@ dans un corps de template. `tokens` est un objet
+// { NOM: valeur }. Les valeurs non fournies laissent le jeton tel quel (utile
+// pour deboguer), donc on fournit toujours une valeur pour chaque jeton utilise.
+function fillTokens(body, tokens) {
+  let out = body;
+  Object.entries(tokens).forEach(([k, v]) => {
+    out = out.split(`@@${k}@@`).join(String(v));
+  });
+  return out;
+}
+
+class WeatherCard extends AlexWrapperCard {
+  static getConfigElement() {
+    return document.createElement("weather-card-editor");
+  }
+  static getStubConfig() {
+    return {
+      entity: "",
+      components: [{ type: "current" }],
+    };
+  }
+
+  _currentConfig(entity, comp) {
+    const primary = colorOr(comp.primary_color, null);
+    const secondary = colorOr(comp.secondary_color, null);
+    const bgOverride = colorOr(comp.background, null);
+
+    const primaryTemp = primary || "rgba(255,255,255,0.90)";
+    const primaryCond = primary || "rgba(255,255,255,0.85)";
+    const secondaryRange = secondary || "rgba(255,255,255,0.50)";
+
+    const t = (tpl) => fillTokens(tpl, { ENTITY: entity });
+
+    return {
+      type: "custom:button-card",
+      entity,
+      show_name: false,
+      show_state: false,
+      show_icon: false,
+      tap_action: { action: "more-info" },
+      styles: {
+        card: [
+          { height: "120px" },
+          { "border-radius": "22px" },
+          { padding: "8px 16px" },
+          {
+            background: bgOverride
+              ? bgOverride
+              : "[[[ " + t(TPL_CURRENT_BG) + " ]]]",
+          },
+          { "box-shadow": "none" },
+          { border: "none" },
+          { overflow: "visible" },
+        ],
+        grid: [
+          {
+            "grid-template-areas":
+              '"temp icon"\n"condition icon"\n"range icon"',
+          },
+          { "grid-template-columns": "1fr 90px" },
+          { "grid-template-rows": "54px 25px 18px" },
+          { overflow: "visible" },
+        ],
+      },
+      custom_fields: {
+        temp: {
+          card: {
+            type: "custom:button-card",
+            show_icon: false,
+            show_name: true,
+            name: "[[[ " + t(TPL_CURRENT_TEMP) + " ]]]",
+            styles: {
+              card: [
+                { background: "transparent" },
+                { border: "none" },
+                { "border-radius": "0" },
+                { "box-shadow": "none" },
+                { padding: "0" },
+                { margin: "0" },
+                { overflow: "visible" },
+              ],
+              grid: [{ overflow: "visible" }],
+              name: [
+                { "justify-self": "start" },
+                { "align-self": "center" },
+                { "font-size": "42px" },
+                { "font-weight": "300" },
+                { "margin-top": "10px" },
+                { "line-height": "1" },
+                { color: primaryTemp },
+                { "white-space": "nowrap" },
+                { overflow: "visible" },
+              ],
+            },
+          },
+        },
+        condition: {
+          card: {
+            type: "custom:button-card",
+            show_icon: false,
+            show_name: true,
+            name: "[[[ " + t(TPL_CURRENT_CONDITION) + " ]]]",
+            styles: {
+              card: [
+                { background: "transparent" },
+                { border: "none" },
+                { "border-radius": "0" },
+                { "box-shadow": "none" },
+                { padding: "0" },
+                { margin: "0" },
+                { overflow: "visible" },
+              ],
+              grid: [{ overflow: "visible" }],
+              name: [
+                { "justify-self": "start" },
+                { "align-self": "center" },
+                { "font-size": "15px" },
+                { "font-weight": "400" },
+                { "line-height": "1" },
+                { color: primaryCond },
+                { "white-space": "nowrap" },
+                { overflow: "visible" },
+              ],
+            },
+          },
+        },
+        range: {
+          card: {
+            type: "custom:button-card",
+            show_icon: false,
+            show_name: true,
+            name: "[[[ " + t(TPL_CURRENT_RANGE) + " ]]]",
+            styles: {
+              card: [
+                { background: "transparent" },
+                { border: "none" },
+                { "border-radius": "0" },
+                { "box-shadow": "none" },
+                { padding: "0" },
+                { margin: "0" },
+                { overflow: "visible" },
+              ],
+              grid: [{ overflow: "visible" }],
+              name: [
+                { "justify-self": "start" },
+                { "align-self": "center" },
+                { "font-size": "12px" },
+                { "line-height": "1" },
+                { color: secondaryRange },
+                { "white-space": "nowrap" },
+                { overflow: "visible" },
+              ],
+            },
+          },
+        },
+        icon: {
+          card: {
+            type: "custom:button-card",
+            show_name: false,
+            show_state: false,
+            icon: "[[[ " + t(TPL_CURRENT_ICON) + " ]]]",
+            styles: {
+              card: [
+                { background: "transparent" },
+                { border: "none" },
+                { "border-radius": "0" },
+                { "box-shadow": "none" },
+                { padding: "0" },
+                { margin: "0" },
+                { overflow: "visible" },
+              ],
+              grid: [{ overflow: "visible" }],
+              icon: [
+                { width: "72px" },
+                { height: "72px" },
+                { color: "#f5c542" },
+              ],
+            },
+          },
+        },
+      },
+    };
+  }
+
+  _forecastConfig(entity, comp, opts) {
+    // opts: { field, template, extraStyles, bg, height, gridArea }
+    const days = comp.days != null ? comp.days : 5;
+    const primary = colorOr(comp.primary_color, opts.defaultPrimary);
+    const secondary = colorOr(comp.secondary_color, opts.defaultSecondary);
+    const bg = colorOr(comp.background, opts.defaultBg);
+
+    const body = fillTokens(opts.template, {
+      ENTITY: entity,
+      DAYS: days,
+      PRIMARY: primary,
+      SECONDARY: secondary,
+      BG: bg,
+    });
+
+    const cfg = {
+      type: "custom:button-card",
+      entity,
+      show_name: false,
+      show_icon: false,
+      show_state: false,
+      styles: {
+        card: [
+          { height: opts.height },
+          { "border-radius": "22px" },
+          { padding: opts.padding },
+          { background: bg },
+          { border: "none" },
+          { "box-shadow": "none" },
+          { overflow: "hidden" },
+        ],
+        grid: [
+          { "grid-template-areas": `"${opts.field}"` },
+          { "grid-template-columns": "1fr" },
+          { "grid-template-rows": "1fr" },
+          { width: "100%" },
+          { height: "100%" },
+        ],
+        custom_fields: {
+          [opts.field]: [
+            { width: "100%" },
+            { height: "100%" },
+            { "align-self": "stretch" },
+            { "justify-self": "stretch" },
+          ],
+        },
+      },
+      custom_fields: {
+        [opts.field]: "[[[ " + body + " ]]]",
+      },
+    };
+
+    if (opts.extraStyles) {
+      cfg.extra_styles = fillTokens(opts.extraStyles, {
+        PRIMARY: primary,
+        SECONDARY: secondary,
+        BG: bg,
+      });
+    }
+
+    return cfg;
+  }
+
+  _classicConfig(entity, comp) {
+    const extraStyles = `
+.forecast { display:flex; width:100%; height:100%; justify-content:space-between; align-items:stretch; gap:0; }
+.day { flex:1 1 0; min-width:0; width:0; display:flex; flex-direction:column; align-items:center; text-align:center; }
+.day-name { font-size:16px; font-weight:400; color:@@PRIMARY@@; line-height:1.1; }
+.date { font-size:13px; color:@@SECONDARY@@; margin-top:3px; }
+.weather-icon { height:52px; width:100%; display:flex; align-items:center; justify-content:center; font-size:30px; margin-top:2px; }
+.temperature { font-size:16px; font-weight:500; color:@@PRIMARY@@; margin-top:3px; }
+.range { position:relative; width:9px; height:155px; margin-top:7px; }
+.range-bg { position:absolute; inset:0; width:9px; border-radius:20px; background:rgba(255,255,255,.11); }
+.range-value { position:absolute; left:0; width:9px; border-radius:20px; background:rgba(220,220,225,.68); }
+.low { font-size:14px; font-weight:500; color:@@SECONDARY@@; margin-top:5px; }
+.rain { font-size:13px; color:#3877aa; margin-top:8px; }
+`.trim();
+
+    return this._forecastConfig(entity, comp, {
+      field: "forecast",
+      template: TPL_FORECAST_CLASSIC,
+      extraStyles,
+      defaultBg: "#343342",
+      defaultPrimary: "rgba(255,255,255,.95)",
+      defaultSecondary: "rgba(255,255,255,.42)",
+      height: "255px",
+      padding: "15px 10px",
+    });
+  }
+
+  _barsConfig(entity, comp) {
+    const extraStyles = `
+.daily { display:flex; flex-direction:column; justify-content:space-between; width:100%; height:100%; }
+.row { display:grid; grid-template-columns:72px 28px minmax(0,1fr) 58px; align-items:center; column-gap:0px; margin-left:-10px; width:100%; height:30px; }
+.day { font-size:13px; font-weight:400; color:@@PRIMARY@@; white-space:nowrap; }
+.icon { display:flex; align-items:center; justify-content:center; color:@@PRIMARY@@; transform:translateX(-12px); }
+.bar { position:relative; width:100%; height:12px; border-radius:20px; background:linear-gradient(90deg, rgba(62,125,170,.35) 0%, rgba(82,151,181,.35) 25%, rgba(128,171,137,.35) 45%, rgba(205,183,87,.35) 65%, rgba(218,130,67,.35) 82%, rgba(190,75,60,.35) 100%); }
+.range { position:absolute; top:0; height:12px; border-radius:20px; background:rgba(220,220,220,.78); }
+.point { position:absolute; top:50%; width:12px; height:12px; transform:translate(-50%,-50%); border-radius:50%; box-sizing:border-box; background:rgba(220,220,220,.95); border:1px solid rgba(0,0,0,.75); }
+.point.current { box-shadow:0 0 0 2px rgba(255,255,255,.28); }
+.temps { display:grid; grid-template-columns:28px 18px; align-items:center; justify-content:end; column-gap:4px; white-space:nowrap; }
+.max { font-size:14px; font-weight:600; color:@@PRIMARY@@; text-align:right; }
+.min { font-size:9px; font-weight:400; color:@@SECONDARY@@; text-align:left; margin-bottom:5px; }
+`.trim();
+
+    return this._forecastConfig(entity, comp, {
+      field: "daily",
+      template: TPL_FORECAST_BARS,
+      extraStyles,
+      defaultBg: "#242424",
+      defaultPrimary: "rgba(255,255,255,.92)",
+      defaultSecondary: "rgba(255,255,255,.42)",
+      height: "235px",
+      padding: "14px",
+    });
+  }
+
+  _chartConfig(entity, comp) {
+    return this._forecastConfig(entity, comp, {
+      field: "chart",
+      template: TPL_FORECAST_CHART,
+      extraStyles: null,
+      defaultBg: "#30303f",
+      defaultPrimary: "#18a6d5",
+      defaultSecondary: "#e8a52c",
+      height: "245px",
+      padding: "9px 12px",
+    });
+  }
+
+  _innerConfig(c) {
+    const entity = c.entity || "";
+    const comps = c.components || [];
+    const cards = comps.map((comp) => {
+      if (comp.type === "classic") return this._classicConfig(entity, comp);
+      if (comp.type === "bars") return this._barsConfig(entity, comp);
+      if (comp.type === "chart") return this._chartConfig(entity, comp);
+      return this._currentConfig(entity, comp);
+    });
+    return { type: "custom:vertical-stack-in-card", cards };
+  }
+}
+customElements.define("weather-card", WeatherCard);
+
+class WeatherCardEditor extends AlexListEditor {
+  static getStubConfig() {
+    return WeatherCard.getStubConfig();
+  }
+
+  _normalize() {
+    if (!Array.isArray(this._config.components)) this._config.components = [];
+  }
+
+  _validPath() {
+    const p = this._path || [];
+    if (p.length >= 1 && !this._config.components[p[0]]) return [];
+    return p;
+  }
+
+  _render() {
+    this._forms = [];
+    this._selectors = [];
+    this.innerHTML = "";
+    const p = this._validPath();
+    if (p.length === 0) this._renderRoot();
+    else this._renderComponent(p[0]);
+    if (this._hass) {
+      this._forms.forEach((f) => (f.hass = this._hass));
+      this._selectors.forEach((s) => (s.hass = this._hass));
+    }
+  }
+
+  _renderRoot() {
+    const cfg = this._config;
+
+    this.appendChild(this._sectionTitle("Entité"));
+    this.appendChild(
+      this._form(
+        [{ name: "entity", selector: { entity: { domain: "weather" } } }],
+        { entity: cfg.entity || "" },
+        { entity: "Entité météo" },
+        (v) => this._update((c) => (c.entity = v.entity))
+      )
+    );
+
+    this.appendChild(this._sectionTitle("Composants"));
+    (cfg.components || []).forEach((comp, i) => {
+      const label = WEATHER_COMPONENT_LABELS[comp.type] || comp.type;
+      const sub =
+        comp.type === "current" ? undefined : `${comp.days != null ? comp.days : 5} jour(s)`;
+      this.appendChild(
+        this._row(
+          WEATHER_COMPONENT_ICONS[comp.type] || "mdi:weather-cloudy",
+          label,
+          sub,
+          () => {
+            this._path = [i];
+            this._render();
+          },
+          () => {
+            this._update((c) => c.components.splice(i, 1));
+            this._render();
+          }
+        )
+      );
+    });
+
+    this.appendChild(
+      this._form(
+        [
+          {
+            name: "add_type",
+            selector: { select: { mode: "dropdown", options: WEATHER_COMPONENT_OPTIONS } },
+          },
+        ],
+        {},
+        { add_type: "Ajouter un composant" },
+        (v) => {
+          if (!v || !v.add_type) return;
+          let idx;
+          this._update((c) => {
+            c.components = c.components || [];
+            const entry = { type: v.add_type };
+            if (v.add_type !== "current") entry.days = 5;
+            c.components.push(entry);
+            idx = c.components.length - 1;
+          });
+          this._path = [idx];
+          this._render();
+        }
+      )
+    );
+  }
+
+  _renderComponent(i) {
+    const comp = this._config.components[i] || {};
+    const merge = (v) =>
+      this._update((c) => (c.components[i] = { ...c.components[i], ...v }));
+
+    this.appendChild(
+      this._backHeader(WEATHER_COMPONENT_LABELS[comp.type] || comp.type, () => {
+        this._path = [];
+        this._render();
+      })
+    );
+
+    if (comp.type !== "current") {
+      this.appendChild(
+        this._form(
+          [
+            {
+              name: "days",
+              selector: { number: { min: 1, max: 10, step: 1, mode: "box" } },
+            },
+          ],
+          { days: comp.days != null ? comp.days : 5 },
+          { days: "Jours de prévision" },
+          merge
+        )
+      );
+    }
+
+    const rows = document.createElement("div");
+    rows.appendChild(
+      this._colorRow("Fond de la carte", comp.background, (v) => merge({ background: v }))
+    );
+    rows.appendChild(
+      this._colorRow("Couleur primaire", comp.primary_color, (v) =>
+        merge({ primary_color: v })
+      )
+    );
+    rows.appendChild(
+      this._colorRow("Couleur secondaire", comp.secondary_color, (v) =>
+        merge({ secondary_color: v })
+      )
+    );
+
+    this.appendChild(this._panel("Customisation", "mdi:palette", rows));
+  }
+}
+customElements.define("weather-card-editor", WeatherCardEditor);
+
+window.customCards.push({
+  type: "weather-card",
+  name: "Weather Card",
+  description: "Météo actuelle et/ou prévisions (3 styles), à empiler librement.",
+  preview: false,
   documentationURL: "https://github.com/<user>/alex-cards",
 });
 

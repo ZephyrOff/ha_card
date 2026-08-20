@@ -14,6 +14,7 @@ Collection de cartes Lovelace custom pour Home Assistant, distribuée en **plugi
 | `custom:light-card`        | oui        | Liste de lumières, groupes déployables au double-clic.            |
 | `custom:multi-graph-card`  | oui        | Pile de mini-graphes configurables (fond de card du thème).      |
 | `custom:pill-card`         | oui        | Pastille nom + sous-titre avec icône ronde et chevron.           |
+| `custom:weather-card`      | oui        | Météo actuelle et/ou prévisions (3 styles), à empiler librement. |
 
 Toutes les cartes apparaissent dans le sélecteur « Ajouter une carte » avec un éditeur
 visuel. La `light-card` a un éditeur type « chips » (liste + crayon pour éditer chaque
@@ -25,6 +26,7 @@ dispo pour éditer le YAML directement.
 `graph-card`, `prise-card`, `shutter-card` et `light-card` génèrent en interne des cartes
 mushroom/card-mod : elles requièrent, installées via HACS, **Mushroom**, **card-mod**,
 **mini-graph-card**, **stack-in-card**, **vertical-stack-in-card** et **mod-card**.
+`weather-card` requiert **button-card** et **vertical-stack-in-card**.
 `room-header-card` n'a aucune dépendance.
 
 ## Installation via HACS (dépôt personnalisé)
@@ -114,6 +116,41 @@ lights:
     name: Globe gauche
     icon: hue:go
 ```
+
+### Weather Card
+
+Une carte, plusieurs « composants » empilés verticalement. Chaque composant est un des
+4 styles ci-dessous ; on peut en mettre plusieurs (ex. météo actuelle + un style de
+prévisions) dans la même carte.
+
+```yaml
+type: custom:weather-card
+entity: weather.forecast_maison
+components:
+  - type: current          # météo actuelle (fond dégradé dynamique par défaut)
+    # background/primary_color/secondary_color : optionnels (color picker dans l'éditeur)
+  - type: classic           # prévisions, icônes emoji + barre min/max par jour
+    days: 5
+  - type: bars               # prévisions, icônes mdi + jauge thermique horizontale
+    days: 5
+  - type: chart               # prévisions, courbe SVG max/min + pluie
+    days: 5
+```
+
+Points importants :
+
+- **`type: current`** : le fond est le dégradé dynamique selon la condition météo par
+  défaut ; définir `background` dans l'éditeur le remplace par une couleur fixe. `primary_color`
+  colore la température et la condition, `secondary_color` colore le min/max du jour.
+- **`type: classic` / `bars` / `chart`** : `days` (défaut 5) limite le nombre de jours de
+  prévision affichés. Ces trois styles lisent `weather.<entité>.attributes.forecast` — si
+  ton intégration météo n'expose pas cet attribut (certaines l'exposent uniquement via le
+  service `weather.get_forecasts`), le composant affiche « Prévisions indisponibles ».
+  `primary_color`/`secondary_color` retintent respectivement : le jour + le max (classic,
+  bars) ; la courbe max + la courbe min (chart).
+- Les 4 styles viennent de gabarits `custom:button-card` fournis par l'utilisateur ;
+  seule la lecture des prévisions (remplacement des données figées d'origine par les
+  vraies données de l'entité) a été ajoutée par le plugin.
 
 ## Ajouter une nouvelle carte
 
