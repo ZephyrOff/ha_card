@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.12.2";
+const ALEX_CARDS_VERSION = "0.12.3";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -2364,9 +2364,9 @@ class WeatherCard extends AlexWrapperCard {
     const secondary = colorOr(comp.secondary_color, null);
     const bgOverride = colorOr(comp.background, null);
 
-    const primaryTemp = primary || "rgba(255,255,255,0.90)";
-    const primaryCond = primary || "rgba(255,255,255,0.85)";
-    const secondaryRange = secondary || "rgba(255,255,255,0.50)";
+    const primaryTemp = primary || "var(--primary-text-color)";
+    const primaryCond = primary || "var(--primary-text-color)";
+    const secondaryRange = secondary || "var(--secondary-text-color)";
 
     const forecastJson = JSON.stringify(this._forecasts[entity] || []);
     const t = (tpl) => fillTokens(tpl, { ENTITY: entity, FORECAST_JSON: forecastJson });
@@ -2607,8 +2607,8 @@ class WeatherCard extends AlexWrapperCard {
       template: TPL_FORECAST_CLASSIC,
       extraStyles,
       defaultBg: "var(--ha-card-background, var(--card-background-color))",
-      defaultPrimary: "rgba(255,255,255,.95)",
-      defaultSecondary: "rgba(255,255,255,.42)",
+      defaultPrimary: "var(--primary-text-color)",
+      defaultSecondary: "var(--secondary-text-color)",
       height: "255px",
       padding: "15px 10px",
     });
@@ -2634,8 +2634,8 @@ class WeatherCard extends AlexWrapperCard {
       template: TPL_FORECAST_BARS,
       extraStyles,
       defaultBg: "var(--ha-card-background, var(--card-background-color))",
-      defaultPrimary: "rgba(255,255,255,.92)",
-      defaultSecondary: "rgba(255,255,255,.42)",
+      defaultPrimary: "var(--primary-text-color)",
+      defaultSecondary: "var(--secondary-text-color)",
       height: "235px",
       padding: "14px",
     });
