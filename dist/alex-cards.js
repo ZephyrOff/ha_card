@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.14.0";
+const ALEX_CARDS_VERSION = "0.15.0";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -97,7 +97,7 @@ const RH_LABELS = {
 
 class RoomHeaderCard extends HTMLElement {
   static getConfigElement() {
-    return document.createElement("room-header-card-editor");
+    return document.createElement("alex-room-header-card-editor");
   }
 
   static getStubConfig() {
@@ -238,7 +238,7 @@ class RoomHeaderCard extends HTMLElement {
     this._built = true;
   }
 }
-customElements.define("room-header-card", RoomHeaderCard);
+customElements.define("alex-room-header-card", RoomHeaderCard);
 
 class RoomHeaderCardEditor extends HTMLElement {
   setConfig(config) {
@@ -272,11 +272,11 @@ class RoomHeaderCardEditor extends HTMLElement {
     if (this._hass) this._form.hass = this._hass;
   }
 }
-customElements.define("room-header-card-editor", RoomHeaderCardEditor);
+customElements.define("alex-room-header-card-editor", RoomHeaderCardEditor);
 
 window.customCards.push({
-  type: "room-header-card",
-  name: "Room Header Card",
+  type: "alex-room-header-card",
+  name: "Alex Room Header",
   description: "Bandeau d'en-tête de pièce (température, humidité, ouvrants).",
   preview: true,
   documentationURL: "https://github.com/<user>/alex-cards",
@@ -990,7 +990,7 @@ const GRAPH_DEFAULT_RGB = [217, 148, 20];
 
 class GraphCard extends AlexWrapperCard {
   static getConfigElement() {
-    return document.createElement("graph-card-editor");
+    return document.createElement("alex-graph-card-editor");
   }
   static getStubConfig() {
     return { entity: "", name: "", icon: "mdi:chart-line", color: GRAPH_DEFAULT_RGB };
@@ -1034,7 +1034,7 @@ class GraphCard extends AlexWrapperCard {
     };
   }
 }
-customElements.define("graph-card", GraphCard);
+customElements.define("alex-graph-card", GraphCard);
 
 class GraphCardEditor extends AlexFormEditor {
   constructor() {
@@ -1052,11 +1052,11 @@ class GraphCardEditor extends AlexFormEditor {
     );
   }
 }
-customElements.define("graph-card-editor", GraphCardEditor);
+customElements.define("alex-graph-card-editor", GraphCardEditor);
 
 window.customCards.push({
-  type: "graph-card",
-  name: "Graph Card",
+  type: "alex-graph-card",
+  name: "Alex Graph Card",
   description: "Tuile valeur + mini-graphe 24 h en fond.",
   preview: true,
   documentationURL: "https://github.com/<user>/alex-cards",
@@ -1073,7 +1073,7 @@ const PRISE_DEFAULT_RGB = [8, 207, 104];
 
 class PriseCard extends AlexWrapperCard {
   static getConfigElement() {
-    return document.createElement("prise-card-editor");
+    return document.createElement("alex-prise-card-editor");
   }
   static getStubConfig() {
     return {
@@ -1141,7 +1141,7 @@ class PriseCard extends AlexWrapperCard {
     };
   }
 }
-customElements.define("prise-card", PriseCard);
+customElements.define("alex-prise-card", PriseCard);
 
 class PriseCardEditor extends AlexFormEditor {
   constructor() {
@@ -1166,11 +1166,11 @@ class PriseCardEditor extends AlexFormEditor {
     );
   }
 }
-customElements.define("prise-card-editor", PriseCardEditor);
+customElements.define("alex-prise-card-editor", PriseCardEditor);
 
 window.customCards.push({
-  type: "prise-card",
-  name: "Prise Card",
+  type: "alex-prise-card",
+  name: "Alex Prise Card",
   description: "Interrupteur avec puissance et mini-graphe.",
   preview: true,
   documentationURL: "https://github.com/<user>/alex-cards",
@@ -1183,7 +1183,7 @@ window.customCards.push({
 
 class ShutterCard extends AlexWrapperCard {
   static getConfigElement() {
-    return document.createElement("shutter-card-editor");
+    return document.createElement("alex-shutter-card-editor");
   }
   static getStubConfig() {
     return {
@@ -1290,7 +1290,7 @@ class ShutterCard extends AlexWrapperCard {
     };
   }
 }
-customElements.define("shutter-card", ShutterCard);
+customElements.define("alex-shutter-card", ShutterCard);
 
 class ShutterCardEditor extends AlexFormEditor {
   constructor() {
@@ -1351,11 +1351,11 @@ class ShutterCardEditor extends AlexFormEditor {
     );
   }
 }
-customElements.define("shutter-card-editor", ShutterCardEditor);
+customElements.define("alex-shutter-card-editor", ShutterCardEditor);
 
 window.customCards.push({
-  type: "shutter-card",
-  name: "Shutter Card",
+  type: "alex-shutter-card",
+  name: "Alex Shutter Card",
   description: "Volet (position) + boutons Open / Projection / Close.",
   preview: true,
   documentationURL: "https://github.com/<user>/alex-cards",
@@ -1387,7 +1387,7 @@ const LIGHT_TRANSPARENT =
 
 class LightCard extends AlexWrapperCard {
   static getConfigElement() {
-    return document.createElement("light-card-editor");
+    return document.createElement("alex-light-card-editor");
   }
   static getStubConfig() {
     return {
@@ -1480,7 +1480,7 @@ class LightCard extends AlexWrapperCard {
     };
   }
 }
-customElements.define("light-card", LightCard);
+customElements.define("alex-light-card", LightCard);
 
 /*
  * Éditeur "façon mushroom-chips" : liste de lumières avec ajout / crayon /
@@ -1999,11 +1999,11 @@ class LightCardEditor extends HTMLElement {
     );
   }
 }
-customElements.define("light-card-editor", LightCardEditor);
+customElements.define("alex-light-card-editor", LightCardEditor);
 
 window.customCards.push({
-  type: "light-card",
-  name: "Light Card",
+  type: "alex-light-card",
+  name: "Alex Light Card",
   description: "Liste de lumières avec groupes déployables au double-clic.",
   preview: false,
   documentationURL: "https://github.com/<user>/alex-cards",
@@ -2018,7 +2018,7 @@ window.customCards.push({
 
 class MultiGraphCard extends AlexWrapperCard {
   static getConfigElement() {
-    return document.createElement("multi-graph-card-editor");
+    return document.createElement("alex-multi-graph-card-editor");
   }
   static getStubConfig() {
     return {
@@ -2057,7 +2057,7 @@ class MultiGraphCard extends AlexWrapperCard {
     };
   }
 }
-customElements.define("multi-graph-card", MultiGraphCard);
+customElements.define("alex-multi-graph-card", MultiGraphCard);
 
 const MG_SCHEMA = [
   { name: "entities", selector: { entity: { multiple: true } } },
@@ -2167,11 +2167,11 @@ class MultiGraphCardEditor extends AlexListEditor {
     );
   }
 }
-customElements.define("multi-graph-card-editor", MultiGraphCardEditor);
+customElements.define("alex-multi-graph-card-editor", MultiGraphCardEditor);
 
 window.customCards.push({
-  type: "multi-graph-card",
-  name: "Multi Graph Card",
+  type: "alex-multi-graph-card",
+  name: "Alex Multi Graph",
   description: "Pile de mini-graphes configurables (fond de card du thème).",
   preview: false,
   documentationURL: "https://github.com/<user>/alex-cards",
@@ -2185,7 +2185,7 @@ window.customCards.push({
 
 class PillCard extends AlexWrapperCard {
   static getConfigElement() {
-    return document.createElement("pill-card-editor");
+    return document.createElement("alex-pill-card-editor");
   }
   static getStubConfig() {
     return { name: "Titre", secondary: "Sous-titre", icon: "mdi:home" };
@@ -2265,7 +2265,7 @@ class PillCard extends AlexWrapperCard {
     return applyActions(cfg, c);
   }
 }
-customElements.define("pill-card", PillCard);
+customElements.define("alex-pill-card", PillCard);
 
 class PillCardEditor extends AlexFormEditor {
   constructor() {
@@ -2303,11 +2303,11 @@ class PillCardEditor extends AlexFormEditor {
     );
   }
 }
-customElements.define("pill-card-editor", PillCardEditor);
+customElements.define("alex-pill-card-editor", PillCardEditor);
 
 window.customCards.push({
-  type: "pill-card",
-  name: "Pill Card",
+  type: "alex-pill-card",
+  name: "Alex Pill",
   description: "Pastille nom + sous-titre avec icône et chevron.",
   preview: true,
   documentationURL: "https://github.com/<user>/alex-cards",

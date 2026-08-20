@@ -7,17 +7,17 @@ Collection de cartes Lovelace custom pour Home Assistant, distribuée en **plugi
 
 | Type                       | Éditeur UI | Description                                                        |
 | -------------------------- | :--------: | ----------------------------------------------------------------- |
-| `custom:room-header-card`  | oui        | Bandeau d'en-tête de pièce : température, humidité, ouvrants.      |
-| `custom:graph-card`        | oui        | Tuile valeur + mini-graphe 24 h en fond.                          |
-| `custom:prise-card`        | oui        | Interrupteur avec puissance + mini-graphe (masqué à l'arrêt).     |
-| `custom:shutter-card`      | oui        | Volet (position) + boutons Open / Projection / Close scriptés.    |
-| `custom:light-card`        | oui        | Liste de lumières, groupes déployables au double-clic.            |
-| `custom:multi-graph-card`  | oui        | Pile de mini-graphes configurables (fond de card du thème).      |
-| `custom:pill-card`         | oui        | Pastille nom + sous-titre avec icône ronde et chevron.           |
+| `custom:alex-room-header-card`  | oui        | Bandeau d'en-tête de pièce : température, humidité, ouvrants.      |
+| `custom:alex-graph-card`        | oui        | Tuile valeur + mini-graphe 24 h en fond.                          |
+| `custom:alex-prise-card`        | oui        | Interrupteur avec puissance + mini-graphe (masqué à l'arrêt).     |
+| `custom:alex-shutter-card`      | oui        | Volet (position) + boutons Open / Projection / Close scriptés.    |
+| `custom:alex-light-card`        | oui        | Liste de lumières, groupes déployables au double-clic.            |
+| `custom:alex-multi-graph-card`  | oui        | Pile de mini-graphes configurables (fond de card du thème).      |
+| `custom:alex-pill-card`         | oui        | Pastille nom + sous-titre avec icône ronde et chevron.           |
 | `custom:alex-weather-card`      | oui        | Météo actuelle et/ou prévisions (3 styles), à empiler librement. |
 
 Toutes les cartes apparaissent dans le sélecteur « Ajouter une carte » avec un éditeur
-visuel. La `light-card` a un éditeur type « chips » (liste + crayon pour éditer chaque
+visuel. La `alex-light-card` a un éditeur type « chips » (liste + crayon pour éditer chaque
 entité, sous-liste de membres pour les groupes) ; le toggle « Éditeur de code » reste
 dispo pour éditer le YAML directement.
 
@@ -28,11 +28,11 @@ la config ; un ancien `[r, g, b]` (sans 4ᵉ valeur) reste valide, l'opacité va
 
 ## Dépendances (HACS)
 
-`graph-card`, `prise-card`, `shutter-card` et `light-card` génèrent en interne des cartes
+`alex-graph-card`, `alex-prise-card`, `alex-shutter-card` et `alex-light-card` génèrent en interne des cartes
 mushroom/card-mod : elles requièrent, installées via HACS, **Mushroom**, **card-mod**,
 **mini-graph-card**, **stack-in-card**, **vertical-stack-in-card** et **mod-card**.
 `alex-weather-card` requiert **button-card** et **vertical-stack-in-card**.
-`room-header-card` n'a aucune dépendance.
+`alex-room-header-card` n'a aucune dépendance.
 
 ## Installation via HACS (dépôt personnalisé)
 
@@ -50,7 +50,7 @@ Dans une vue, « Ajouter une carte » → **Room Header Card**, puis remplir les
 (l'éditeur fait le reste). Équivalent YAML :
 
 ```yaml
-type: custom:room-header-card
+type: custom:alex-room-header-card
 name: Salon
 secondary: Volet · Apple TV · lumière · Béatrice
 icon: mdi:sofa
@@ -65,7 +65,7 @@ ou un `group`.
 ### Graph Card / Prise Card
 
 ```yaml
-type: custom:graph-card
+type: custom:alex-graph-card
 entity: sensor.cuisine_temp_temperature
 name: Température
 icon: mdi:thermometer
@@ -73,7 +73,7 @@ color: [217, 148, 20]
 ```
 
 ```yaml
-type: custom:prise-card
+type: custom:alex-prise-card
 entity: switch.prise_cagibi
 power_entity: sensor.prise_cagibi_power   # optionnel : active W + graphe
 name: Prise Cagibi
@@ -88,7 +88,7 @@ tap_action:
 Couleurs en CSS libre (accepte `rgba(...)`, hex, noms). Champs couleur vides = défauts du thème.
 
 ```yaml
-type: custom:shutter-card
+type: custom:alex-shutter-card
 entity: cover.volet_cuisine
 name: Cuisine
 icon: mdi:window-shutter
@@ -107,7 +107,7 @@ Chaque entrée de `lights` est une lumière simple ; ajouter `expand_toggle` (un
 au double-clic.
 
 ```yaml
-type: custom:light-card
+type: custom:alex-light-card
 all_entity: light.bureau_light_all
 lights:
   - entity: light.bureau_light_plafond_all
@@ -185,7 +185,7 @@ Autres points :
 
 ## Ajouter une nouvelle carte
 
-Dans `dist/alex-cards.js`, dupliquer le bloc `=== room-header-card ===` :
+Dans `dist/alex-cards.js`, dupliquer le bloc `=== room-header-card ===` (le nom du bloc de code source ; le tag public, lui, est `alex-room-header-card`) :
 
 1. une classe `MaCarte extends HTMLElement` avec `setConfig`, `set hass`, `getCardSize`,
    `static getConfigElement`, `static getStubConfig` ;
