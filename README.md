@@ -234,8 +234,18 @@ Types de catégorie et agrégation :
   Déclenchée (rouge). Les entités suivantes de la même catégorie sont ignorées.
 
 Chaque catégorie a sa propre icône (optionnelle, sinon une icône par défaut selon le
-type). Il n'y a pas encore d'action au clic sur une ligne (more-info, etc.) — à ajouter
-si besoin.
+type). L'éditeur affiche les entités d'une catégorie sous forme de liste (comme les
+Catégories elles-mêmes), avec une ligne « Ajouter une entité ». Il n'y a pas encore
+d'action au clic sur une ligne (more-info, etc.) — à ajouter si besoin.
+
+**Personnalisation (color-pickers avec opacité, comme le reste du package) :**
+
+- Racine → panneau **Customisation** : couleur du badge, fond de la carte (vide = thème),
+  couleur du nom de la carte, couleur des noms de catégorie.
+- Chaque catégorie → son propre panneau **Customisation** : couleur de succès (remplace
+  le vert par défaut) et couleur d'échec (remplace le rouge/orange par défaut — le
+  détecteur en alerte et l'ouvrant/verrou en défaut partagent la même couleur d'échec,
+  pour rester sur une logique binaire succès/échec).
 
 ## Ajouter une nouvelle carte
 

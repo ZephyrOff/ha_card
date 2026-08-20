@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.16.0";
+const ALEX_CARDS_VERSION = "0.16.1";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -938,12 +938,9 @@ class AlexListEditor extends HTMLElement {
         ? `<div style="font-size:12px;color:var(--secondary-text-color);overflow:hidden;` +
           `text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(subtitle)}</div>`
         : "");
-    row.append(
-      ic,
-      lab,
-      this._iconButton("mdi:pencil", "Éditer", onEdit),
-      this._iconButton("mdi:delete", "Supprimer", onDelete)
-    );
+    row.append(ic, lab);
+    if (onEdit) row.appendChild(this._iconButton("mdi:pencil", "Éditer", onEdit));
+    row.appendChild(this._iconButton("mdi:delete", "Supprimer", onDelete));
     return row;
   }
 
@@ -1670,12 +1667,9 @@ class LightCardEditor extends HTMLElement {
         ? `<div style="font-size:12px;color:var(--secondary-text-color);overflow:hidden;` +
           `text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(subtitle)}</div>`
         : "");
-    row.append(
-      ic,
-      lab,
-      this._iconButton("mdi:pencil", "Éditer", onEdit),
-      this._iconButton("mdi:delete", "Supprimer", onDelete)
-    );
+    row.append(ic, lab);
+    if (onEdit) row.appendChild(this._iconButton("mdi:pencil", "Éditer", onEdit));
+    row.appendChild(this._iconButton("mdi:delete", "Supprimer", onDelete));
     return row;
   }
 
@@ -3124,6 +3118,17 @@ function sensorCategorySummary(hass, cat) {
     : { text: `${activeCount} actif${activeCount > 1 ? "s" : ""}`, tone: "grey", dotTone: "green" };
 }
 
+// Resout un ton semantique ('green'/'orange'/'red'/'grey') vers une couleur
+// CSS reelle, en tenant compte des overrides success_color/failed_color
+// definis sur la categorie ('orange' partage failed_color avec 'red', pour
+// rester sur la logique binaire succes/echec demandee).
+function resolveSensorTone(tone, cat) {
+  if (tone === "green") return colorOr(cat.success_color, SENSOR_TONE_CSS.green);
+  if (tone === "red" || tone === "orange")
+    return colorOr(cat.failed_color, SENSOR_TONE_CSS[tone]);
+  return SENSOR_TONE_CSS.grey;
+}
+
 class SensorCard extends HTMLElement {
   static getConfigElement() {
     return document.createElement("alex-sensor-card-editor");
@@ -3157,12 +3162,17 @@ class SensorCard extends HTMLElement {
     const summaries = cats.map((cat) => sensorCategorySummary(hass, cat));
 
     // Ne re-render que si un element affiche a reellement change (nom,
-    // icone, ou le texte/couleur resultant d'au moins une categorie).
+    // icone, couleurs, ou le texte/couleur resultant d'au moins une categorie).
     const sig = [
       c.name,
       c.icon,
       JSON.stringify(c.icon_color || null),
-      cats.map((cat) => `${cat.name}|${cat.icon}|${cat.type}`).join(";"),
+      JSON.stringify(c.background || null),
+      JSON.stringify(c.primary_color || null),
+      JSON.stringify(c.secondary_color || null),
+      cats
+        .map((cat) => `${cat.name}|${cat.icon}|${cat.type}|${cat.success_color}|${cat.failed_color}`)
+        .join(";"),
       summaries.map((s) => `${s.text}|${s.tone}|${s.dotTone || ""}`).join(";"),
     ].join("~");
     if (this._built && sig === this._lastSig) return;
@@ -3171,13 +3181,16 @@ class SensorCard extends HTMLElement {
     const iconColor = colorOr(c.icon_color, "#e6a34a");
     const badgeRgb = Array.isArray(c.icon_color) ? c.icon_color : [230, 163, 74];
     const badgeBg = `rgba(${badgeRgb[0]}, ${badgeRgb[1]}, ${badgeRgb[2]}, 0.16)`;
+    const cardBg = colorOr(c.background, "var(--ha-card-background, var(--card-background-color))");
+    const primaryColor = colorOr(c.primary_color, "var(--primary-text-color)");
+    const secondaryColor = colorOr(c.secondary_color, "var(--primary-text-color)");
 
     const rowsHtml = cats
       .map((cat, i) => {
         const info = summaries[i];
         const dotTone = info.dotTone || info.tone;
-        const dotColor = SENSOR_TONE_CSS[dotTone] || SENSOR_TONE_CSS.grey;
-        const textColor = SENSOR_TONE_CSS[info.tone] || SENSOR_TONE_CSS.grey;
+        const dotColor = resolveSensorTone(dotTone, cat);
+        const textColor = resolveSensorTone(info.tone, cat);
         const icon = cat.icon || SENSOR_TYPE_DEFAULT_ICON[cat.type] || "mdi:help-circle-outline";
         const border =
           i < cats.length - 1 ? "border-bottom:1px solid var(--divider-color);" : "";
@@ -3185,7 +3198,7 @@ class SensorCard extends HTMLElement {
           <div style="display:flex;align-items:center;gap:10px;padding:12px 2px;${border}">
             <div style="width:8px;height:8px;border-radius:50%;background:${dotColor};flex:0 0 auto;"></div>
             <ha-icon icon="${icon}" style="--mdc-icon-size:18px;color:var(--secondary-text-color);flex:0 0 auto;"></ha-icon>
-            <div style="flex:1;min-width:0;font-size:14px;font-weight:600;color:var(--primary-text-color);
+            <div style="flex:1;min-width:0;font-size:14px;font-weight:600;color:${secondaryColor};
                         overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(cat.name || "")}</div>
             <div style="flex:0 0 auto;font-family:var(--code-font-family, ui-monospace, monospace);
                         font-size:13px;color:${textColor};white-space:nowrap;">${escapeHtml(info.text)}</div>
@@ -3195,14 +3208,14 @@ class SensorCard extends HTMLElement {
 
     this.innerHTML = `
       <ha-card style="border-radius:20px;box-shadow:none;
-                      background:var(--ha-card-background, var(--card-background-color));
+                      background:${cardBg};
                       padding:16px 18px;">
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px;">
           <div style="width:40px;height:40px;border-radius:12px;background:${badgeBg};
                       display:flex;align-items:center;justify-content:center;flex:0 0 auto;">
             <ha-icon icon="${c.icon || "mdi:shield-home"}" style="--mdc-icon-size:20px;color:${iconColor};"></ha-icon>
           </div>
-          <div style="font-size:17px;font-weight:700;color:var(--primary-text-color);
+          <div style="font-size:17px;font-weight:700;color:${primaryColor};
                       overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(c.name || "")}</div>
         </div>
         <div>${rowsHtml}</div>
@@ -3245,15 +3258,42 @@ class SensorCardEditor extends AlexListEditor {
 
     this.appendChild(this._sectionTitle("En-tête"));
     this.appendChild(
-      this._mixed(
+      this._form(
         [
           { name: "name", selector: { text: {} } },
           { name: "icon", selector: { icon: {} } },
-          { name: "icon_color", selector: { color_rgb: {} } },
         ],
-        { name: cfg.name, icon: cfg.icon, icon_color: cfg.icon_color },
-        { name: "Nom", icon: "Icône", icon_color: "Couleur du badge" },
+        { name: cfg.name, icon: cfg.icon },
+        { name: "Nom", icon: "Icône" },
         (v) => this._update((c) => Object.assign(c, v))
+      )
+    );
+
+    this.appendChild(
+      this._panel(
+        "Customisation",
+        "mdi:palette",
+        this._mixed(
+          [
+            { name: "icon_color", selector: { color_rgb: {} } },
+            { name: "background", selector: { color_rgb: {} } },
+            { name: "primary_color", selector: { color_rgb: {} } },
+            { name: "secondary_color", selector: { color_rgb: {} } },
+          ],
+          {
+            icon_color: cfg.icon_color,
+            background: cfg.background,
+            primary_color: cfg.primary_color,
+            secondary_color: cfg.secondary_color,
+          },
+          {
+            icon_color: "Couleur du badge",
+            background: "Fond de la carte",
+            primary_color: "Couleur du nom de la carte",
+            secondary_color: "Couleur des noms de catégorie",
+          },
+          (v) => this._update((c) => Object.assign(c, v))
+        )
       )
     );
 
@@ -3306,9 +3346,24 @@ class SensorCardEditor extends AlexListEditor {
     );
   }
 
+  // Ligne "+ ajouter une entité" : un mini ha-form a un seul champ
+  // entity-picker, servant de bouton d'ajout (meme principe que les listes
+  // de Light/Weather). `domains` peut etre un tableau (filtre indicatif).
+  _addEntityRow(domains, onPick) {
+    return this._form(
+      [{ name: "entity", selector: { entity: { domain: domains } } }],
+      {},
+      { entity: "Ajouter une entité" },
+      (v) => {
+        if (v && v.entity) onPick(v.entity);
+      }
+    );
+  }
+
   _renderCategory(i) {
     const cat = this._config.categories[i] || {};
     const merge = (v) => this._update((c) => (c.categories[i] = { ...c.categories[i], ...v }));
+    const icon = cat.icon || SENSOR_TYPE_DEFAULT_ICON[cat.type] || "mdi:help-circle-outline";
 
     this.appendChild(
       this._backHeader(cat.name || SENSOR_CATEGORY_TYPES[cat.type] || "Catégorie", () => {
@@ -3333,29 +3388,54 @@ class SensorCardEditor extends AlexListEditor {
       )
     );
 
+    this.appendChild(this._sectionTitle("Entités à surveiller"));
+    const entities = cat.entities || [];
+    entities.forEach((entityId, j) => {
+      const st = this._hass && this._hass.states[entityId];
+      const friendly = st && st.attributes && st.attributes.friendly_name;
+      this.appendChild(
+        this._row(icon, friendly || entityId, friendly ? entityId : "", null, () => {
+          this._update((c) => c.categories[i].entities.splice(j, 1));
+          this._render();
+        })
+      );
+    });
     this.appendChild(
-      this._form(
-        [
-          {
-            name: "entities",
-            selector: {
-              entity: { multiple: true, domain: SENSOR_TYPE_DOMAINS[cat.type] || undefined },
-            },
-          },
-        ],
-        { entities: cat.entities || [] },
-        { entities: "Entités à surveiller" },
-        merge
-      )
+      this._addEntityRow(SENSOR_TYPE_DOMAINS[cat.type], (entityId) => {
+        this._update((c) => {
+          c.categories[i].entities = c.categories[i].entities || [];
+          c.categories[i].entities.push(entityId);
+        });
+        this._render();
+      })
     );
 
-    if (cat.type === "alarm" && (cat.entities || []).length > 1) {
+    if (cat.type === "alarm" && entities.length > 1) {
       const hint = document.createElement("div");
       hint.textContent =
         "⚠ Seule la première entité est prise en compte pour une catégorie Alarme.";
       hint.style.cssText = "font-size:12px;color:var(--warning-color,#f4a000);margin:4px 0;";
       this.appendChild(hint);
     }
+
+    this.appendChild(
+      this._panel(
+        "Customisation",
+        "mdi:palette",
+        this._mixed(
+          [
+            { name: "success_color", selector: { color_rgb: {} } },
+            { name: "failed_color", selector: { color_rgb: {} } },
+          ],
+          { success_color: cat.success_color, failed_color: cat.failed_color },
+          {
+            success_color: "Couleur succès (vert)",
+            failed_color: "Couleur échec (rouge/orange)",
+          },
+          merge
+        )
+      )
+    );
   }
 }
 customElements.define("alex-sensor-card-editor", SensorCardEditor);
