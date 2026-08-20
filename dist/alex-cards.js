@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.11.0";
+const ALEX_CARDS_VERSION = "0.11.1";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -2263,7 +2263,7 @@ function fillTokens(body, tokens) {
 
 class WeatherCard extends AlexWrapperCard {
   static getConfigElement() {
-    return document.createElement("weather-card-editor");
+    return document.createElement("alex-weather-card-editor");
   }
   static getStubConfig() {
     return {
@@ -2576,7 +2576,7 @@ class WeatherCard extends AlexWrapperCard {
     return { type: "custom:vertical-stack-in-card", cards };
   }
 }
-customElements.define("weather-card", WeatherCard);
+customElements.define("alex-weather-card", WeatherCard);
 
 class WeatherCardEditor extends AlexListEditor {
   static getStubConfig() {
@@ -2714,11 +2714,11 @@ class WeatherCardEditor extends AlexListEditor {
     this.appendChild(this._panel("Customisation", "mdi:palette", rows));
   }
 }
-customElements.define("weather-card-editor", WeatherCardEditor);
+customElements.define("alex-weather-card-editor", WeatherCardEditor);
 
 window.customCards.push({
-  type: "weather-card",
-  name: "Weather Card",
+  type: "alex-weather-card",
+  name: "Alex Weather Card",
   description: "Météo actuelle et/ou prévisions (3 styles), à empiler librement.",
   preview: false,
   documentationURL: "https://github.com/<user>/alex-cards",

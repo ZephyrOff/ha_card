@@ -14,7 +14,7 @@ Collection de cartes Lovelace custom pour Home Assistant, distribuée en **plugi
 | `custom:light-card`        | oui        | Liste de lumières, groupes déployables au double-clic.            |
 | `custom:multi-graph-card`  | oui        | Pile de mini-graphes configurables (fond de card du thème).      |
 | `custom:pill-card`         | oui        | Pastille nom + sous-titre avec icône ronde et chevron.           |
-| `custom:weather-card`      | oui        | Météo actuelle et/ou prévisions (3 styles), à empiler librement. |
+| `custom:alex-weather-card`      | oui        | Météo actuelle et/ou prévisions (3 styles), à empiler librement. |
 
 Toutes les cartes apparaissent dans le sélecteur « Ajouter une carte » avec un éditeur
 visuel. La `light-card` a un éditeur type « chips » (liste + crayon pour éditer chaque
@@ -26,7 +26,7 @@ dispo pour éditer le YAML directement.
 `graph-card`, `prise-card`, `shutter-card` et `light-card` génèrent en interne des cartes
 mushroom/card-mod : elles requièrent, installées via HACS, **Mushroom**, **card-mod**,
 **mini-graph-card**, **stack-in-card**, **vertical-stack-in-card** et **mod-card**.
-`weather-card` requiert **button-card** et **vertical-stack-in-card**.
+`alex-weather-card` requiert **button-card** et **vertical-stack-in-card**.
 `room-header-card` n'a aucune dépendance.
 
 ## Installation via HACS (dépôt personnalisé)
@@ -124,7 +124,7 @@ Une carte, plusieurs « composants » empilés verticalement. Chaque composant e
 prévisions) dans la même carte.
 
 ```yaml
-type: custom:weather-card
+type: custom:alex-weather-card
 entity: weather.forecast_maison
 components:
   - type: current          # météo actuelle (fond dégradé dynamique par défaut)
