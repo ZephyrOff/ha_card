@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.24.4";
+const ALEX_CARDS_VERSION = "0.24.5";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -1040,8 +1040,7 @@ class GraphCard extends AlexWrapperCard {
                 "  --ha-card-border-color: transparent !important;\n" +
                 "  --ha-card-box-shadow: none !important;\n" +
                 "  border: none !important;\n  border-width: 0 !important;\n" +
-                "  box-shadow: none !important;\n  outline: none !important;\n" +
-                "  background: none !important;\n}\n" +
+                "  box-shadow: none !important;\n  outline: none !important;\n}\n" +
                 "ha-card::before,\nha-card::after {\n  display: none !important;\n" +
                 "  content: none !important;\n  box-shadow: none !important;\n" +
                 "  border: none !important;\n}\n",
@@ -1155,8 +1154,7 @@ class PriseCard extends AlexWrapperCard {
             "  --ha-card-border-color: transparent !important;\n" +
             "  --ha-card-box-shadow: none !important;\n" +
             "  border: none !important;\n  border-width: 0 !important;\n" +
-            "  box-shadow: none !important;\n  outline: none !important;\n" +
-            "  background: none !important;\n}\n" +
+            "  box-shadow: none !important;\n  outline: none !important;\n}\n" +
             "ha-card::before,\nha-card::after {\n  display: none !important;\n" +
             "  content: none !important;\n  box-shadow: none !important;\n" +
             "  border: none !important;\n}\n",
