@@ -95,6 +95,8 @@ tap_action:
   action: toggle
 ```
 
+Prise Card prend désormais explicitement le fond du thème par défaut (auparavant, `custom:stack-in-card` ne le faisait pas de façon fiable et pouvait rester transparent).
+
 ### Shutter Card
 
 Couleurs en CSS libre (accepte `rgba(...)`, hex, noms). Champs couleur vides = défauts du thème.
