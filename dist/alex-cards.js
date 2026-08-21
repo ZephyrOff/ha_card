@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.24.1";
+const ALEX_CARDS_VERSION = "0.24.2";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -1016,7 +1016,11 @@ class GraphCard extends AlexWrapperCard {
     const line = rgba(c.color, 0.5, GRAPH_DEFAULT_RGB);
     return {
       type: "custom:stack-in-card",
-      card_mod: { style: "ha-card {\n  --ha-card-border-width: 0;\n}\n" },
+      card_mod: {
+        style:
+          "ha-card {\n  --ha-card-border-width: 0;\n" +
+          "  background: var(--ha-card-background, var(--card-background-color));\n}\n",
+      },
       cards: [
         applyActions(
           {
@@ -1027,7 +1031,11 @@ class GraphCard extends AlexWrapperCard {
             name: c.name || "",
             icon: c.icon || "mdi:chart-line",
             icon_color: iconColor,
-            card_mod: { style: "ha-card {\n  z-index: 1;\n  --ha-card-border-width: 0;\n}\n" },
+            card_mod: {
+              style:
+                "ha-card {\n  z-index: 1;\n  --ha-card-border-width: 0;\n" +
+                "  background: var(--ha-card-background, var(--card-background-color));\n}\n",
+            },
           },
           c
         ),
@@ -1043,7 +1051,7 @@ class GraphCard extends AlexWrapperCard {
           card_mod: {
             style:
               "ha-card {\n  position: absolute !important;\n  height: 100%;\n  width: 100%;\n" +
-              "  right: 0px;\n  bottom: 0px;\n  --ha-card-border-width: 0;\n}\n",
+              "  right: 0px;\n  bottom: 0px;\n  --ha-card-border-width: 0;\n  background: transparent;\n}\n",
           },
         },
       ],

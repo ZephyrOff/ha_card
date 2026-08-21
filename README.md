@@ -84,6 +84,8 @@ icon: mdi:thermometer
 color: [217, 148, 20]
 ```
 
+Graph Card et Prise Card prennent désormais explicitement le fond du thème par défaut (auparavant, `custom:stack-in-card` ne le faisait pas de façon fiable et pouvait rester transparent).
+
 ```yaml
 type: custom:alex-prise-card
 entity: switch.prise_cagibi
@@ -94,8 +96,6 @@ color: [8, 207, 104]
 tap_action:
   action: toggle
 ```
-
-Prise Card prend désormais explicitement le fond du thème par défaut (auparavant, `custom:stack-in-card` ne le faisait pas de façon fiable et pouvait rester transparent).
 
 ### Shutter Card
 
