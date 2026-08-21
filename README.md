@@ -97,7 +97,7 @@ tap_action:
   action: toggle
 ```
 
-Le mini-graphe en fond (`fill: fade`) peut, selon `mini-graph-card`, dessiner un léger contour tout autour de sa zone de remplissage (y compris une ligne en bas) — corrigé en désactivant ce contour (`.fill { stroke: none }`), ne garde que la courbe elle-même visible. Même correctif appliqué à Multi Graph Card, qui utilise le même réglage.
+Le mini-graphe en fond (`fill: fade`) peut, selon `mini-graph-card`, dessiner un léger contour tout autour de sa zone de remplissage (y compris une ligne en bas) — corrigé en désactivant ce contour (`.fill { stroke: none }`). Ce correctif seul ne suffit pas toujours : un thème avec effet « verre dépoli » (ou tout thème injectant un `ha-card::before` global, ex. Frosted Glass) peut peindre son propre liseré par-dessus la tuile texte, qui devient visible contre le graphe coloré en dessous. Graph Card et Prise Card neutralisent maintenant explicitement ce pseudo-élément (`ha-card::before/::after { content: none }`) sur leur tuile texte, et le mini-graphe déborde légèrement de sa zone (`height: 130%`, `overflow: visible`) pour que son dégradé de fondu se termine hors champ plutôt que d'être coupé net. Multi Graph Card garde le correctif `.fill { stroke: none }` seul (structure différente, sans tuile superposée).
 
 ### Shutter Card
 

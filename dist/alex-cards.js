@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.24.3";
+const ALEX_CARDS_VERSION = "0.24.4";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -1018,8 +1018,10 @@ class GraphCard extends AlexWrapperCard {
       type: "custom:stack-in-card",
       card_mod: {
         style:
-          "ha-card {\n  --ha-card-border-width: 0;\n" +
-          "  background: var(--ha-card-background, var(--card-background-color));\n}\n",
+          "ha-card {\n  --ha-card-border-width: 0;\n  border: none !important;\n" +
+          "  box-shadow: none !important;\n" +
+          "  background: var(--ha-card-background, var(--card-background-color));\n" +
+          "  overflow: hidden !important;\n}\n",
       },
       cards: [
         applyActions(
@@ -1033,8 +1035,16 @@ class GraphCard extends AlexWrapperCard {
             icon_color: iconColor,
             card_mod: {
               style:
-                "ha-card {\n  z-index: 1;\n  --ha-card-border-width: 0;\n" +
-                "  background: var(--ha-card-background, var(--card-background-color));\n}\n",
+                "ha-card {\n  position: relative !important;\n  z-index: 1 !important;\n" +
+                "  --ha-card-border-width: 0px !important;\n" +
+                "  --ha-card-border-color: transparent !important;\n" +
+                "  --ha-card-box-shadow: none !important;\n" +
+                "  border: none !important;\n  border-width: 0 !important;\n" +
+                "  box-shadow: none !important;\n  outline: none !important;\n" +
+                "  background: none !important;\n}\n" +
+                "ha-card::before,\nha-card::after {\n  display: none !important;\n" +
+                "  content: none !important;\n  box-shadow: none !important;\n" +
+                "  border: none !important;\n}\n",
             },
           },
           c
@@ -1050,8 +1060,12 @@ class GraphCard extends AlexWrapperCard {
           show: { name: false, icon: false, state: false, legend: false, fill: "fade" },
           card_mod: {
             style:
-              "ha-card {\n  position: absolute !important;\n  height: 100%;\n  width: 100%;\n" +
-              "  right: 0px;\n  bottom: 0px;\n  --ha-card-border-width: 0;\n  background: transparent;\n}\n" +
+              "ha-card {\n  position: absolute !important;\n  height: 130% !important;\n" +
+              "  width: 100%;\n  right: 0px;\n  bottom: 0px;\n" +
+              "  --ha-card-border-width: 0 !important;\n  border: none !important;\n" +
+              "  border-width: 0 !important;\n  box-shadow: none !important;\n" +
+              "  outline: none !important;\n  background: transparent !important;\n" +
+              "  overflow: visible !important;\n}\n" +
               ".fill {\n  stroke: none !important;\n}\n",
           },
         },
@@ -1136,8 +1150,16 @@ class PriseCard extends AlexWrapperCard {
         ...(c.double_tap_action ? { double_tap_action: c.double_tap_action } : {}),
         card_mod: {
           style:
-            "ha-card {\n  z-index: 1;\n  --ha-card-border-width: 0;\n" +
-            "  background: var(--ha-card-background, var(--card-background-color));\n}\n",
+            "ha-card {\n  position: relative !important;\n  z-index: 1 !important;\n" +
+            "  --ha-card-border-width: 0px !important;\n" +
+            "  --ha-card-border-color: transparent !important;\n" +
+            "  --ha-card-box-shadow: none !important;\n" +
+            "  border: none !important;\n  border-width: 0 !important;\n" +
+            "  box-shadow: none !important;\n  outline: none !important;\n" +
+            "  background: none !important;\n}\n" +
+            "ha-card::before,\nha-card::after {\n  display: none !important;\n" +
+            "  content: none !important;\n  box-shadow: none !important;\n" +
+            "  border: none !important;\n}\n",
         },
       },
     ];
@@ -1157,8 +1179,12 @@ class PriseCard extends AlexWrapperCard {
             "ha-card {\n" +
             `  {% if is_state('${sw}', 'off') %}\n    visibility: hidden;\n` +
             "  {% else %}\n    visibility: visible;\n  {% endif %}\n" +
-            "  position: absolute !important;\n  height: 100%;\n  width: 100%;\n" +
-            "  right: 0px;\n  bottom: 0px;\n  --ha-card-border-width: 0;\n  background: transparent;\n}\n" +
+            "  position: absolute !important;\n  height: 130% !important;\n  width: 100%;\n" +
+            "  right: 0px;\n  bottom: 0px;\n" +
+            "  --ha-card-border-width: 0 !important;\n  border: none !important;\n" +
+            "  border-width: 0 !important;\n  box-shadow: none !important;\n" +
+            "  outline: none !important;\n  background: transparent !important;\n" +
+            "  overflow: visible !important;\n}\n" +
             ".fill {\n  stroke: none !important;\n}\n",
         },
       });
@@ -1168,8 +1194,10 @@ class PriseCard extends AlexWrapperCard {
       type: "custom:stack-in-card",
       card_mod: {
         style:
-          "ha-card {\n  --ha-card-border-width: 0;\n" +
-          "  background: var(--ha-card-background, var(--card-background-color));\n}\n",
+          "ha-card {\n  --ha-card-border-width: 0;\n  border: none !important;\n" +
+          "  box-shadow: none !important;\n" +
+          "  background: var(--ha-card-background, var(--card-background-color));\n" +
+          "  overflow: hidden !important;\n}\n",
       },
       cards,
     };
