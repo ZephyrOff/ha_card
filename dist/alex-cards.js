@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.25.0";
+const ALEX_CARDS_VERSION = "0.25.1";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -4120,6 +4120,7 @@ class ToggleCard extends HTMLElement {
       JSON.stringify(c.secondary_color || null),
       JSON.stringify(c.on_color || null),
       JSON.stringify(c.off_color || null),
+      c.inactive_opacity,
       rows
         .map(
           (r) =>
@@ -4141,6 +4142,7 @@ class ToggleCard extends HTMLElement {
     const offColor = colorOr(c.off_color, "rgba(var(--rgb-primary-text-color,0,0,0),0.18)");
     const rowIcon = c.entity_icon || c.icon || "mdi:toggle-switch-outline";
     const rowSpacing = c.row_spacing != null ? c.row_spacing : 12;
+    const inactiveOpacity = (c.inactive_opacity != null ? c.inactive_opacity : 50) / 100;
 
     const rowsHtml = rows
       .map((r, i) => {
@@ -4150,14 +4152,16 @@ class ToggleCard extends HTMLElement {
         const thumbLeft = r.on ? "23px" : "3px";
         const entIcon = r.icon || rowIcon;
         const entIconColor = colorOr(r.color, iconColor);
+        const dim = r.on ? 1 : inactiveOpacity;
         return `
           <div style="display:flex;align-items:center;gap:12px;padding:${rowSpacing}px 2px;${border}">
             <div style="width:32px;height:32px;border-radius:9px;
                         background:rgba(var(--rgb-primary-text-color,0,0,0),0.06);
-                        display:flex;align-items:center;justify-content:center;flex:0 0 auto;">
+                        display:flex;align-items:center;justify-content:center;flex:0 0 auto;
+                        opacity:${dim};transition:opacity .15s;">
               <ha-icon icon="${entIcon}" style="--mdc-icon-size:16px;color:${entIconColor};"></ha-icon>
             </div>
-            <div style="flex:1;min-width:0;">
+            <div style="flex:1;min-width:0;opacity:${dim};transition:opacity .15s;">
               <div style="font-size:14px;font-weight:600;color:${secondaryColor};
                           overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(r.name)}</div>
               ${
@@ -4307,6 +4311,10 @@ class ToggleCardEditor extends AlexListEditor {
         this._mixed(
           [
             { name: "row_spacing", selector: { number: { min: 0, max: 40, step: 1, mode: "box" } } },
+            {
+              name: "inactive_opacity",
+              selector: { number: { min: 0, max: 100, step: 5, mode: "box" } },
+            },
             { name: "entity_icon", selector: { icon: {} } },
             { name: "icon_color", selector: { color_rgb: {} } },
             { name: "background", selector: { color_rgb: {} } },
@@ -4317,6 +4325,7 @@ class ToggleCardEditor extends AlexListEditor {
           ],
           {
             row_spacing: cfg.row_spacing != null ? cfg.row_spacing : 12,
+            inactive_opacity: cfg.inactive_opacity != null ? cfg.inactive_opacity : 50,
             entity_icon: cfg.entity_icon,
             icon_color: cfg.icon_color,
             background: cfg.background,
@@ -4327,6 +4336,7 @@ class ToggleCardEditor extends AlexListEditor {
           },
           {
             row_spacing: "Écartement entre les entités (px)",
+            inactive_opacity: "Opacité texte/icône si inactif (%)",
             entity_icon: "Icône des lignes (vide = icône du badge)",
             icon_color: "Couleur du badge",
             background: "Fond de la carte",

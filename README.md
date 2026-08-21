@@ -355,8 +355,10 @@ on_color: [244, 169, 53]          # optionnel, couleur de l'interrupteur actif
   reste valide, sans personnalisation par entité.
 - Personnalisation (panneau Customisation racine) : badge, icône des lignes (vide =
   icône du badge), fond de carte, couleur du nom, couleur des noms d'entité, écartement
-  entre les entités (px), **couleur interrupteur actif** et **couleur interrupteur
-  inactif** (remplacent respectivement l'orange et le gris par défaut).
+  entre les entités (px), **opacité du texte/icône quand l'entité est inactive** (%,
+  défaut 50 — s'applique à l'icône et au nom, pas à l'interrupteur ni au temps écoulé),
+  **couleur interrupteur actif** et **couleur interrupteur inactif** (remplacent
+  respectivement l'orange et le gris par défaut).
 
 ### Clock Card
 
