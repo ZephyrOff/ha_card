@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.24.5";
+const ALEX_CARDS_VERSION = "0.25.0";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -508,17 +508,91 @@ function bindActions(node, getHass, getConfig, entityId) {
 class AlexWrapperCard extends HTMLElement {
   setConfig(config) {
     this._config = config;
+    this._syncTemplateSubs();
     if (this._hass) this._build();
   }
 
   set hass(hass) {
     this._hass = hass;
+    this._syncTemplateSubs();
     if (this._card) this._card.hass = hass;
     else this._build();
   }
 
   getCardSize() {
     return this._card && this._card.getCardSize ? this._card.getCardSize() : 3;
+  }
+
+  // Sous-classes : liste des cles de config pouvant contenir un template
+  // Jinja (ex. ["name", "secondary"]). Vide par defaut (pas de changement
+  // de comportement pour les cartes qui ne s'en servent pas).
+  _templatableFields() {
+    return [];
+  }
+
+  _isJinjaTemplate(v) {
+    return typeof v === "string" && (v.includes("{{") || v.includes("{%"));
+  }
+
+  // Valeur a utiliser pour ce champ : le rendu Jinja live si un abonnement
+  // est actif pour ce champ, sinon la valeur brute de la config.
+  _templated(field) {
+    if (this._templateResults && Object.prototype.hasOwnProperty.call(this._templateResults, field)) {
+      return this._templateResults[field];
+    }
+    return this._config ? this._config[field] : undefined;
+  }
+
+  // (Re)synchronise les abonnements de rendu de template avec la config et
+  // le hass courants : cree les abonnements manquants, desabonne ceux dont
+  // le texte du template a change ou qui ne sont plus templates.
+  _syncTemplateSubs() {
+    if (!this._hass || !this._hass.connection || !this._config) return;
+    this._templateSubs = this._templateSubs || {};
+    this._templateResults = this._templateResults || {};
+    this._templatableFields().forEach((field) => {
+      const raw = this._config[field];
+      const existing = this._templateSubs[field];
+      if (existing && existing.raw === raw) return; // deja a jour
+      if (existing) {
+        existing.unsub && existing.unsub();
+        delete this._templateSubs[field];
+        delete this._templateResults[field];
+      }
+      if (!this._isJinjaTemplate(raw)) return;
+      const sub = { raw, unsub: null };
+      this._templateSubs[field] = sub;
+      this._hass.connection
+        .subscribeMessage(
+          (msg) => {
+            this._templateResults[field] = msg.result;
+            // Pousse la nouvelle valeur a la carte deja construite plutot
+            // que d'attendre un rebuild complet (evite un flash visuel).
+            if (this._card && this._card.setConfig) {
+              try {
+                this._card.setConfig(this._innerConfig(this._config));
+              } catch (e) {
+                /* config momentanement invalide, ignore */
+              }
+            } else {
+              this._build();
+            }
+          },
+          { type: "render_template", template: raw }
+        )
+        .then((unsub) => {
+          if (this._templateSubs[field] === sub) sub.unsub = unsub;
+          else unsub(); // config a change entre-temps, abonnement deja perime
+        })
+        .catch(() => {
+          delete this._templateSubs[field];
+        });
+    });
+  }
+
+  disconnectedCallback() {
+    Object.values(this._templateSubs || {}).forEach((s) => s.unsub && s.unsub());
+    this._templateSubs = {};
   }
 
   async _build() {
@@ -2280,6 +2354,10 @@ class PillCard extends AlexWrapperCard {
     return { name: "Titre", secondary: "Sous-titre", icon: "mdi:home" };
   }
 
+  _templatableFields() {
+    return ["name", "secondary"];
+  }
+
   _innerConfig(c) {
     const bg = colorOr(
       c.background,
@@ -2291,12 +2369,14 @@ class PillCard extends AlexWrapperCard {
       : "rgba(var(--rgb-primary-text-color, 0, 0, 0), 0.08)";
     const nameColor = colorOr(c.name_color, "var(--primary-text-color)");
     const secColor = colorOr(c.secondary_color, "var(--secondary-text-color)");
+    const name = this._templated("name");
+    const secondary = this._templated("secondary");
 
     const cfg = {
       type: "custom:button-card",
       icon: c.icon || "mdi:home",
-      name: c.name || "",
-      label: c.secondary || "",
+      name: name || "",
+      label: secondary || "",
       show_name: true,
       show_label: true,
       show_icon: true,

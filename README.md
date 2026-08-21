@@ -52,6 +52,26 @@ mushroom/card-mod : elles requièrent, installées via HACS, **Mushroom**, **car
 
 ## Utilisation
 
+**Templates Jinja** : le champ **Nom** et **Sous-titre** de la Pill Card acceptent un
+template Jinja (`{{ }}`/`{% %}`) au lieu d'un texte fixe — la carte s'abonne au rendu
+en direct de HA (même mécanisme que les capteurs template) et se met à jour toute seule
+à chaque changement d'état pertinent :
+
+```yaml
+type: custom:alex-pill-card
+name: Volets
+secondary: >-
+  {% set members = state_attr('cover.volet_maison', 'entity_id') or [] %}
+  {{ members | select('is_state', 'open') | list | count }}/{{ members | count }} ouverts
+icon: mdi:window-shutter-open
+```
+
+Ce mécanisme est propre au package (les champs `custom:button-card` sous-jacents ne
+supportent nativement que leurs propres templates JS `[[[ ]]]`, pas le Jinja) — la carte
+détecte automatiquement si le texte contient `{{`/`{%`, sinon il est utilisé tel quel.
+Pour l'instant activé uniquement sur Pill Card ; à étendre à d'autres champs/cartes sur
+demande.
+
 Dans les éditeurs à liste (Light, Multi Graph, Weather, Sensor, Entity, Toggle, Server —
 et la sous-liste des membres d'un groupe sur Light), chaque ligne a des flèches **▲ / ▼**
 pour la remonter ou la descendre dans l'ordre d'affichage, en plus du crayon et de la
