@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.25.1";
+const ALEX_CARDS_VERSION = "0.25.2";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -3381,7 +3381,12 @@ class SensorCard extends HTMLElement {
       JSON.stringify(c.secondary_color || null),
       c.row_spacing,
       cats
-        .map((cat) => `${cat.name}|${cat.icon}|${cat.type}|${cat.success_color}|${cat.failed_color}`)
+        .map(
+          (cat) =>
+            `${cat.name}|${cat.icon}|${cat.type}|${cat.success_color}|${cat.failed_color}|` +
+            `${JSON.stringify(cat.tap_action || null)}|${JSON.stringify(cat.hold_action || null)}|` +
+            `${JSON.stringify(cat.double_tap_action || null)}`
+        )
         .join(";"),
       summaries.map((s) => `${s.text}|${s.tone}|${s.dotTone || ""}`).join(";"),
     ].join("~");
@@ -3405,8 +3410,10 @@ class SensorCard extends HTMLElement {
         const icon = cat.icon || SENSOR_TYPE_DEFAULT_ICON[cat.type] || "mdi:help-circle-outline";
         const border =
           i < cats.length - 1 ? "border-bottom:1px solid var(--divider-color);" : "";
+        const hasAction = cat.tap_action || cat.hold_action || cat.double_tap_action;
         return `
-          <div style="display:flex;align-items:center;gap:10px;padding:${rowSpacing}px 2px;${border}">
+          <div class="ac-sensor-row" data-cat-index="${i}" style="display:flex;align-items:center;gap:10px;
+                      padding:${rowSpacing}px 2px;${border}${hasAction ? "cursor:pointer;" : ""}">
             <div style="width:8px;height:8px;border-radius:50%;background:${dotColor};flex:0 0 auto;"></div>
             <ha-icon icon="${icon}" style="--mdc-icon-size:18px;color:var(--secondary-text-color);flex:0 0 auto;"></ha-icon>
             <div style="flex:1;min-width:0;font-size:14px;font-weight:600;color:${secondaryColor};
@@ -3431,6 +3438,19 @@ class SensorCard extends HTMLElement {
         </div>
         <div>${rowsHtml}</div>
       </ha-card>`;
+
+    this.querySelectorAll(".ac-sensor-row").forEach((el) => {
+      const i = parseInt(el.getAttribute("data-cat-index"), 10);
+      const cat = cats[i];
+      if (!cat) return;
+      bindActions(
+        el,
+        () => this._hass,
+        () => cat,
+        () => (cat.entities && cat.entities[0]) || undefined
+      );
+    });
+
     this._built = true;
   }
 }
@@ -3636,6 +3656,19 @@ class SensorCardEditor extends AlexListEditor {
       hint.style.cssText = "font-size:12px;color:var(--warning-color,#f4a000);margin:4px 0;";
       this.appendChild(hint);
     }
+
+    this.appendChild(
+      this._form(
+        [INTERACTIONS_FIELD],
+        {
+          tap_action: cat.tap_action,
+          hold_action: cat.hold_action,
+          double_tap_action: cat.double_tap_action,
+        },
+        ACTION_LABELS,
+        merge
+      )
+    );
 
     this.appendChild(
       this._panel(

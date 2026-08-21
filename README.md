@@ -273,8 +273,11 @@ Types de catégorie et agrégation :
 
 Chaque catégorie a sa propre icône (optionnelle, sinon une icône par défaut selon le
 type). L'éditeur affiche les entités d'une catégorie sous forme de liste (comme les
-Catégories elles-mêmes), avec une ligne « Ajouter une entité ». Il n'y a pas encore
-d'action au clic sur une ligne (more-info, etc.) — à ajouter si besoin.
+Catégories elles-mêmes), avec une ligne « Ajouter une entité ». Chaque catégorie a aussi
+son propre panneau **Interactions** (clic/appui long/double-clic — mêmes actions que les
+autres cartes du package : more-info, toggle, navigate, url, appel de service). Sans
+action configurée, la ligne reste en lecture seule (pas de curseur pointeur). L'entité
+par défaut pour un `more-info` sans cible explicite est la première de la catégorie.
 
 **Personnalisation (color-pickers avec opacité, comme le reste du package) :**
 
