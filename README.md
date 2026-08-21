@@ -97,6 +97,8 @@ tap_action:
   action: toggle
 ```
 
+Le mini-graphe en fond (`fill: fade`) peut, selon `mini-graph-card`, dessiner un léger contour tout autour de sa zone de remplissage (y compris une ligne en bas) — corrigé en désactivant ce contour (`.fill { stroke: none }`), ne garde que la courbe elle-même visible. Même correctif appliqué à Multi Graph Card, qui utilise le même réglage.
+
 ### Shutter Card
 
 Couleurs en CSS libre (accepte `rgba(...)`, hex, noms). Champs couleur vides = défauts du thème.

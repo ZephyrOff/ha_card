@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.24.2";
+const ALEX_CARDS_VERSION = "0.24.3";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -1051,7 +1051,8 @@ class GraphCard extends AlexWrapperCard {
           card_mod: {
             style:
               "ha-card {\n  position: absolute !important;\n  height: 100%;\n  width: 100%;\n" +
-              "  right: 0px;\n  bottom: 0px;\n  --ha-card-border-width: 0;\n  background: transparent;\n}\n",
+              "  right: 0px;\n  bottom: 0px;\n  --ha-card-border-width: 0;\n  background: transparent;\n}\n" +
+              ".fill {\n  stroke: none !important;\n}\n",
           },
         },
       ],
@@ -1157,7 +1158,8 @@ class PriseCard extends AlexWrapperCard {
             `  {% if is_state('${sw}', 'off') %}\n    visibility: hidden;\n` +
             "  {% else %}\n    visibility: visible;\n  {% endif %}\n" +
             "  position: absolute !important;\n  height: 100%;\n  width: 100%;\n" +
-            "  right: 0px;\n  bottom: 0px;\n  --ha-card-border-width: 0;\n  background: transparent;\n}\n",
+            "  right: 0px;\n  bottom: 0px;\n  --ha-card-border-width: 0;\n  background: transparent;\n}\n" +
+            ".fill {\n  stroke: none !important;\n}\n",
         },
       });
     }
@@ -2094,7 +2096,9 @@ class MultiGraphCard extends AlexWrapperCard {
       smoothing: true,
       animate: true,
       show: { state: true, extrema: true, fill: "fade", labels: true, icon: !!g.icon },
-      card_mod: { style: "ha-card { border-radius: 24px; }\n" },
+      card_mod: {
+        style: "ha-card { border-radius: 24px; }\n.fill {\n  stroke: none !important;\n}\n",
+      },
     };
     if (color) card.line_color = color;
     if (g.icon) card.icon = g.icon;
