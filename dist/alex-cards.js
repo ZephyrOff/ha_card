@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.23.2";
+const ALEX_CARDS_VERSION = "0.24.0";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -772,6 +772,23 @@ class AlexListEditor extends HTMLElement {
     this._emit();
   }
 
+  // Echange l'element a `index` avec son voisin (index+delta) dans le
+  // tableau renvoye par getList(config). Utilise par les fleches monter/
+  // descendre des listes ; ne fait rien si l'index cible sort du tableau
+  // (bornes gerees en amont via onMoveUp/onMoveDown = null aux extremites).
+  _moveItem(getList, index, delta) {
+    this._update((c) => {
+      const arr = getList(c);
+      if (!Array.isArray(arr)) return;
+      const j = index + delta;
+      if (j < 0 || j >= arr.length) return;
+      const tmp = arr[index];
+      arr[index] = arr[j];
+      arr[j] = tmp;
+    });
+    this._render();
+  }
+
   _iconButton(icon, title, onClick) {
     const btn = document.createElement("ha-icon-button");
     btn.title = title;
@@ -921,7 +938,7 @@ class AlexListEditor extends HTMLElement {
     return frag;
   }
 
-  _row(icon, text, subtitle, onEdit, onDelete) {
+  _row(icon, text, subtitle, onEdit, onDelete, onMoveUp, onMoveDown) {
     const row = document.createElement("div");
     row.style.cssText =
       "display:flex;align-items:center;gap:12px;padding:6px 6px 6px 12px;" +
@@ -939,6 +956,8 @@ class AlexListEditor extends HTMLElement {
           `text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(subtitle)}</div>`
         : "");
     row.append(ic, lab);
+    if (onMoveUp) row.appendChild(this._iconButton("mdi:arrow-up", "Monter", onMoveUp));
+    if (onMoveDown) row.appendChild(this._iconButton("mdi:arrow-down", "Descendre", onMoveDown));
     if (onEdit) row.appendChild(this._iconButton("mdi:pencil", "Éditer", onEdit));
     row.appendChild(this._iconButton("mdi:delete", "Supprimer", onDelete));
     return row;
@@ -1550,6 +1569,23 @@ class LightCardEditor extends HTMLElement {
     this._emit();
   }
 
+  // Echange l'element a `index` avec son voisin (index+delta) dans le
+  // tableau renvoye par getList(config). Utilise par les fleches monter/
+  // descendre des listes ; ne fait rien si l'index cible sort du tableau
+  // (bornes gerees en amont via onMoveUp/onMoveDown = null aux extremites).
+  _moveItem(getList, index, delta) {
+    this._update((c) => {
+      const arr = getList(c);
+      if (!Array.isArray(arr)) return;
+      const j = index + delta;
+      if (j < 0 || j >= arr.length) return;
+      const tmp = arr[index];
+      arr[index] = arr[j];
+      arr[j] = tmp;
+    });
+    this._render();
+  }
+
   /* ---- petits composants DOM ---- */
 
   _iconButton(icon, title, onClick) {
@@ -1650,7 +1686,7 @@ class LightCardEditor extends HTMLElement {
     return wrap;
   }
 
-  _row(icon, text, subtitle, onEdit, onDelete) {
+  _row(icon, text, subtitle, onEdit, onDelete, onMoveUp, onMoveDown) {
     const row = document.createElement("div");
     row.style.cssText =
       "display:flex;align-items:center;gap:12px;padding:6px 6px 6px 12px;" +
@@ -1668,6 +1704,8 @@ class LightCardEditor extends HTMLElement {
           `text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(subtitle)}</div>`
         : "");
     row.append(ic, lab);
+    if (onMoveUp) row.appendChild(this._iconButton("mdi:arrow-up", "Monter", onMoveUp));
+    if (onMoveDown) row.appendChild(this._iconButton("mdi:arrow-down", "Descendre", onMoveDown));
     if (onEdit) row.appendChild(this._iconButton("mdi:pencil", "Éditer", onEdit));
     row.appendChild(this._iconButton("mdi:delete", "Supprimer", onDelete));
     return row;
@@ -1759,7 +1797,11 @@ class LightCardEditor extends HTMLElement {
           () => {
             this._update((c) => c.lights.splice(i, 1));
             this._render();
-          }
+          },
+          i > 0 ? () => this._moveItem((c) => c.lights, i, -1) : null,
+          i < (cfg.lights || []).length - 1
+            ? () => this._moveItem((c) => c.lights, i, 1)
+            : null
         )
       );
     });
@@ -1933,7 +1975,11 @@ class LightCardEditor extends HTMLElement {
           () => {
             this._update((c) => c.lights[i].members.splice(j, 1));
             this._render();
-          }
+          },
+          j > 0 ? () => this._moveItem((c) => c.lights[i].members, j, -1) : null,
+          j < members.length - 1
+            ? () => this._moveItem((c) => c.lights[i].members, j, 1)
+            : null
         )
       );
     });
@@ -2100,7 +2146,8 @@ class MultiGraphCardEditor extends AlexListEditor {
 
   _renderRoot() {
     this.appendChild(this._sectionTitle("Graphes"));
-    (this._config.graphs || []).forEach((g, i) => {
+    const graphs = this._config.graphs || [];
+    graphs.forEach((g, i) => {
       const n = (g.entities || []).length;
       this.appendChild(
         this._row(
@@ -2114,7 +2161,9 @@ class MultiGraphCardEditor extends AlexListEditor {
           () => {
             this._update((c) => c.graphs.splice(i, 1));
             this._render();
-          }
+          },
+          i > 0 ? () => this._moveItem((c) => c.graphs, i, -1) : null,
+          i < graphs.length - 1 ? () => this._moveItem((c) => c.graphs, i, 1) : null
         )
       );
     });
@@ -2892,7 +2941,8 @@ class WeatherCardEditor extends AlexListEditor {
     );
 
     this.appendChild(this._sectionTitle("Composants"));
-    (cfg.components || []).forEach((comp, i) => {
+    const components = cfg.components || [];
+    components.forEach((comp, i) => {
       const label = WEATHER_COMPONENT_LABELS[comp.type] || comp.type;
       const sub =
         comp.type === "current" ? undefined : `${comp.days != null ? comp.days : 5} jour(s)`;
@@ -2908,7 +2958,11 @@ class WeatherCardEditor extends AlexListEditor {
           () => {
             this._update((c) => c.components.splice(i, 1));
             this._render();
-          }
+          },
+          i > 0 ? () => this._moveItem((c) => c.components, i, -1) : null,
+          i < components.length - 1
+            ? () => this._moveItem((c) => c.components, i, 1)
+            : null
         )
       );
     });
@@ -3301,7 +3355,8 @@ class SensorCardEditor extends AlexListEditor {
     );
 
     this.appendChild(this._sectionTitle("Catégories"));
-    (cfg.categories || []).forEach((cat, i) => {
+    const categories = cfg.categories || [];
+    categories.forEach((cat, i) => {
       this.appendChild(
         this._row(
           cat.icon || SENSOR_TYPE_DEFAULT_ICON[cat.type] || "mdi:help-circle-outline",
@@ -3314,7 +3369,11 @@ class SensorCardEditor extends AlexListEditor {
           () => {
             this._update((c) => c.categories.splice(i, 1));
             this._render();
-          }
+          },
+          i > 0 ? () => this._moveItem((c) => c.categories, i, -1) : null,
+          i < categories.length - 1
+            ? () => this._moveItem((c) => c.categories, i, 1)
+            : null
         )
       );
     });
@@ -3770,7 +3829,9 @@ class EntityCardEditor extends AlexListEditor {
           () => {
             this._update((c) => c.entities.splice(j, 1));
             this._render();
-          }
+          },
+          j > 0 ? () => this._moveItem((c) => c.entities, j, -1) : null,
+          j < entities.length - 1 ? () => this._moveItem((c) => c.entities, j, 1) : null
         )
       );
     });
@@ -4094,7 +4155,9 @@ class ToggleCardEditor extends AlexListEditor {
           () => {
             this._update((c) => c.entities.splice(j, 1));
             this._render();
-          }
+          },
+          j > 0 ? () => this._moveItem((c) => c.entities, j, -1) : null,
+          j < entities.length - 1 ? () => this._moveItem((c) => c.entities, j, 1) : null
         )
       );
     });
@@ -4960,7 +5023,9 @@ class ServerCardEditor extends AlexListEditor {
           () => {
             this._update((c) => c.servers.splice(j, 1));
             this._render();
-          }
+          },
+          j > 0 ? () => this._moveItem((c) => c.servers, j, -1) : null,
+          j < servers.length - 1 ? () => this._moveItem((c) => c.servers, j, 1) : null
         )
       );
     });

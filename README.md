@@ -52,6 +52,12 @@ mushroom/card-mod : elles requièrent, installées via HACS, **Mushroom**, **car
 
 ## Utilisation
 
+Dans les éditeurs à liste (Light, Multi Graph, Weather, Sensor, Entity, Toggle, Server —
+et la sous-liste des membres d'un groupe sur Light), chaque ligne a des flèches **▲ / ▼**
+pour la remonter ou la descendre dans l'ordre d'affichage, en plus du crayon et de la
+poubelle. Les flèches n'apparaissent que quand elles ont un effet (pas de « monter » sur
+le premier élément, pas de « descendre » sur le dernier).
+
 Dans une vue, « Ajouter une carte » → **Room Header Card**, puis remplir les champs
 (l'éditeur fait le reste). Équivalent YAML :
 
