@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.25.2";
+const ALEX_CARDS_VERSION = "0.25.3";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -3657,18 +3657,19 @@ class SensorCardEditor extends AlexListEditor {
       this.appendChild(hint);
     }
 
-    this.appendChild(
-      this._form(
-        [INTERACTIONS_FIELD],
-        {
-          tap_action: cat.tap_action,
-          hold_action: cat.hold_action,
-          double_tap_action: cat.double_tap_action,
-        },
-        ACTION_LABELS,
-        merge
-      )
+    const interactionsForm = this._form(
+      [INTERACTIONS_FIELD],
+      {
+        tap_action: cat.tap_action,
+        hold_action: cat.hold_action,
+        double_tap_action: cat.double_tap_action,
+      },
+      ACTION_LABELS,
+      merge
     );
+    interactionsForm.style.display = "block";
+    interactionsForm.style.marginTop = "12px";
+    this.appendChild(interactionsForm);
 
     this.appendChild(
       this._panel(
