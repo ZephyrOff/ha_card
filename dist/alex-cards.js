@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.27.0";
+const ALEX_CARDS_VERSION = "0.27.1";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -5394,7 +5394,6 @@ class AlexPopupCard extends HTMLElement {
   setConfig(config) {
     if (!config) throw new Error("Configuration invalide");
     this._config = config;
-    this._normalizeCards();
     if (this._editMode) this._renderPreview();
   }
 
@@ -5464,10 +5463,13 @@ class AlexPopupCard extends HTMLElement {
     return false;
   }
 
-  // Normalise chaque entree de `cards` vers la forme {column, card}.
-  _normalizeCards() {
-    if (!this._config) return;
-    this._config.cards = (this._config.cards || []).map((entry) =>
+  // Normalise chaque entree de `cards` vers la forme {column, card}, en
+  // renvoyant un NOUVEAU tableau — ne modifie jamais this._config.cards
+  // directement (HA peut passer un objet de config gele/immuable, une
+  // ecriture directe dessus leve "Cannot assign to read only property").
+  _normalizedCardEntries() {
+    if (!this._config) return [];
+    return (this._config.cards || []).map((entry) =>
       entry && entry.card ? entry : { column: undefined, card: entry }
     );
   }
@@ -5608,7 +5610,7 @@ class AlexPopupCard extends HTMLElement {
 
     const helpers = await window.loadCardHelpers();
     const cardEls = [];
-    (c.cards || []).forEach((entry, i) => {
+    this._normalizedCardEntries().forEach((entry, i) => {
       const cardCfg = entry && entry.card ? entry.card : entry;
       if (!cardCfg || !cardCfg.type) return;
       const colIdx =
