@@ -7,7 +7,7 @@
  */
 
 
-const ALEX_CARDS_VERSION = "0.28.0";
+const ALEX_CARDS_VERSION = "0.28.1";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
