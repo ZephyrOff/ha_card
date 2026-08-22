@@ -21,6 +21,7 @@ Collection de cartes Lovelace custom pour Home Assistant, distribuée en **plugi
 | `custom:alex-clock-card`        | oui        | Horloge et date, alignables, avec la personnalisation du package. |
 | `custom:alex-media-player-card` | oui        | Contrôle média (pochette, lecture, volume) avec bascule entre lecteurs actifs. |
 | `custom:alex-server-card`       | oui        | Liste de serveurs/VM avec statut en ligne et bouton power. |
+| `custom:alex-popup`             | oui        | Système de popup personnalisable (forme, déclencheurs, colonnes). |
 
 Toutes les cartes apparaissent dans le sélecteur « Ajouter une carte » avec un éditeur
 visuel. La `alex-light-card` a un éditeur type « chips » (liste + crayon pour éditer chaque
@@ -480,6 +481,84 @@ servers:
   ligne » et couleur « hors ligne » (appliquées au point de statut, au texte de statut,
   et à l'icône du bouton power) — une simplification par rapport aux 4 teintes distinctes
   du gabarit d'origine, pour rester sur le même nombre de champs que les autres cartes.
+
+### Alex Popup
+
+Système de popup maison, pensé pour remplacer `custom:bubble-card` (`card_type: pop-up`)
+sur les points où on s'est heurté à ses limites : largeur fixe non documentée, exclusion
+de thème pour tout ce qui est `type-custom-bubble-card`, hauteur de ligne rigide côté
+vue « sections ». Rendu en overlay (« portail » attaché à `document.body`), indépendant
+de l'endroit où la carte est posée dans le dashboard.
+
+```yaml
+type: custom:alex-popup
+hash: security
+title: Sécurité
+show_title: true
+show_close: true
+shape: center              # center / top / bottom / left / right
+columns: 2
+open_on_entity: alarm_control_panel.maison
+open_on_states: triggered
+close_on:
+  - close_button
+  - outside_click
+close_on_entity: ''        # vide = reprend open_on_entity
+close_on_states: ''
+on_open_action:
+  action: none
+on_close_action:
+  action: none
+background: [37, 42, 54, 1]
+column_gap: 12
+card_gap: 10
+cards:
+  - column: 1
+    card:
+      type: custom:mushroom-alarm-control-panel-card
+      entity: alarm_control_panel.maison
+  - column: 2
+    card:
+      type: custom:mushroom-entity-card
+      entity: camera.portier
+```
+
+**Ouverture** — deux mécanismes indépendants, combinables :
+- **Par hash** : n'importe quel `tap_action: navigate, navigation_path: '#security'` sur
+  n'importe quelle autre carte ouvre ce popup — même principe que bubble-card, aucune
+  carte « déclencheur » séparée n'est nécessaire.
+- **Par état d'entité** (`open_on_entity`/`open_on_states`, états séparés par des
+  virgules) : le popup s'ouvre automatiquement dès que l'entité **transitionne** vers un
+  état listé — pas en continu, pour qu'une fermeture manuelle ne soit pas immédiatement
+  annulée tant que l'entité reste dans cet état.
+- **Ciblage d'un appareil précis** (ex. une tablette murale) : pas de champ dédié — pose
+  la carte uniquement sur la vue/le dashboard chargé par cet appareil. Pas de dépendance
+  à `browser_mod`.
+
+**Fermeture** — `close_on` est un tableau combinable (`close_button`, `outside_click`,
+`entity_state`). La touche **Échap** ferme toujours le popup, indépendamment de ce
+tableau (comportement standard d'une fenêtre modale, non désactivable).
+
+**Contenu et colonnes** — `columns: N` définit le nombre de colonnes ; chaque entrée de
+`cards:` peut préciser `column: X` (1-indexé) pour choisir la sienne, les entrées sans
+`column` se répartissent automatiquement en tournant sur les colonnes disponibles.
+**Chaque colonne s'ajuste à la hauteur de son propre contenu** (pas de hauteur de ligne
+imposée façon vue « sections ») — le contenu global défile (`overflow:auto`) si tout ne
+tient pas dans la hauteur du popup.
+
+**Contenu en YAML uniquement** — comme `vertical-stack`/`grid` (les cartes conteneurs
+natives de HA n'ont elles-mêmes pas d'éditeur visuel pour leur contenu imbriqué), l'
+éditeur visuel de Alex Popup couvre tous les réglages du popup lui-même (forme,
+déclencheurs, couleurs, colonnes, fermeture, événements) mais pas `cards:` — à éditer en
+basculant sur le mode YAML de la carte dans l'éditeur HA.
+
+**Événements** — `on_open_action`/`on_close_action` acceptent le même format d'action
+que `tap_action` partout ailleurs dans HA (call-service, toggle, navigate, url…).
+
+**Personnalisation** (panneau Customisation) : fond du popup, fond de l'en-tête, couleur
+du titre, couleur de la croix, couleur du fond assombri (backdrop), arrondi des coins,
+largeur (`left`/`right`/`center`), hauteur max (`top`/`bottom`/`center`), écartement
+entre colonnes, écartement entre cartes d'une même colonne, marge intérieure.
 
 ## Ajouter une nouvelle carte
 

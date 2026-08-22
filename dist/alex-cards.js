@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.25.3";
+const ALEX_CARDS_VERSION = "0.26.0";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -5282,6 +5282,432 @@ window.customCards.push({
   type: "alex-server-card",
   name: "Alex Server Card",
   description: "Liste de serveurs/VM avec statut en ligne et bouton power.",
+  preview: false,
+  documentationURL: "https://github.com/<user>/alex-cards",
+});
+
+/* =========================================================================
+ * === alex-popup ==========================================================
+ * Systeme de popup maison (remplace bubble-card pour ce besoin) : overlay
+ * "portal" attache a document.body, forme configurable (centre/haut/bas/
+ * cote), ouverture par hash OU par etat d'entite, fermeture combinable
+ * (croix/clic exterieur/etat d'entite), colonnes de contenu auto-hauteur,
+ * evenements ouverture/fermeture. Le contenu (cards:) se configure en YAML
+ * (comme les vertical-stack/grid natifs de HA, qui n'ont pas non plus
+ * d'editeur visuel pour leurs cartes imbriquees) ; tout le reste (forme,
+ * declencheurs, couleurs, colonnes...) a l'editeur visuel complet.
+ * ========================================================================= */
+
+const POPUP_SHAPE_OPTIONS = [
+  { value: "center", label: "Fenêtre centrée" },
+  { value: "top", label: "Volet du haut" },
+  { value: "bottom", label: "Volet du bas" },
+  { value: "left", label: "Volet gauche" },
+  { value: "right", label: "Volet droit" },
+];
+
+const POPUP_CLOSE_OPTIONS = [
+  { value: "close_button", label: "Bouton croix" },
+  { value: "outside_click", label: "Clic en dehors" },
+  { value: "entity_state", label: "État d'une entité" },
+];
+
+// Alignement de l'overlay (flex, direction ligne par defaut) selon la forme :
+// align-items = axe transverse (vertical), justify-content = axe principal
+// (horizontal). Determine sur quel bord le panneau colle.
+const POPUP_SHAPE_ALIGN = {
+  center: "align-items:center;justify-content:center;",
+  top: "align-items:flex-start;justify-content:center;",
+  bottom: "align-items:flex-end;justify-content:center;",
+  left: "align-items:stretch;justify-content:flex-start;",
+  right: "align-items:stretch;justify-content:flex-end;",
+};
+
+// Transformation de depart (hors champ) par forme, animee vers l'etat neutre
+// a l'ouverture.
+const POPUP_SHAPE_ENTER_FROM = {
+  center: "scale(.92)",
+  top: "translateY(-100%)",
+  bottom: "translateY(100%)",
+  left: "translateX(-100%)",
+  right: "translateX(100%)",
+};
+
+function popupParseStates(v) {
+  if (Array.isArray(v)) return v.map((s) => String(s).trim()).filter(Boolean);
+  if (typeof v === "string") return v.split(",").map((s) => s.trim()).filter(Boolean);
+  return [];
+}
+
+class AlexPopupCard extends HTMLElement {
+  static getConfigElement() {
+    return document.createElement("alex-popup-card-editor");
+  }
+  static getStubConfig() {
+    return {
+      hash: "mon-popup",
+      title: "Titre",
+      show_title: true,
+      show_close: true,
+      shape: "center",
+      columns: 1,
+      close_on: ["close_button", "outside_click"],
+      cards: [],
+    };
+  }
+
+  setConfig(config) {
+    if (!config) throw new Error("Configuration invalide");
+    this._config = config;
+  }
+
+  set hass(hass) {
+    const prevOpenState = this._openEntityState;
+    const prevCloseState = this._closeEntityState;
+    this._hass = hass;
+    if (!this._config) return;
+    const c = this._config;
+
+    // Ouverture automatique par etat d'entite : declenchee sur TRANSITION
+    // vers un etat cible, pas en continu — sinon impossible de fermer
+    // manuellement tant que l'entite reste dans cet etat.
+    if (c.open_on_entity) {
+      const st = hass.states[c.open_on_entity];
+      this._openEntityState = st ? st.state : undefined;
+      const targets = popupParseStates(c.open_on_states);
+      if (
+        prevOpenState !== undefined &&
+        this._openEntityState !== prevOpenState &&
+        targets.includes(this._openEntityState)
+      ) {
+        this.open();
+      }
+    }
+
+    // Fermeture automatique par etat d'entite, meme logique de transition.
+    if ((c.close_on || []).includes("entity_state")) {
+      const closeEntity = c.close_on_entity || c.open_on_entity;
+      if (closeEntity) {
+        const st = hass.states[closeEntity];
+        this._closeEntityState = st ? st.state : undefined;
+        const targets = popupParseStates(c.close_on_states);
+        if (
+          prevCloseState !== undefined &&
+          this._closeEntityState !== prevCloseState &&
+          targets.includes(this._closeEntityState)
+        ) {
+          this.close();
+        }
+      }
+    }
+
+    // Propage hass aux cartes deja construites dans le popup ouvert.
+    (this._cardEls || []).forEach((el) => (el.hass = hass));
+  }
+
+  getCardSize() {
+    return 0;
+  }
+
+  connectedCallback() {
+    this._hashHandler = () => this._checkHash();
+    window.addEventListener("hashchange", this._hashHandler);
+    this._checkHash(); // popup deja ciblee par le hash au chargement
+  }
+
+  disconnectedCallback() {
+    if (this._hashHandler) window.removeEventListener("hashchange", this._hashHandler);
+    this._teardown();
+  }
+
+  _normalizedHash() {
+    const h = this._config && this._config.hash;
+    return h ? "#" + String(h).replace(/^#/, "") : null;
+  }
+
+  _checkHash() {
+    const h = this._normalizedHash();
+    if (h && window.location.hash === h) this.open();
+  }
+
+  open() {
+    if (this._isOpen) return;
+    this._isOpen = true;
+    this._build();
+    if (this._config.on_open_action && this._hass) {
+      fireAction(this, this._hass, this._config.on_open_action);
+    }
+  }
+
+  close() {
+    if (!this._isOpen) return;
+    this._isOpen = false;
+    this._teardown();
+    // Libere le hash : un navigate vers un hash inchange ne redeclenche pas
+    // "hashchange", donc sans ca un deuxieme clic sur le declencheur ne
+    // rouvrirait rien.
+    const h = this._normalizedHash();
+    if (h && window.location.hash === h) {
+      history.pushState("", document.title, window.location.pathname + window.location.search);
+    }
+    if (this._config.on_close_action && this._hass) {
+      fireAction(this, this._hass, this._config.on_close_action);
+    }
+  }
+
+  async _build() {
+    const c = this._config;
+    this._teardown();
+
+    const overlay = document.createElement("div");
+    const backdropColor = colorOr(c.backdrop_color, "rgba(0,0,0,0.5)");
+    const align = POPUP_SHAPE_ALIGN[c.shape] || POPUP_SHAPE_ALIGN.center;
+    overlay.style.cssText =
+      `position:fixed;inset:0;z-index:600;display:flex;${align}` +
+      `background:${backdropColor};opacity:0;transition:opacity .2s ease;`;
+
+    const closeOnOutside = (c.close_on || []).includes("outside_click");
+    overlay.addEventListener("click", (ev) => {
+      if (ev.target === overlay && closeOnOutside) this.close();
+    });
+
+    const keyHandler = (ev) => {
+      if (ev.key === "Escape") this.close();
+    };
+    window.addEventListener("keydown", keyHandler);
+    this._keyHandler = keyHandler;
+
+    const panel = document.createElement("div");
+    this._applyPanelShape(panel, c);
+
+    const showTitle = c.show_title !== false && c.title;
+    const showClose = c.show_close !== false;
+    if (showTitle || showClose) {
+      const header = document.createElement("div");
+      header.style.cssText =
+        "display:flex;align-items:center;justify-content:space-between;gap:12px;" +
+        `padding:14px 16px;background:${colorOr(c.header_background, "transparent")};flex:0 0 auto;`;
+      const t = document.createElement("div");
+      t.textContent = showTitle ? c.title : "";
+      t.style.cssText =
+        `font-size:17px;font-weight:700;color:${colorOr(c.title_color, "var(--primary-text-color)")};` +
+        "overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;";
+      header.appendChild(t);
+      if (showClose) {
+        const closeBtn = document.createElement("ha-icon");
+        closeBtn.icon = "mdi:close";
+        closeBtn.style.cssText =
+          `cursor:pointer;flex:0 0 auto;color:${colorOr(c.close_color, "var(--secondary-text-color)")};`;
+        closeBtn.addEventListener("click", () => this.close());
+        header.appendChild(closeBtn);
+      }
+      panel.appendChild(header);
+    }
+
+    const content = document.createElement("div");
+    const columnGap = c.column_gap != null ? c.column_gap : 12;
+    const cardGap = c.card_gap != null ? c.card_gap : 10;
+    const padding = c.padding != null ? c.padding : 16;
+    content.style.cssText =
+      `display:flex;gap:${columnGap}px;padding:${padding}px;overflow:auto;flex:1;min-height:0;`;
+
+    const columnsCount = Math.max(1, c.columns || 1);
+    const columnsArr = Array.from({ length: columnsCount }, () => document.createElement("div"));
+    columnsArr.forEach((col) => {
+      col.style.cssText = `display:flex;flex-direction:column;gap:${cardGap}px;flex:1;min-width:0;`;
+    });
+
+    const helpers = await window.loadCardHelpers();
+    this._cardEls = [];
+    (c.cards || []).forEach((entry, i) => {
+      const cardCfg = entry && entry.card ? entry.card : entry;
+      if (!cardCfg) return;
+      const colIdx =
+        entry && entry.column
+          ? Math.min(Math.max(entry.column - 1, 0), columnsCount - 1)
+          : i % columnsCount;
+      let el;
+      try {
+        el = helpers.createCardElement(cardCfg);
+      } catch (e) {
+        return;
+      }
+      if (this._hass) el.hass = this._hass;
+      this._cardEls.push(el);
+      columnsArr[colIdx].appendChild(el);
+    });
+
+    columnsArr.forEach((col) => content.appendChild(col));
+    panel.appendChild(content);
+    overlay.appendChild(panel);
+    document.body.appendChild(overlay);
+    document.body.style.overflow = "hidden";
+    this._overlay = overlay;
+
+    // Anime l'entree apres l'ajout au DOM (laisse le navigateur peindre
+    // l'etat initial hors champ avant de declencher la transition).
+    requestAnimationFrame(() => {
+      overlay.style.opacity = "1";
+      panel.style.transform = "translate(0,0) scale(1)";
+    });
+  }
+
+  _applyPanelShape(panel, c) {
+    const bg = colorOr(c.background, "var(--ha-card-background, var(--card-background-color))");
+    const radius = c.border_radius != null ? c.border_radius : 22;
+    const isSide = c.shape === "left" || c.shape === "right";
+    const isVert = c.shape === "top" || c.shape === "bottom";
+    const width = c.width || (isSide ? "340px" : "min(520px, 92vw)");
+    const maxHeight = c.height || (isVert ? "80vh" : "85vh");
+    const enterFrom = POPUP_SHAPE_ENTER_FROM[c.shape] || POPUP_SHAPE_ENTER_FROM.center;
+
+    const radiusCss = {
+      center: `border-radius:${radius}px;`,
+      top: `border-radius:0 0 ${radius}px ${radius}px;`,
+      bottom: `border-radius:${radius}px ${radius}px 0 0;`,
+      left: `border-radius:0 ${radius}px ${radius}px 0;`,
+      right: `border-radius:${radius}px 0 0 ${radius}px;`,
+    }[c.shape || "center"];
+
+    const sizeCss = isSide
+      ? `width:${width};height:100vh;`
+      : isVert
+      ? `width:100%;max-height:${maxHeight};`
+      : `width:${width};max-height:${maxHeight};`;
+
+    panel.style.cssText =
+      "display:flex;flex-direction:column;overflow:hidden;" +
+      `background:${bg};${radiusCss}${sizeCss}` +
+      `box-shadow:0 12px 36px rgba(0,0,0,.35);` +
+      `transition:transform .22s ease,opacity .22s ease;transform:${enterFrom};`;
+    panel.addEventListener("click", (ev) => ev.stopPropagation());
+  }
+
+  _teardown() {
+    if (this._overlay && this._overlay.parentNode) {
+      this._overlay.parentNode.removeChild(this._overlay);
+    }
+    this._overlay = null;
+    this._cardEls = [];
+    document.body.style.overflow = "";
+    if (this._keyHandler) {
+      window.removeEventListener("keydown", this._keyHandler);
+      this._keyHandler = null;
+    }
+  }
+}
+customElements.define("alex-popup", AlexPopupCard);
+
+class AlexPopupCardEditor extends AlexFormEditor {
+  static getStubConfig() {
+    return AlexPopupCard.getStubConfig();
+  }
+
+  constructor() {
+    super();
+    this._schema = [
+      { name: "hash", selector: { text: {} } },
+      { name: "title", selector: { text: {} } },
+      { name: "show_title", selector: { boolean: {} } },
+      { name: "show_close", selector: { boolean: {} } },
+      { name: "shape", selector: { select: { mode: "dropdown", options: POPUP_SHAPE_OPTIONS } } },
+      { name: "columns", selector: { number: { min: 1, max: 6, step: 1, mode: "box" } } },
+      {
+        name: "open_group",
+        type: "expandable",
+        flatten: true,
+        title: "Ouverture automatique",
+        icon: "mdi:import",
+        schema: [
+          { name: "open_on_entity", selector: { entity: {} } },
+          { name: "open_on_states", selector: { text: {} } },
+        ],
+      },
+      {
+        name: "close_group",
+        type: "expandable",
+        flatten: true,
+        title: "Fermeture",
+        icon: "mdi:export",
+        schema: [
+          {
+            name: "close_on",
+            selector: { select: { multiple: true, mode: "list", options: POPUP_CLOSE_OPTIONS } },
+          },
+          { name: "close_on_entity", selector: { entity: {} } },
+          { name: "close_on_states", selector: { text: {} } },
+        ],
+      },
+      {
+        name: "events_group",
+        type: "expandable",
+        flatten: true,
+        title: "Événements",
+        icon: "mdi:script-text-outline",
+        schema: [
+          { name: "on_open_action", selector: { ui_action: { default_action: "none" } } },
+          { name: "on_close_action", selector: { ui_action: { default_action: "none" } } },
+        ],
+      },
+      {
+        name: "customisation",
+        type: "expandable",
+        flatten: true,
+        title: "Customisation",
+        icon: "mdi:palette",
+        schema: [
+          { name: "background", selector: { color_rgb: {} } },
+          { name: "header_background", selector: { color_rgb: {} } },
+          { name: "title_color", selector: { color_rgb: {} } },
+          { name: "close_color", selector: { color_rgb: {} } },
+          { name: "backdrop_color", selector: { color_rgb: {} } },
+          {
+            name: "border_radius",
+            selector: { number: { min: 0, max: 48, step: 1, mode: "box" } },
+          },
+          { name: "width", selector: { text: {} } },
+          { name: "height", selector: { text: {} } },
+          { name: "column_gap", selector: { number: { min: 0, max: 40, step: 1, mode: "box" } } },
+          { name: "card_gap", selector: { number: { min: 0, max: 40, step: 1, mode: "box" } } },
+          { name: "padding", selector: { number: { min: 0, max: 40, step: 1, mode: "box" } } },
+        ],
+      },
+    ];
+    this._labels = {
+      hash: "Identifiant (hash, sans #)",
+      title: "Titre",
+      show_title: "Afficher le titre",
+      show_close: "Afficher la croix de fermeture",
+      shape: "Forme",
+      columns: "Nombre de colonnes",
+      open_on_entity: "Entité déclenchant l'ouverture",
+      open_on_states: "États déclenchants (séparés par des virgules)",
+      close_on: "Méthodes de fermeture",
+      close_on_entity: "Entité déclenchant la fermeture (vide = celle d'ouverture)",
+      close_on_states: "États déclenchants (séparés par des virgules)",
+      on_open_action: "Action à l'ouverture",
+      on_close_action: "Action à la fermeture",
+      background: "Fond du popup",
+      header_background: "Fond de l'en-tête",
+      title_color: "Couleur du titre",
+      close_color: "Couleur de la croix",
+      backdrop_color: "Couleur du fond assombri",
+      border_radius: "Arrondi des coins (px)",
+      width: "Largeur (ex. 480px, 70vw)",
+      height: "Hauteur max (ex. 80vh) — vide = auto",
+      column_gap: "Écartement entre colonnes (px)",
+      card_gap: "Écartement entre cartes d'une colonne (px)",
+      padding: "Marge intérieure (px)",
+    };
+  }
+}
+customElements.define("alex-popup-card-editor", AlexPopupCardEditor);
+
+window.customCards.push({
+  type: "alex-popup",
+  name: "Alex Popup",
+  description:
+    "Système de popup personnalisable : forme, déclencheurs (hash/entité), colonnes, fermeture combinable.",
   preview: false,
   documentationURL: "https://github.com/<user>/alex-cards",
 });
