@@ -21,7 +21,6 @@ Collection de cartes Lovelace custom pour Home Assistant, distribuée en **plugi
 | `custom:alex-clock-card`        | oui        | Horloge et date, alignables, avec la personnalisation du package. |
 | `custom:alex-media-player-card` | oui        | Contrôle média (pochette, lecture, volume) avec bascule entre lecteurs actifs. |
 | `custom:alex-server-card`       | oui        | Liste de serveurs/VM avec statut en ligne et bouton power. |
-| `custom:alex-popup`             | oui        | Système de popup personnalisable (forme, déclencheurs, colonnes). |
 
 Toutes les cartes apparaissent dans le sélecteur « Ajouter une carte » avec un éditeur
 visuel. La `alex-light-card` a un éditeur type « chips » (liste + crayon pour éditer chaque
@@ -481,107 +480,6 @@ servers:
   ligne » et couleur « hors ligne » (appliquées au point de statut, au texte de statut,
   et à l'icône du bouton power) — une simplification par rapport aux 4 teintes distinctes
   du gabarit d'origine, pour rester sur le même nombre de champs que les autres cartes.
-
-### Alex Popup
-
-Système de popup maison, pensé pour remplacer `custom:bubble-card` (`card_type: pop-up`)
-sur les points où on s'est heurté à ses limites : largeur fixe non documentée, exclusion
-de thème pour tout ce qui est `type-custom-bubble-card`, hauteur de ligne rigide côté
-vue « sections ». Rendu en overlay (« portail » attaché à `document.body`), indépendant
-de l'endroit où la carte est posée dans le dashboard.
-
-```yaml
-type: custom:alex-popup
-hash: security
-title: Sécurité
-show_title: true
-show_close: true
-shape: center              # center / top / bottom / left / right
-columns: 2
-open_on_entity: alarm_control_panel.maison
-open_on_states: triggered
-close_on:
-  - close_button
-  - outside_click
-close_on_entity: ''        # vide = reprend open_on_entity
-close_on_states: ''
-on_open_action:
-  action: none
-on_close_action:
-  action: none
-background: [37, 42, 54, 1]
-column_gap: 12
-card_gap: 10
-cards:
-  - column: 1
-    card:
-      type: custom:mushroom-alarm-control-panel-card
-      entity: alarm_control_panel.maison
-  - column: 2
-    card:
-      type: custom:mushroom-entity-card
-      entity: camera.portier
-```
-
-**Ouverture** — deux mécanismes indépendants, combinables :
-- **Par hash** : n'importe quel `tap_action: navigate, navigation_path: '#security'` sur
-  n'importe quelle autre carte ouvre ce popup — même principe que bubble-card, aucune
-  carte « déclencheur » séparée n'est nécessaire.
-- **Par état d'entité** (`open_on_entity`/`open_on_states`, états séparés par des
-  virgules) : le popup s'ouvre automatiquement dès que l'entité **transitionne** vers un
-  état listé — pas en continu, pour qu'une fermeture manuelle ne soit pas immédiatement
-  annulée tant que l'entité reste dans cet état.
-- **Ciblage d'un appareil précis** (ex. une tablette murale) : pas de champ dédié — pose
-  la carte uniquement sur la vue/le dashboard chargé par cet appareil. Pas de dépendance
-  à `browser_mod`.
-
-**Fermeture** — `close_on` est un tableau combinable (`close_button`, `outside_click`,
-`entity_state`). La touche **Échap** ferme toujours le popup, indépendamment de ce
-tableau (comportement standard d'une fenêtre modale, non désactivable).
-
-**Contenu et colonnes** — `columns: N` définit le nombre de colonnes ; chaque entrée de
-`cards:` peut préciser `column: X` (1-indexé) pour choisir la sienne, les entrées sans
-`column` se répartissent automatiquement en tournant sur les colonnes disponibles.
-**Chaque colonne s'ajuste à la hauteur de son propre contenu** (pas de hauteur de ligne
-imposée façon vue « sections ») — le contenu global défile (`overflow:auto`) si tout ne
-tient pas dans la hauteur du popup.
-
-**Édition directe dans l'aperçu (glisser-déposer natif)** — en éditant le dashboard,
-l'aperçu inline n'est plus une simple prévisualisation : chaque carte du popup est
-habillée avec `<hui-card-edit-mode>`, le composant natif de Home Assistant qui gère déjà
-l'édition de n'importe quelle carte de dashboard — mêmes icônes de survol (modifier,
-dupliquer, supprimer), même look. Le réordonnancement se fait par **glisser-déposer réel**
-via `<ha-sortable>` (natif HA), **au sein d'une même colonne** — déplacer une carte vers
-une autre colonne se fait en changeant son champ `column` depuis l'édition, pas par
-glisser inter-colonnes. Chaque colonne a sa propre ligne « + Ajouter » (sélecteur de type
-+ bouton). Cliquer l'icône crayon d'une carte ouvre un petit formulaire inline (type +
-JSON) directement dans l'aperçu, pas de rectangle transparent à deviner.
-
-**Pourquoi JSON et pas le vrai sélecteur/dialogue natif de HA** — vérifié dans le code
-source de Bubble Card (merci pour l'archive) : leur expérience complète nécessite un
-système de registres globaux (`window.__bubbleCardEditorInstances`...), une carte
-`hui-section` factice injectée dans `<home-assistant>` avec un faux `lovelace.config`
-complet pour emprunter le presse-papier natif de HA, et une chaîne de repli à 5 niveaux à
-travers plusieurs shadow DOM pour retrouver le bon dialogue — une mécanique dont un
-changement de structure DOM d'une version HA récente (2026.5.x) a d'ailleurs cassé une
-partie, d'après leurs propres notes de version. `hui-card-edit-mode` et `ha-sortable`,
-eux, ne sont pas chargés à la demande (contrairement à `hui-stack-card-editor`/
-`hui-card-picker`) et sont réutilisés tels quels, sans reproduire cette couche fragile.
-
-**Liste de cartes dans l'éditeur de réglages** (accessible via ⋮ → Modifier sur la carte
-elle-même, séparément de l'aperçu inline) — un second système d'édition, plus classique :
-icône + type, colonne assignée, crayon/poubelle/flèches pour réordonner (même système que
-Sensor/Toggle/Server Card). Le détail d'une carte propose un sélecteur de **type**
-(types courants + valeur libre pour n'importe quel autre type installé) et le même
-éditeur **JSON** pour le reste de sa configuration.
-
-**Événements** — `on_open_action`/`on_close_action` acceptent le même format d'action
-que `tap_action` partout ailleurs dans HA (call-service, toggle, navigate, url…).
-
-**Personnalisation** (panneau Customisation) : fond du popup, fond de l'en-tête, couleur
-du titre, couleur de la croix, couleur du fond assombri (backdrop), arrondi des coins,
-largeur (`left`/`right`/`center`), hauteur max (`top`/`bottom`/`center`), écartement
-entre colonnes, écartement entre cartes d'une même colonne, marge intérieure.
 
 ## Ajouter une nouvelle carte
 
