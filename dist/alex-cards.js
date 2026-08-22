@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.29.0";
+const ALEX_CARDS_VERSION = "0.30.0";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -5286,6 +5286,228 @@ window.customCards.push({
   documentationURL: "https://github.com/<user>/alex-cards",
 });
 
+
+/* =========================================================================
+ * === alex-gradient-card ==================================================
+ * Pilotage des degrades par segment des lampes/bandeaux "Gradient" Philips
+ * Hue via Zigbee2MQTT. Z2M expose `gradient` en ECRITURE SEULE (confirme
+ * dans sa doc officielle : "It's not possible to read (/get) this value.")
+ * — pas de service natif HA pour ca, donc appel direct a mqtt.publish sur
+ * le topic zigbee2mqtt/<nom_convivial>/set avec {"gradient": [...]}.
+ * Consequence assumee : les pickers ne refletent jamais l'etat reel du
+ * bandeau au chargement (impossible techniquement), ils partent neutres.
+ * ========================================================================= */
+
+class GradientCard extends HTMLElement {
+  static getConfigElement() {
+    return document.createElement("alex-gradient-card-editor");
+  }
+  static getStubConfig() {
+    return { entity: "", segments: 5, name: "Bandeau", icon: "mdi:led-strip-variant" };
+  }
+
+  setConfig(config) {
+    if (!config) throw new Error("Configuration invalide");
+    this._config = config;
+    this._built = false;
+    this._lastSig = null;
+  }
+
+  set hass(hass) {
+    this._hass = hass;
+    this._render();
+  }
+
+  getCardSize() {
+    return 2;
+  }
+
+  // Nom convivial Z2M utilise dans le topic MQTT : deduit de l'entite si non
+  // renseigne explicitement (souvent identique, mais pas garanti si
+  // l'entite HA a ete renommee independamment du peripherique Z2M).
+  _friendlyName() {
+    const c = this._config;
+    if (c.friendly_name) return c.friendly_name;
+    if (c.entity) return c.entity.split(".")[1] || "";
+    return "";
+  }
+
+  _render() {
+    if (!this._config || !this._hass) return;
+    const c = this._config;
+    const hass = this._hass;
+    const entity = c.entity;
+    const stateObj = entity ? hass.states[entity] : null;
+    const isOn = !!stateObj && stateObj.state === "on";
+    const segmentsCount = Math.max(2, Math.min(10, c.segments || 5));
+    const friendlyName = this._friendlyName();
+
+    // Etat local des pickers (jamais lu depuis Z2M, voir note en tete de
+    // fichier) : reinitialise seulement si le nombre de segments change,
+    // conserve sinon (pas de rebuild sur chaque mise a jour de hass tant
+    // que la config elle-meme n'a pas change — voir sig plus bas).
+    if (!this._segmentColors || this._segmentColors.length !== segmentsCount) {
+      const prev = this._segmentColors || [];
+      this._segmentColors = Array.from({ length: segmentsCount }, (_, i) => prev[i] || "#ffffff");
+    }
+
+    const sig = [
+      c.name,
+      c.icon,
+      JSON.stringify(c.icon_color || null),
+      JSON.stringify(c.background || null),
+      JSON.stringify(c.primary_color || null),
+      JSON.stringify(c.secondary_color || null),
+      JSON.stringify(c.accent_color || null),
+      segmentsCount,
+      isOn,
+      entity,
+      friendlyName,
+    ].join("~");
+    if (this._built && sig === this._lastSig) return;
+    this._lastSig = sig;
+
+    const cardBg = colorOr(c.background, "var(--ha-card-background, var(--card-background-color))");
+    const primaryColor = colorOr(c.primary_color, "var(--primary-text-color)");
+    const secondaryColor = colorOr(c.secondary_color, "var(--secondary-text-color)");
+    const accentColor = colorOr(c.accent_color, "#8b7ae6");
+    const iconColor = colorOr(c.icon_color, accentColor);
+    const badgeRgb = Array.isArray(c.icon_color) ? c.icon_color : [139, 122, 230];
+    const badgeBg = `rgba(${badgeRgb[0]}, ${badgeRgb[1]}, ${badgeRgb[2]}, 0.16)`;
+
+    const segmentsHtml = this._segmentColors
+      .map(
+        (color, i) => `
+          <input type="color" class="ac-gradient-seg" data-index="${i}" value="${color}"
+            style="width:100%;height:44px;min-width:0;border:none;border-radius:10px;padding:0;
+                   cursor:pointer;background:${color};-webkit-appearance:none;appearance:none;" />`
+      )
+      .join("");
+
+    const missingConfig = !entity || !friendlyName;
+
+    this.innerHTML = `
+      <ha-card style="border-radius:20px;box-shadow:none;background:${cardBg};padding:16px 18px;">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">
+          <div style="width:40px;height:40px;border-radius:12px;background:${badgeBg};
+                      display:flex;align-items:center;justify-content:center;flex:0 0 auto;">
+            <ha-icon icon="${c.icon || "mdi:led-strip-variant"}" style="--mdc-icon-size:20px;color:${iconColor};"></ha-icon>
+          </div>
+          <div style="flex:1;min-width:0;font-size:17px;font-weight:700;color:${primaryColor};
+                      overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(c.name || "")}</div>
+          ${
+            entity
+              ? `<div class="ac-gradient-toggle" style="flex:0 0 auto;width:44px;height:24px;border-radius:12px;
+                      background:${isOn ? accentColor : "rgba(var(--rgb-primary-text-color,0,0,0),0.18)"};
+                      position:relative;cursor:pointer;transition:background .15s;">
+                  <div style="width:18px;height:18px;border-radius:50%;background:#fff;position:absolute;
+                              top:3px;left:${isOn ? "23px" : "3px"};transition:left .15s;
+                              box-shadow:0 1px 3px rgba(0,0,0,.3);"></div>
+                </div>`
+              : ""
+          }
+        </div>
+
+        ${
+          missingConfig
+            ? `<div style="font-size:13px;color:${secondaryColor};padding:8px 0;">
+                Configure l'entité de la lumière (et le nom convivial Z2M si besoin) dans les réglages de la carte.
+              </div>`
+            : `<div style="display:grid;grid-template-columns:repeat(${segmentsCount}, 1fr);gap:6px;margin-bottom:14px;">
+                ${segmentsHtml}
+              </div>
+              <div class="ac-gradient-apply" style="text-align:center;padding:10px;border-radius:12px;
+                          background:${accentColor};color:#000;font-size:14px;font-weight:600;cursor:pointer;">
+                Appliquer le dégradé
+              </div>
+              <div style="font-size:11px;color:${secondaryColor};text-align:center;margin-top:8px;">
+                Réglage à l'aveugle — Zigbee2MQTT ne permet pas de relire le dégradé actuellement affiché.
+              </div>`
+        }
+      </ha-card>`;
+
+    this.querySelectorAll(".ac-gradient-seg").forEach((el) => {
+      el.addEventListener("input", (ev) => {
+        const idx = parseInt(el.getAttribute("data-index"), 10);
+        this._segmentColors[idx] = ev.target.value;
+        el.style.background = ev.target.value;
+      });
+    });
+
+    const toggleEl = this.querySelector(".ac-gradient-toggle");
+    if (toggleEl && entity) {
+      toggleEl.addEventListener("click", () => {
+        hass.callService("homeassistant", "toggle", { entity_id: entity });
+      });
+    }
+
+    const applyEl = this.querySelector(".ac-gradient-apply");
+    if (applyEl) {
+      applyEl.addEventListener("click", () => {
+        if (!friendlyName) return;
+        hass.callService("mqtt", "publish", {
+          topic: `zigbee2mqtt/${friendlyName}/set`,
+          payload: JSON.stringify({ gradient: this._segmentColors }),
+        });
+      });
+    }
+
+    this._built = true;
+  }
+}
+customElements.define("alex-gradient-card", GradientCard);
+
+class GradientCardEditor extends AlexFormEditor {
+  static getStubConfig() {
+    return GradientCard.getStubConfig();
+  }
+
+  constructor() {
+    super();
+    this._schema = [
+      { name: "entity", selector: { entity: { domain: "light" } } },
+      { name: "friendly_name", selector: { text: {} } },
+      { name: "segments", selector: { number: { min: 2, max: 10, step: 1, mode: "box" } } },
+      { name: "name", selector: { text: {} } },
+      { name: "icon", selector: { icon: {} } },
+      {
+        name: "customisation",
+        type: "expandable",
+        flatten: true,
+        title: "Customisation",
+        icon: "mdi:palette",
+        schema: [
+          { name: "icon_color", selector: { color_rgb: {} } },
+          { name: "background", selector: { color_rgb: {} } },
+          { name: "primary_color", selector: { color_rgb: {} } },
+          { name: "secondary_color", selector: { color_rgb: {} } },
+          { name: "accent_color", selector: { color_rgb: {} } },
+        ],
+      },
+    ];
+    this._labels = {
+      entity: "Entité de la lumière",
+      friendly_name: "Nom convivial Z2M (vide = déduit de l'entité)",
+      segments: "Nombre de segments",
+      name: "Nom",
+      icon: "Icône",
+      icon_color: "Couleur du badge",
+      background: "Fond de la carte",
+      primary_color: "Couleur du nom",
+      secondary_color: "Couleur secondaire",
+      accent_color: "Couleur du bouton / interrupteur actif",
+    };
+  }
+}
+customElements.define("alex-gradient-card-editor", GradientCardEditor);
+
+window.customCards.push({
+  type: "alex-gradient-card",
+  name: "Alex Gradient Card",
+  description: "Réglage des segments de couleur des lampes Gradient Philips Hue via Zigbee2MQTT.",
+  preview: false,
+  documentationURL: "https://github.com/<user>/alex-cards",
+});
 
 /* =========================================================================
  * === ma-prochaine-carte ==================================================

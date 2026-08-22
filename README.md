@@ -21,6 +21,7 @@ Collection de cartes Lovelace custom pour Home Assistant, distribuée en **plugi
 | `custom:alex-clock-card`        | oui        | Horloge et date, alignables, avec la personnalisation du package. |
 | `custom:alex-media-player-card` | oui        | Contrôle média (pochette, lecture, volume) avec bascule entre lecteurs actifs. |
 | `custom:alex-server-card`       | oui        | Liste de serveurs/VM avec statut en ligne et bouton power. |
+| `custom:alex-gradient-card`     | oui        | Réglage des segments de couleur des lampes Gradient Philips Hue (Zigbee2MQTT). |
 
 Toutes les cartes apparaissent dans le sélecteur « Ajouter une carte » avec un éditeur
 visuel. La `alex-light-card` a un éditeur type « chips » (liste + crayon pour éditer chaque
@@ -480,6 +481,43 @@ servers:
   ligne » et couleur « hors ligne » (appliquées au point de statut, au texte de statut,
   et à l'icône du bouton power) — une simplification par rapport aux 4 teintes distinctes
   du gabarit d'origine, pour rester sur le même nombre de champs que les autres cartes.
+
+### Alex Gradient Card
+
+Pilotage des segments de couleur des lampes/bandeaux « Gradient » Philips Hue, via
+Zigbee2MQTT — pas d'intégration tierce nécessaire, juste le service natif
+`mqtt.publish` de Home Assistant (déjà disponible dès que Z2M tourne).
+
+```yaml
+type: custom:alex-gradient-card
+entity: light.bandeau_salon
+friendly_name: bandeau_salon   # optionnel, vide = déduit de l'entité
+segments: 5                    # 5 pour la Lightstrip Gradient (caractéristique physique du modèle)
+name: Bandeau Salon
+icon: mdi:led-strip-variant
+```
+
+- **Réglage à l'aveugle, assumé** : Zigbee2MQTT expose `gradient` en écriture seule —
+  confirmé dans sa documentation officielle (« It's not possible to read (/get) this
+  value »). La carte ne peut donc pas pré-remplir les sélecteurs de couleur avec l'état
+  réellement affiché sur le bandeau ; ils partent toujours neutres (blanc) au chargement.
+  Un rappel de ce point est affiché sous les sélecteurs.
+- **Nombre de segments** configurable, mais ce n'est pas une limite arbitraire de la
+  carte : c'est une caractéristique physique du modèle (5 zones pour la Lightstrip
+  Gradient `929002994901` — d'autres produits Hue Gradient, comme la lampe Signe,
+  peuvent différer). Envoyer un nombre différent de celui réellement câblé sur le
+  bandeau ne donne pas plus/moins de zones indépendantes, le firmware du bandeau
+  interprète à sa façon.
+- **`friendly_name`** doit correspondre au nom convivial **Zigbee2MQTT** de l'appareil
+  (celui utilisé dans le topic MQTT), pas nécessairement au nom de l'entité HA si tu
+  l'as renommée séparément. Vide par défaut = déduit du dernier segment de l'entity_id.
+  Le bouton d'application appelle `mqtt.publish` sur
+  `zigbee2mqtt/<nom_convivial>/set` avec `{"gradient": [...]}` (couleurs hex).
+- Un interrupteur dans l'en-tête permet d'allumer/éteindre la lumière elle-même
+  (`homeassistant.toggle` sur l'entité configurée) — les segments n'ont de sens que
+  lumière allumée.
+- Personnalisation (panneau Customisation) : couleur du badge, fond de la carte,
+  couleur du nom, couleur secondaire, couleur du bouton « Appliquer »/interrupteur actif.
 
 ## Ajouter une nouvelle carte
 
