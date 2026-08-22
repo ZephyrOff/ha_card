@@ -546,11 +546,19 @@ tableau (comportement standard d'une fenêtre modale, non désactivable).
 imposée façon vue « sections ») — le contenu global défile (`overflow:auto`) si tout ne
 tient pas dans la hauteur du popup.
 
-**Contenu en YAML uniquement** — comme `vertical-stack`/`grid` (les cartes conteneurs
-natives de HA n'ont elles-mêmes pas d'éditeur visuel pour leur contenu imbriqué), l'
-éditeur visuel de Alex Popup couvre tous les réglages du popup lui-même (forme,
-déclencheurs, couleurs, colonnes, fermeture, événements) mais pas `cards:` — à éditer en
-basculant sur le mode YAML de la carte dans l'éditeur HA.
+**Aperçu live en mode édition** — en éditant le dashboard, la carte affiche le contenu
+réel du popup directement dans son emplacement (bandeau « Aperçu — Alex Popup »), plutôt
+qu'un rectangle transparent. Détecté via l'ancêtre `hui-card-edit-mode` de Home
+Assistant.
+
+**Liste de cartes dans l'éditeur** — un système propre au package (pas de dépendance à
+des composants internes non documentés de HA, qui n'expose pas son sélecteur de cartes
+aux cartes tierces — vérifié : même des développeurs chevronnés butent dessus). Chaque
+carte de la liste : icône + type, colonne assignée, crayon/poubelle/flèches pour
+réordonner (même système que Sensor/Toggle/Server Card). Le détail d'une carte propose
+un sélecteur de **type** (types courants + valeur libre pour n'importe quel autre type
+installé) et un éditeur **JSON** pour le reste de sa configuration (entité, nom,
+options…) — pas de YAML complet, mais stable et sans dépendance fragile.
 
 **Événements** — `on_open_action`/`on_close_action` acceptent le même format d'action
 que `tap_action` partout ailleurs dans HA (call-service, toggle, navigate, url…).
