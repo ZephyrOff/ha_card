@@ -546,19 +546,34 @@ tableau (comportement standard d'une fenêtre modale, non désactivable).
 imposée façon vue « sections ») — le contenu global défile (`overflow:auto`) si tout ne
 tient pas dans la hauteur du popup.
 
-**Aperçu live en mode édition** — en éditant le dashboard, la carte affiche le contenu
-réel du popup directement dans son emplacement (bandeau « Aperçu — Alex Popup »), plutôt
-qu'un rectangle transparent. Détecté via l'ancêtre `hui-card-edit-mode` de Home
-Assistant.
+**Édition directe dans l'aperçu (glisser-déposer natif)** — en éditant le dashboard,
+l'aperçu inline n'est plus une simple prévisualisation : chaque carte du popup est
+habillée avec `<hui-card-edit-mode>`, le composant natif de Home Assistant qui gère déjà
+l'édition de n'importe quelle carte de dashboard — mêmes icônes de survol (modifier,
+dupliquer, supprimer), même look. Le réordonnancement se fait par **glisser-déposer réel**
+via `<ha-sortable>` (natif HA), **au sein d'une même colonne** — déplacer une carte vers
+une autre colonne se fait en changeant son champ `column` depuis l'édition, pas par
+glisser inter-colonnes. Chaque colonne a sa propre ligne « + Ajouter » (sélecteur de type
++ bouton). Cliquer l'icône crayon d'une carte ouvre un petit formulaire inline (type +
+JSON) directement dans l'aperçu, pas de rectangle transparent à deviner.
 
-**Liste de cartes dans l'éditeur** — un système propre au package (pas de dépendance à
-des composants internes non documentés de HA, qui n'expose pas son sélecteur de cartes
-aux cartes tierces — vérifié : même des développeurs chevronnés butent dessus). Chaque
-carte de la liste : icône + type, colonne assignée, crayon/poubelle/flèches pour
-réordonner (même système que Sensor/Toggle/Server Card). Le détail d'une carte propose
-un sélecteur de **type** (types courants + valeur libre pour n'importe quel autre type
-installé) et un éditeur **JSON** pour le reste de sa configuration (entité, nom,
-options…) — pas de YAML complet, mais stable et sans dépendance fragile.
+**Pourquoi JSON et pas le vrai sélecteur/dialogue natif de HA** — vérifié dans le code
+source de Bubble Card (merci pour l'archive) : leur expérience complète nécessite un
+système de registres globaux (`window.__bubbleCardEditorInstances`...), une carte
+`hui-section` factice injectée dans `<home-assistant>` avec un faux `lovelace.config`
+complet pour emprunter le presse-papier natif de HA, et une chaîne de repli à 5 niveaux à
+travers plusieurs shadow DOM pour retrouver le bon dialogue — une mécanique dont un
+changement de structure DOM d'une version HA récente (2026.5.x) a d'ailleurs cassé une
+partie, d'après leurs propres notes de version. `hui-card-edit-mode` et `ha-sortable`,
+eux, ne sont pas chargés à la demande (contrairement à `hui-stack-card-editor`/
+`hui-card-picker`) et sont réutilisés tels quels, sans reproduire cette couche fragile.
+
+**Liste de cartes dans l'éditeur de réglages** (accessible via ⋮ → Modifier sur la carte
+elle-même, séparément de l'aperçu inline) — un second système d'édition, plus classique :
+icône + type, colonne assignée, crayon/poubelle/flèches pour réordonner (même système que
+Sensor/Toggle/Server Card). Le détail d'une carte propose un sélecteur de **type**
+(types courants + valeur libre pour n'importe quel autre type installé) et le même
+éditeur **JSON** pour le reste de sa configuration.
 
 **Événements** — `on_open_action`/`on_close_action` acceptent le même format d'action
 que `tap_action` partout ailleurs dans HA (call-service, toggle, navigate, url…).

@@ -6,8 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-
-const ALEX_CARDS_VERSION = "0.27.1";
+const ALEX_CARDS_VERSION = "0.28.0";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -5567,7 +5566,7 @@ class AlexPopupCard extends HTMLElement {
   // l'overlay reel (_build) et l'apercu inline en mode edition
   // (_renderPreview). `interactive` desactive le bouton fermer/la fermeture
   // au clic exterieur dans l'apercu, ou ils n'auraient pas de sens.
-  async _buildPanel(c, { interactive }) {
+  async _buildPanel(c, { interactive, skipCards }) {
     const panel = document.createElement("div");
     this._applyPanelShape(panel, c);
 
@@ -5594,6 +5593,10 @@ class AlexPopupCard extends HTMLElement {
         header.appendChild(closeBtn);
       }
       panel.appendChild(header);
+    }
+
+    if (skipCards) {
+      return { panel, cardEls: [] };
     }
 
     const content = document.createElement("div");
@@ -5653,21 +5656,283 @@ class AlexPopupCard extends HTMLElement {
       wrap.appendChild(badge);
 
       const holder = document.createElement("div");
-      holder.style.cssText = "max-height:420px;overflow:auto;position:relative;";
-      const { panel, cardEls } = await this._buildPanel(c, { interactive: false });
+      holder.style.cssText = "max-height:520px;overflow:auto;position:relative;";
+      const { panel } = await this._buildPanel(c, { interactive: false, skipCards: true });
       panel.style.transform = "none";
       panel.style.maxHeight = "none";
       panel.style.width = "100%";
       panel.style.boxShadow = "none";
+
+      this._cardEls = [];
+      const editableContent = await this._buildEditableColumns(c);
+      panel.appendChild(editableContent);
+
       holder.appendChild(panel);
       wrap.appendChild(holder);
 
       this.innerHTML = "";
       this.appendChild(wrap);
-      this._cardEls = cardEls;
     } finally {
       this._previewBuilding = false;
     }
+  }
+
+  // Applique une mutation pure sur la liste normalisee des cartes, met a
+  // jour la config et notifie HA — meme mecanisme que bubble-card (un
+  // config-changed emis directement depuis la carte, pendant l'edition du
+  // dashboard, est bien pris en compte par HA), puis rafraichit l'apercu.
+  _updateCards(mutator) {
+    const entries = this._normalizedCardEntries();
+    const updated = mutator(entries.slice()) || entries;
+    const newConfig = { ...this._config, cards: updated };
+    this._config = newConfig;
+    fireDomEvent(this, "config-changed", { config: newConfig });
+    this._renderPreview();
+  }
+
+  _reorderCards(oldIndex, newIndex) {
+    this._updateCards((arr) => {
+      const [moved] = arr.splice(oldIndex, 1);
+      arr.splice(newIndex, 0, moved);
+      return arr;
+    });
+  }
+
+  _deleteCard(index) {
+    if (this._editingCardIndex === index) this._editingCardIndex = null;
+    this._updateCards((arr) => arr.filter((_, i) => i !== index));
+  }
+
+  _duplicateCard(index) {
+    this._updateCards((arr) => {
+      const copy = JSON.parse(JSON.stringify(arr[index]));
+      arr.splice(index + 1, 0, copy);
+      return arr;
+    });
+  }
+
+  // Construit les colonnes de l'apercu editable : chaque colonne est son
+  // propre <ha-sortable> (glisser-deposer natif, au sein de la colonne
+  // uniquement — deplacer une carte vers une autre colonne se fait via son
+  // champ "colonne" dans l'edition, pas par glisser-cross-colonne), avec les
+  // cartes habillees en <hui-card-edit-mode> (chrome natif HA : icones
+  // modifier/dupliquer/supprimer au survol, fournies par HA lui-meme) et un
+  // formulaire d'ajout en bas de chaque colonne.
+  async _buildEditableColumns(c) {
+    const columnGap = c.column_gap != null ? c.column_gap : 12;
+    const cardGap = c.card_gap != null ? c.card_gap : 10;
+    const padding = c.padding != null ? c.padding : 16;
+    const content = document.createElement("div");
+    content.style.cssText = `display:flex;gap:${columnGap}px;padding:${padding}px;flex-wrap:wrap;`;
+
+    const columnsCount = Math.max(1, c.columns || 1);
+    const entries = this._normalizedCardEntries();
+    const helpers = await window.loadCardHelpers();
+
+    const perColumn = Array.from({ length: columnsCount }, () => []);
+    entries.forEach((entry, i) => {
+      const colIdx =
+        entry && entry.column
+          ? Math.min(Math.max(entry.column - 1, 0), columnsCount - 1)
+          : i % columnsCount;
+      perColumn[colIdx].push({ entry, index: i });
+    });
+
+    perColumn.forEach((colEntries, colIdx) => {
+      const colWrap = document.createElement("div");
+      colWrap.style.cssText = `display:flex;flex-direction:column;gap:${cardGap}px;flex:1;min-width:180px;`;
+
+      const sortable = document.createElement("ha-sortable");
+      sortable.disabled = colEntries.length < 2;
+      sortable.draggableSelector = ".ac-popup-card";
+      sortable.rollback = false;
+      sortable.options = { delay: 100, delayOnTouchOnly: true, direction: "vertical" };
+
+      const listWrap = document.createElement("div");
+      listWrap.style.cssText = `display:flex;flex-direction:column;gap:${cardGap}px;`;
+
+      colEntries.forEach(({ entry, index }) => {
+        const cardCfg = entry.card || entry;
+
+        if (this._editingCardIndex === index) {
+          listWrap.appendChild(this._buildInlineCardEditor(index, cardCfg));
+          return;
+        }
+
+        if (!cardCfg || !cardCfg.type) return;
+        let cardEl;
+        try {
+          cardEl = helpers.createCardElement(cardCfg);
+        } catch (e) {
+          return;
+        }
+        if (this._hass) cardEl.hass = this._hass;
+        this._cardEls.push(cardEl);
+
+        const cardWrap = document.createElement("div");
+        cardWrap.className = "ac-popup-card";
+        cardWrap.style.cssText = "position:relative;border-radius:12px;overflow:hidden;";
+
+        const editModeEl = document.createElement("hui-card-edit-mode");
+        editModeEl.hass = this._hass;
+        // Faux lovelace minimal : juste assez pour que hui-card-edit-mode
+        // affiche sa barre d'outils (editMode) sans planter (saveConfig
+        // no-op — on gere nous-memes la sauvegarde via config-changed).
+        editModeEl.lovelace = { editMode: true, saveConfig: async () => {} };
+        editModeEl.path = [0, 0, index];
+        editModeEl.hiddenOverlay = false;
+        editModeEl.appendChild(cardEl);
+        cardWrap.appendChild(editModeEl);
+        listWrap.appendChild(cardWrap);
+      });
+
+      sortable.addEventListener("item-moved", (ev) => {
+        ev.stopPropagation();
+        const { oldIndex, newIndex } = ev.detail;
+        const realOld = colEntries[oldIndex] && colEntries[oldIndex].index;
+        const realNew = colEntries[newIndex] && colEntries[newIndex].index;
+        if (realOld != null && realNew != null) this._reorderCards(realOld, realNew);
+      });
+      listWrap.addEventListener("ll-delete-card", (ev) => {
+        ev.stopPropagation();
+        const realIdx = colEntries[ev.detail.path[2]] && colEntries[ev.detail.path[2]].index;
+        if (realIdx != null) this._deleteCard(realIdx);
+      });
+      listWrap.addEventListener("ll-edit-card", (ev) => {
+        ev.stopPropagation();
+        const realIdx = colEntries[ev.detail.path[2]] && colEntries[ev.detail.path[2]].index;
+        if (realIdx != null) {
+          this._editingCardIndex = realIdx;
+          this._renderPreview();
+        }
+      });
+      listWrap.addEventListener("ll-duplicate-card", (ev) => {
+        ev.stopPropagation();
+        const realIdx = colEntries[ev.detail.path[2]] && colEntries[ev.detail.path[2]].index;
+        if (realIdx != null) this._duplicateCard(realIdx);
+      });
+
+      sortable.appendChild(listWrap);
+      colWrap.appendChild(sortable);
+      colWrap.appendChild(this._buildAddCardRow(colIdx + 1));
+      content.appendChild(colWrap);
+    });
+
+    return content;
+  }
+
+  // Formulaire d'ajout : select natif (aucune dependance) + bouton, ajoute
+  // directement une nouvelle carte de ce type dans la colonne donnee.
+  _buildAddCardRow(columnNumber) {
+    const row = document.createElement("div");
+    row.style.cssText = "display:flex;gap:8px;align-items:center;";
+
+    const select = document.createElement("select");
+    select.style.cssText =
+      "flex:1;min-width:0;padding:8px 10px;border-radius:10px;border:1px solid var(--divider-color);" +
+      "background:var(--card-background-color);color:var(--primary-text-color);font-size:13px;";
+    POPUP_CARD_TYPE_OPTIONS.forEach((opt) => {
+      const o = document.createElement("option");
+      o.value = opt.value;
+      o.textContent = opt.label;
+      select.appendChild(o);
+    });
+
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.textContent = "+ Ajouter";
+    btn.style.cssText =
+      "flex:0 0 auto;padding:8px 14px;border-radius:10px;border:1px dashed var(--divider-color);" +
+      "background:transparent;color:var(--secondary-text-color);cursor:pointer;font-size:13px;white-space:nowrap;";
+    btn.addEventListener("click", () => {
+      this._updateCards((arr) => {
+        arr.push({ column: columnNumber, card: { type: select.value } });
+        return arr;
+      });
+    });
+
+    row.append(select, btn);
+    return row;
+  }
+
+  // Panneau d'edition inline (type + JSON) affiche a la place d'une carte
+  // quand on clique son icone crayon — pas de dialogue natif HA disponible
+  // pour un type de carte arbitraire, donc edition en JSON assumee.
+  _buildInlineCardEditor(index, cardCfg) {
+    const box = document.createElement("div");
+    box.style.cssText =
+      "border:1px solid var(--divider-color);border-radius:12px;padding:12px;" +
+      "background:var(--card-background-color);";
+
+    const typeRow = document.createElement("div");
+    typeRow.style.cssText = "display:flex;gap:8px;align-items:center;margin-bottom:8px;";
+    const typeLabel = document.createElement("span");
+    typeLabel.textContent = "Type";
+    typeLabel.style.cssText = "font-size:12px;color:var(--secondary-text-color);flex:0 0 auto;";
+    const typeSelect = document.createElement("select");
+    typeSelect.style.cssText =
+      "flex:1;min-width:0;padding:6px 8px;border-radius:8px;border:1px solid var(--divider-color);" +
+      "background:var(--card-background-color);color:var(--primary-text-color);font-size:13px;";
+    POPUP_CARD_TYPE_OPTIONS.forEach((opt) => {
+      const o = document.createElement("option");
+      o.value = opt.value;
+      o.textContent = opt.label;
+      if (opt.value === cardCfg.type) o.selected = true;
+      typeSelect.appendChild(o);
+    });
+    typeRow.append(typeLabel, typeSelect);
+
+    const { type, ...rest } = cardCfg;
+    const textarea = document.createElement("textarea");
+    textarea.value = JSON.stringify(rest, null, 2);
+    textarea.rows = 8;
+    textarea.spellcheck = false;
+    textarea.style.cssText =
+      "width:100%;box-sizing:border-box;font-family:var(--code-font-family,monospace);" +
+      "font-size:12px;padding:8px;border-radius:8px;border:1px solid var(--divider-color);" +
+      "background:var(--secondary-background-color,var(--card-background-color));" +
+      "color:var(--primary-text-color);resize:vertical;";
+
+    const errorEl = document.createElement("div");
+    errorEl.style.cssText = "font-size:12px;color:var(--error-color,#db4437);margin-top:4px;min-height:16px;";
+
+    const actions = document.createElement("div");
+    actions.style.cssText = "display:flex;gap:8px;justify-content:flex-end;margin-top:8px;";
+    const cancelBtn = document.createElement("button");
+    cancelBtn.type = "button";
+    cancelBtn.textContent = "Annuler";
+    cancelBtn.style.cssText =
+      "padding:6px 12px;border-radius:8px;border:1px solid var(--divider-color);" +
+      "background:transparent;color:var(--secondary-text-color);cursor:pointer;font-size:13px;";
+    cancelBtn.addEventListener("click", () => {
+      this._editingCardIndex = null;
+      this._renderPreview();
+    });
+    const saveBtn = document.createElement("button");
+    saveBtn.type = "button";
+    saveBtn.textContent = "Enregistrer";
+    saveBtn.style.cssText =
+      "padding:6px 12px;border-radius:8px;border:none;" +
+      "background:var(--primary-color);color:var(--text-primary-color,#fff);cursor:pointer;font-size:13px;";
+    saveBtn.addEventListener("click", () => {
+      let parsed;
+      try {
+        parsed = textarea.value.trim() ? JSON.parse(textarea.value) : {};
+      } catch (err) {
+        errorEl.textContent = "JSON invalide : " + err.message;
+        return;
+      }
+      this._editingCardIndex = null;
+      this._updateCards((arr) => {
+        const e = arr[index];
+        arr[index] = { ...e, card: { type: typeSelect.value, ...parsed } };
+        return arr;
+      });
+    });
+    actions.append(cancelBtn, saveBtn);
+
+    box.append(typeRow, textarea, errorEl, actions);
+    return box;
   }
 
   _applyPanelShape(panel, c) {
