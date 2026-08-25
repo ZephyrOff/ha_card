@@ -517,11 +517,13 @@ icon: mdi:led-strip-variant
   désactivé par défaut) — jamais un attribut de l'entité lumière — mais son nom suit une
   convention fiable (`light.chambre_bled` → `number.chambre_bled_length`, confirmée en
   usage réel), donc la carte la déduit automatiquement de `entity`. Si ton entité ne
-  suit pas cette convention (par exemple renommée manuellement côté HA), renseigne le
-  champ **`length_entity`** dans l'éditeur pour la pointer explicitement — il prend
-  toujours le pas sur la déduction automatique. Sans entité résolvable (déduite ou
-  explicite) ou si elle n'est pas lisible, repli sur `segments` réglé manuellement. Un
-  message sous les sélecteurs indique la source de la détection (déduite/explicite/
+  suit pas cette convention (par exemple renommée manuellement côté HA), tu peux forcer
+  l'entité longueur avec `length_entity: number.xxx` **directement en YAML** — ce champ
+  n'apparaît pas dans l'éditeur visuel (cas rare, pour ne pas alourdir le formulaire),
+  mais reste pris en compte s'il est présent dans la config, en priorité sur la
+  déduction automatique. Sans entité résolvable (déduite ou explicite) ou si elle n'est
+  pas lisible, repli sur `segments` réglé manuellement. Un message sous les sélecteurs
+  indique la source de la détection (déduite/explicite/
   manuelle).
 - **`friendly_name`** doit correspondre au nom convivial **Zigbee2MQTT** de l'appareil
   (celui utilisé dans le topic MQTT), pas nécessairement au nom de l'entité HA si tu

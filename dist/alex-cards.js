@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.31.2";
+const ALEX_CARDS_VERSION = "0.31.3";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -5553,7 +5553,6 @@ class GradientCardEditor extends AlexFormEditor {
         },
       },
       { name: "friendly_name", selector: { text: {} } },
-      { name: "length_entity", selector: { entity: { domain: ["number", "sensor"] } } },
       {
         name: "segments",
         selector: { number: { min: 2, max: 50, step: 1, mode: "box" } },
@@ -5579,7 +5578,6 @@ class GradientCardEditor extends AlexFormEditor {
       entity: "Entité de la lumière",
       device_type: "Type d'appareil",
       friendly_name: "Nom convivial Z2M (vide = déduit de l'entité)",
-      length_entity: "Entité longueur du bandeau (Aqara — vide = déduite du nom de l'entité lumière)",
       segments: "Nombre de segments (Aqara : ignoré si longueur détectée)",
       name: "Nom",
       icon: "Icône",
