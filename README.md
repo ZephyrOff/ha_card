@@ -492,12 +492,11 @@ selon `device_type`.
 
 ```yaml
 type: custom:alex-gradient-card
-entity: light.bandeau_salon
+entity: light.chambre_bled
 device_type: aqara             # hue / aqara
-friendly_name: bandeau_salon   # optionnel, vide = déduit de l'entité
-length_entity: number.bandeau_salon_length   # aqara uniquement, voir plus bas
-segments: 5                    # ignoré si length_entity est configurée et lisible
-name: Bandeau Salon
+friendly_name: chambre_bled    # optionnel, vide = déduit de l'entité
+segments: 5                    # repli si aucune entité longueur n'est resolvable
+name: Bandeau Chambre
 icon: mdi:led-strip-variant
 ```
 
@@ -513,14 +512,17 @@ icon: mdi:led-strip-variant
   courante pour la Lightstrip Gradient d'origine, à ajuster selon ton modèle).
 - **`device_type: aqara`** — payload différent : `{"segment_colors": [{"segment": 1,
   "color": {"r":.., "g":.., "b":..}}, ...]}`. **Nombre de segments détecté
-  automatiquement** à partir de **`length_entity`** — 5 segments de 20cm par mètre de
-  bandeau. Important : `length` est exposée par Z2M comme une **entité séparée**
-  (`number.*`, parfois aussi un `sensor.*` associé) — **pas** un attribut de l'entité
-  lumière — c'est pourquoi ce champ doit être renseigné explicitement, la carte ne peut
-  pas le déduire de `entity` tout seule. Cherche l'entité correspondant à « Length » sur
-  l'appareil dans Réglages → Appareils → (ton bandeau), ou dans le frontend Z2M. Sans
-  cette entité configurée (ou si elle n'est pas lisible), repli sur `segments` réglé
-  manuellement. Un message sous les sélecteurs indique si la détection a fonctionné.
+  automatiquement**, sans rien configurer en plus dans le cas courant : `length` est
+  exposée par Z2M comme une **entité séparée** (`number.*`, parfois aussi un `sensor.*`
+  désactivé par défaut) — jamais un attribut de l'entité lumière — mais son nom suit une
+  convention fiable (`light.chambre_bled` → `number.chambre_bled_length`, confirmée en
+  usage réel), donc la carte la déduit automatiquement de `entity`. Si ton entité ne
+  suit pas cette convention (par exemple renommée manuellement côté HA), renseigne le
+  champ **`length_entity`** dans l'éditeur pour la pointer explicitement — il prend
+  toujours le pas sur la déduction automatique. Sans entité résolvable (déduite ou
+  explicite) ou si elle n'est pas lisible, repli sur `segments` réglé manuellement. Un
+  message sous les sélecteurs indique la source de la détection (déduite/explicite/
+  manuelle).
 - **`friendly_name`** doit correspondre au nom convivial **Zigbee2MQTT** de l'appareil
   (celui utilisé dans le topic MQTT), pas nécessairement au nom de l'entité HA si tu
   l'as renommée séparément. Vide par défaut = déduit du dernier segment de l'entity_id.

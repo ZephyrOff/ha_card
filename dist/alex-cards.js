@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.31.1";
+const ALEX_CARDS_VERSION = "0.31.2";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -5349,16 +5349,31 @@ class GradientCard extends HTMLElement {
     return "";
   }
 
+  // Entite number.*_length deduite du nom de l'entite lumiere elle-meme
+  // (convention confirmee : light.chambre_bled -> number.chambre_bled_length,
+  // meme "object_id" avec juste le domaine et le suffixe qui changent).
+  // N'est qu'un point de depart : `length_entity` explicite prend toujours
+  // le pas si l'utilisateur l'a renseignee (ex. entite renommee cote HA).
+  _defaultLengthEntity() {
+    const c = this._config;
+    if (!c.entity) return null;
+    const objectId = c.entity.split(".")[1];
+    return objectId ? `number.${objectId}_length` : null;
+  }
+
   // Nombre de segments effectif. Pour l'Aqara T1, deduit automatiquement de
-  // `length_entity` (une entite number.*/sensor.* SEPAREE de la lumiere —
-  // Z2M expose les proprietes numeriques parametrables ainsi, jamais comme
-  // simple attribut de l'entite light) : 5 segments de 20cm par metre de
-  // bandeau. Pour Hue (ou si `length_entity` n'est pas configuree/lisible),
-  // repli sur le champ `segments` regle manuellement.
+  // l'entite longueur (number.*_length — deduite par convention du nom de
+  // l'entite lumiere, ou fournie explicitement via `length_entity` si le
+  // nommage ne correspond pas) : 5 segments de 20cm par metre de bandeau.
+  // Z2M expose cette propriete comme une entite SEPAREE de la lumiere,
+  // jamais comme simple attribut de l'entite light. Pour Hue (ou si aucune
+  // entite longueur n'est resolvable/lisible), repli sur `segments` regle
+  // manuellement.
   _effectiveSegments() {
     const c = this._config;
-    if (c.device_type === "aqara" && c.length_entity && this._hass) {
-      const st = this._hass.states[c.length_entity];
+    if (c.device_type === "aqara" && this._hass) {
+      const lengthEntityId = c.length_entity || this._defaultLengthEntity();
+      const st = lengthEntityId ? this._hass.states[lengthEntityId] : null;
       if (st && st.state != null && !Number.isNaN(Number(st.state))) {
         const n = Math.round(Number(st.state) * 5);
         if (n > 0) return Math.min(50, n);
@@ -5422,8 +5437,10 @@ class GradientCard extends HTMLElement {
       .join("");
 
     const missingConfig = !entity || !friendlyName;
-    const lengthStateObj = c.device_type === "aqara" && c.length_entity ? hass.states[c.length_entity] : null;
+    const resolvedLengthEntity = c.device_type === "aqara" ? c.length_entity || this._defaultLengthEntity() : null;
+    const lengthStateObj = resolvedLengthEntity ? hass.states[resolvedLengthEntity] : null;
     const autoDetected = !!lengthStateObj && lengthStateObj.state != null && !Number.isNaN(Number(lengthStateObj.state));
+    const lengthWasGuessed = autoDetected && !c.length_entity;
 
     this.innerHTML = `
       <ha-card style="border-radius:20px;box-shadow:none;background:${cardBg};padding:16px 18px;">
@@ -5458,7 +5475,9 @@ class GradientCard extends HTMLElement {
               <div style="font-size:11px;color:${secondaryColor};margin-bottom:10px;">
                 ${
                   autoDetected
-                    ? `${segmentsCount} segments détectés automatiquement (longueur du bandeau).`
+                    ? lengthWasGuessed
+                      ? `${segmentsCount} segments détectés automatiquement (déduit de « ${resolvedLengthEntity} », vérifie que ça correspond).`
+                      : `${segmentsCount} segments détectés automatiquement (longueur du bandeau).`
                     : `${segmentsCount} segments (réglage manuel).`
                 }
               </div>
@@ -5560,7 +5579,7 @@ class GradientCardEditor extends AlexFormEditor {
       entity: "Entité de la lumière",
       device_type: "Type d'appareil",
       friendly_name: "Nom convivial Z2M (vide = déduit de l'entité)",
-      length_entity: "Entité longueur du bandeau (Aqara — number.*, pas un attribut de la lumière)",
+      length_entity: "Entité longueur du bandeau (Aqara — vide = déduite du nom de l'entité lumière)",
       segments: "Nombre de segments (Aqara : ignoré si longueur détectée)",
       name: "Nom",
       icon: "Icône",
