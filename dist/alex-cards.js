@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.32.6";
+const ALEX_CARDS_VERSION = "0.32.7";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -5770,31 +5770,21 @@ class AlexInputColorCard extends HTMLElement {
    * Native RGB picker
    * --------------------------------------------------------------------- */
 
-  _openColorPicker(entity, groupName) {
+  _openColorPicker(entity, groupName, row) {
+
+    // Si déjà ouvert → on le ferme
+    const existing = row.querySelector(".inline-color-picker");
+
+    if (existing) {
+      existing.remove();
+      return;
+    }
 
     const current = this._color(entity);
 
-    const dialog = document.createElement("ha-dialog");
-
-    dialog.heading = true;
-    dialog.open = true;
-
-    dialog.style.setProperty(
-      "--mdc-dialog-min-width",
-      "320px"
-    );
-
-    const title = document.createElement("div");
-
-    title.textContent =
-      `Couleur — ${groupName || ""}`;
-
-    title.style.cssText =
-      "font-size:18px;" +
-      "font-weight:500;" +
-      "margin-bottom:16px;";
-
     const picker = document.createElement("ha-selector");
+
+    picker.className = "inline-color-picker";
 
     picker.hass = this._hass;
 
@@ -5804,38 +5794,28 @@ class AlexInputColorCard extends HTMLElement {
 
     picker.value = this._hexToRgb(current);
 
-    picker.style.cssText =
-      "display:block;" +
-      "width:100%;";
+    picker.style.cssText = `
+      display:block;
+      width:100%;
+      margin-top:10px;
+      margin-bottom:4px;
+    `;
 
-    picker.addEventListener(
-      "value-changed",
-      ev => {
+    picker.addEventListener("value-changed", ev => {
 
-        const rgb = ev.detail?.value;
+      const rgb = ev.detail?.value;
 
-        if (!Array.isArray(rgb) || rgb.length < 3) {
-          return;
-        }
-
-        const hex = this._rgbToHex(rgb);
-
-        this._setText(entity, hex);
-
-        dialog.close();
+      if (!Array.isArray(rgb) || rgb.length < 3) {
+        return;
       }
-    );
 
-    dialog.appendChild(title);
-    dialog.appendChild(picker);
+      const hex = this._rgbToHex(rgb);
 
-    dialog.addEventListener(
-      "closed",
-      () => dialog.remove(),
-      { once: true }
-    );
+      this._setText(entity, hex);
 
-    document.body.appendChild(dialog);
+    });
+
+    row.appendChild(picker);
   }
 
   /* -----------------------------------------------------------------------
@@ -6055,12 +6035,12 @@ class AlexInputColorCard extends HTMLElement {
     button.addEventListener(
       "click",
       ev => {
-
         ev.stopPropagation();
 
         this._openColorPicker(
           group.color,
-          group.name
+          group.name,
+          row
         );
       }
     );
