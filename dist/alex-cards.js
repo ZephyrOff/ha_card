@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.32.9";
+const ALEX_CARDS_VERSION = "0.32.10";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -5771,58 +5771,77 @@ class AlexInputColorCard extends HTMLElement {
    * --------------------------------------------------------------------- */
 
   _openColorPicker(entity, groupName) {
-    const selector = document.createElement("ha-selector");
-
-    selector.hass = this._hass;
-
-    selector.selector = {
-      color_rgb: {},
-    };
 
     const current = this._color(entity);
 
-    if (current) {
-      selector.value = this._hexToRgb(current);
-    }
+    const dialog = document.createElement("ha-dialog");
 
-    // Le selector doit exister dans le DOM pour que HA puisse
-    // correctement ouvrir son popup.
-    selector.style.position = "fixed";
-    selector.style.left = "-10000px";
-    selector.style.top = "0";
-    selector.style.width = "1px";
-    selector.style.height = "1px";
+    dialog.heading = true;
+    dialog.open = true;
 
-    document.body.appendChild(selector);
+    dialog.style.setProperty(
+      "--mdc-dialog-min-width",
+      "320px"
+    );
 
-    const cleanup = () => {
-      selector.remove();
+    const title = document.createElement("div");
+
+    title.textContent =
+      `Couleur — ${groupName || ""}`;
+
+    title.style.cssText =
+      "font-size:18px;" +
+      "font-weight:500;" +
+      "margin-bottom:16px;";
+
+    const picker = document.createElement("ha-selector");
+
+    picker.hass = this._hass;
+
+    picker.selector = {
+      color_rgb: {},
     };
 
-    selector.addEventListener("value-changed", (ev) => {
-      ev.stopPropagation();
+    picker.value = this._hexToRgb(current);
 
-      const rgb = ev.detail?.value;
+    picker.style.cssText =
+      "display:block;" +
+      "width:100%;" +
+      "margin:0;";
 
-      if (Array.isArray(rgb) && rgb.length >= 3) {
+    picker.addEventListener(
+      "value-changed",
+      ev => {
+
+        ev.stopPropagation();
+
+        const rgb = ev.detail?.value;
+
+        if (!Array.isArray(rgb) || rgb.length < 3) {
+          return;
+        }
+
         const hex = this._rgbToHex(rgb);
 
         this._setText(entity, hex);
+
+        // On ferme uniquement après avoir choisi une couleur.
+        dialog.close();
       }
+    );
 
-      cleanup();
-    }, { once: true });
+    dialog.appendChild(title);
+    dialog.appendChild(picker);
 
-    // Ouvre directement le picker natif HA
-    requestAnimationFrame(() => {
-      const input =
-        selector.shadowRoot?.querySelector("ha-color-picker") ||
-        selector.shadowRoot?.querySelector("ha-color-picker");
+    dialog.addEventListener(
+      "closed",
+      () => {
+        dialog.remove();
+      },
+      { once: true }
+    );
 
-      if (input) {
-        input.click();
-      }
-    });
+    document.body.appendChild(dialog);
   }
 
   /* -----------------------------------------------------------------------
