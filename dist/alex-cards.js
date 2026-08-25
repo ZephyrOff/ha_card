@@ -5601,10 +5601,867 @@ window.customCards.push({
   documentationURL: "https://github.com/<user>/alex-cards",
 });
 
+
 /* =========================================================================
- * === ma-prochaine-carte ==================================================
- * Wrapper : étendre AlexWrapperCard + implémenter _innerConfig(config),
- * éditeur simple : étendre AlexFormEditor (this._schema / this._labels),
- * éditeur liste : étendre AlexListEditor (_normalize / _render).
- * Puis customElements.define(...) x2 + window.customCards.push(...).
+ * === alex-input-color ====================================================
+ *
+ * Gestion compacte des paramètres lumineux :
+ *
+ *   - brightness -> input_number 0..254
+ *   - color      -> input_text contenant une couleur HEX (#RRGGBB)
+ *   - white      -> input_number contenant une température en Kelvin
+ *
+ * Chaque groupe peut utiliser un, deux ou trois paramètres.
+ *
+ * Exemple :
+ *
+ * type: custom:alex-input-color
+ * groups:
+ *   - name: Matin
+ *     icon: mdi:weather-sunset-up
+ *     brightness: input_number.matin_light_direct
+ *     color: input_text.light_scheduler_color_matin_direct
+ *     white: input_number.light_scheduler_white_matin_direct
+ *
  * ========================================================================= */
+
+class AlexInputColorCard extends HTMLElement {
+
+  static getConfigElement() {
+    return document.createElement("alex-input-color-card-editor");
+  }
+
+  static getStubConfig() {
+    return {
+      groups: [
+        {
+          name: "Matin",
+          icon: "mdi:weather-sunset-up",
+          brightness: "",
+          color: "",
+          white: "",
+        },
+      ],
+    };
+  }
+
+  setConfig(config) {
+    if (!config) {
+      throw new Error("Configuration invalide");
+    }
+
+    this._config = config;
+    this._built = false;
+    this._lastSig = null;
+    this._colorPickers = [];
+    this._whitePickers = [];
+  }
+
+  set hass(hass) {
+    this._hass = hass;
+    this._render();
+  }
+
+  getCardSize() {
+    const groups = this._config?.groups || [];
+    return Math.max(1, groups.length);
+  }
+
+  /* -----------------------------------------------------------------------
+   * Helpers
+   * --------------------------------------------------------------------- */
+
+  _getState(entityId) {
+    if (!entityId || !this._hass) return null;
+    return this._hass.states[entityId] || null;
+  }
+
+  _getNumber(entityId, fallback = 0) {
+    const state = this._getState(entityId);
+
+    if (!state) return fallback;
+
+    const value = Number(state.state);
+
+    return Number.isFinite(value) ? value : fallback;
+  }
+
+  _getColor(entityId) {
+    const state = this._getState(entityId);
+
+    if (!state || !state.state || state.state === "unknown" || state.state === "unavailable") {
+      return [255, 255, 255];
+    }
+
+    const value = String(state.state).trim();
+
+    /*
+     * HEX #RRGGBB
+     */
+
+    const match = value.match(/^#?([0-9a-f]{6})$/i);
+
+    if (match) {
+      const hex = match[1];
+
+      return [
+        parseInt(hex.substring(0, 2), 16),
+        parseInt(hex.substring(2, 4), 16),
+        parseInt(hex.substring(4, 6), 16),
+      ];
+    }
+
+    /*
+     * RGB "255, 120, 50"
+     */
+
+    const rgb = value.match(
+      /^rgb\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)$/i
+    );
+
+    if (rgb) {
+      return [
+        Number(rgb[1]),
+        Number(rgb[2]),
+        Number(rgb[3]),
+      ];
+    }
+
+    return [255, 255, 255];
+  }
+
+  _rgbToHex(rgb) {
+    if (!Array.isArray(rgb) || rgb.length < 3) {
+      return "#ffffff";
+    }
+
+    return (
+      "#" +
+      rgb
+        .slice(0, 3)
+        .map((v) =>
+          Math.max(0, Math.min(255, Number(v) || 0))
+            .toString(16)
+            .padStart(2, "0")
+        )
+        .join("")
+        .toUpperCase()
+    );
+  }
+
+  _setInputText(entityId, value) {
+    if (!entityId || !this._hass) return;
+
+    this._hass.callService(
+      "input_text",
+      "set_value",
+      {
+        entity_id: entityId,
+        value,
+      }
+    );
+  }
+
+  _setInputNumber(entityId, value) {
+    if (!entityId || !this._hass) return;
+
+    this._hass.callService(
+      "input_number",
+      "set_value",
+      {
+        entity_id: entityId,
+        value,
+      }
+    );
+  }
+
+  _createRgbPicker(entityId) {
+
+    const picker = document.createElement("ha-selector");
+
+    picker.selector = {
+      color_rgb: {},
+    };
+
+    picker.value = this._getColor(entityId);
+
+    if (this._hass) {
+      picker.hass = this._hass;
+    }
+
+    picker.style.cssText =
+      "flex:0 0 auto;" +
+      "min-width:42px;" +
+      "max-width:120px;";
+
+    picker.addEventListener("value-changed", (ev) => {
+
+      ev.stopPropagation();
+
+      const rgb = ev.detail?.value;
+
+      if (!Array.isArray(rgb) || rgb.length < 3) {
+        return;
+      }
+
+      picker.value = rgb;
+
+      const hex = this._rgbToHex(rgb);
+
+      this._setInputText(entityId, hex);
+    });
+
+    this._colorPickers.push(picker);
+
+    return picker;
+  }
+
+  _createWhitePicker(entityId) {
+
+    const value = this._getNumber(entityId, 4000);
+
+    const picker = document.createElement("ha-selector");
+
+    picker.selector = {
+      color_temp: {
+        unit: "kelvin",
+        min: 2000,
+        max: 6500,
+      },
+    };
+
+    picker.value = value;
+
+    if (this._hass) {
+      picker.hass = this._hass;
+    }
+
+    picker.style.cssText =
+      "flex:1 1 auto;" +
+      "min-width:90px;" +
+      "max-width:180px;";
+
+    picker.addEventListener("value-changed", (ev) => {
+
+      ev.stopPropagation();
+
+      const kelvin = Number(ev.detail?.value);
+
+      if (!Number.isFinite(kelvin)) {
+        return;
+      }
+
+      picker.value = kelvin;
+
+      this._setInputNumber(entityId, kelvin);
+    });
+
+    this._whitePickers.push(picker);
+
+    return picker;
+  }
+
+  /* -----------------------------------------------------------------------
+   * Row
+   * --------------------------------------------------------------------- */
+
+  _renderGroup(group) {
+
+    const row = document.createElement("div");
+
+    row.style.cssText =
+      "display:flex;" +
+      "align-items:center;" +
+      "gap:8px;" +
+      "min-height:42px;" +
+      "padding:3px 0;";
+
+    /*
+     * Icône
+     */
+
+    const iconWrap = document.createElement("div");
+
+    iconWrap.style.cssText =
+      "width:28px;" +
+      "height:28px;" +
+      "border-radius:8px;" +
+      "display:flex;" +
+      "align-items:center;" +
+      "justify-content:center;" +
+      "background:rgba(var(--rgb-primary-text-color,0,0,0),0.06);" +
+      "flex:0 0 auto;";
+
+    const icon = document.createElement("ha-icon");
+
+    icon.icon = group.icon || "mdi:lightbulb-outline";
+
+    icon.style.cssText =
+      "--mdc-icon-size:17px;" +
+      "color:var(--secondary-text-color);";
+
+    iconWrap.appendChild(icon);
+
+    /*
+     * Nom
+     */
+
+    const name = document.createElement("div");
+
+    name.textContent = group.name || "";
+
+    name.style.cssText =
+      "flex:0 0 76px;" +
+      "min-width:0;" +
+      "font-size:13px;" +
+      "font-weight:500;" +
+      "color:var(--primary-text-color);" +
+      "white-space:nowrap;" +
+      "overflow:hidden;" +
+      "text-overflow:ellipsis;";
+
+    row.append(iconWrap, name);
+
+    /*
+     * BRIGHTNESS
+     */
+
+    if (group.brightness) {
+
+      const brightness = document.createElement("ha-selector");
+
+      brightness.selector = {
+        number: {
+          min: 0,
+          max: 254,
+          step: 1,
+          mode: "slider",
+        },
+      };
+
+      brightness.value = this._getNumber(group.brightness, 0);
+
+      if (this._hass) {
+        brightness.hass = this._hass;
+      }
+
+      brightness.style.cssText =
+        "flex:1 1 auto;" +
+        "min-width:70px;" +
+        "max-width:170px;";
+
+      brightness.addEventListener("value-changed", (ev) => {
+
+        ev.stopPropagation();
+
+        const value = Number(ev.detail?.value);
+
+        if (!Number.isFinite(value)) {
+          return;
+        }
+
+        brightness.value = value;
+
+        this._setInputNumber(group.brightness, value);
+      });
+
+      this._colorPickers.push(brightness);
+
+      row.appendChild(brightness);
+
+      const brightnessValue = document.createElement("div");
+
+      brightnessValue.textContent =
+        `${Math.round(this._getNumber(group.brightness, 0))}`;
+
+      brightnessValue.style.cssText =
+        "width:28px;" +
+        "flex:0 0 28px;" +
+        "text-align:right;" +
+        "font-size:11px;" +
+        "color:var(--secondary-text-color);";
+
+      row.appendChild(brightnessValue);
+    }
+
+    /*
+     * RGB
+     */
+
+    if (group.color) {
+
+      const picker = this._createRgbPicker(group.color);
+
+      row.appendChild(picker);
+    }
+
+    /*
+     * WHITE / KELVIN
+     */
+
+    if (group.white) {
+
+      const picker = this._createWhitePicker(group.white);
+
+      row.appendChild(picker);
+
+      const kelvinValue = document.createElement("div");
+
+      kelvinValue.textContent =
+        `${Math.round(this._getNumber(group.white, 4000))} K`;
+
+      kelvinValue.style.cssText =
+        "width:48px;" +
+        "flex:0 0 48px;" +
+        "text-align:right;" +
+        "font-size:11px;" +
+        "color:var(--secondary-text-color);" +
+        "white-space:nowrap;";
+
+      row.appendChild(kelvinValue);
+    }
+
+    return row;
+  }
+
+  /* -----------------------------------------------------------------------
+   * Render
+   * --------------------------------------------------------------------- */
+
+  _render() {
+
+    if (!this._config || !this._hass) {
+      return;
+    }
+
+    const groups = this._config.groups || [];
+
+    const signature = groups
+      .map((g) => {
+
+        const brightness = g.brightness
+          ? this._getNumber(g.brightness, 0)
+          : "";
+
+        const color = g.color
+          ? this._getState(g.color)?.state || ""
+          : "";
+
+        const white = g.white
+          ? this._getNumber(g.white, 4000)
+          : "";
+
+        return [
+          g.name,
+          g.icon,
+          g.brightness,
+          brightness,
+          g.color,
+          color,
+          g.white,
+          white,
+        ].join("|");
+
+      })
+      .join("~");
+
+    if (this._built && signature === this._lastSig) {
+      return;
+    }
+
+    this._lastSig = signature;
+
+    this._colorPickers = [];
+    this._whitePickers = [];
+
+    const card = document.createElement("ha-card");
+
+    card.style.cssText =
+      "border-radius:20px;" +
+      "box-shadow:none;" +
+      "border:none;" +
+      "background:var(--ha-card-background,var(--card-background-color));" +
+      "padding:8px 12px;";
+
+    const container = document.createElement("div");
+
+    container.style.cssText =
+      "display:flex;" +
+      "flex-direction:column;" +
+      "width:100%;" +
+      "gap:1px;";
+
+    groups.forEach((group, index) => {
+
+      const row = this._renderGroup(group);
+
+      if (index < groups.length - 1) {
+
+        row.style.borderBottom =
+          "1px solid var(--divider-color)";
+      }
+
+      container.appendChild(row);
+    });
+
+    card.appendChild(container);
+
+    this.innerHTML = "";
+    this.appendChild(card);
+
+    this._built = true;
+  }
+}
+
+customElements.define(
+  "alex-input-color",
+  AlexInputColorCard
+);
+
+
+/* =========================================================================
+ * === alex-input-color-editor =============================================
+ * ========================================================================= */
+
+class AlexInputColorCardEditor extends AlexListEditor {
+
+  static getStubConfig() {
+    return AlexInputColorCard.getStubConfig();
+  }
+
+  _normalize() {
+
+    if (!Array.isArray(this._config.groups)) {
+      this._config.groups = [];
+    }
+
+    this._config.groups = this._config.groups.map((g) => ({
+      name: "",
+      icon: "mdi:lightbulb-outline",
+      brightness: "",
+      color: "",
+      white: "",
+      ...g,
+    }));
+  }
+
+  _validPath() {
+
+    const p = this._path || [];
+
+    if (
+      p.length >= 1 &&
+      !this._config.groups[p[0]]
+    ) {
+      return [];
+    }
+
+    return p;
+  }
+
+  _render() {
+
+    this._forms = [];
+    this._selectors = [];
+
+    this.innerHTML = "";
+
+    const p = this._validPath();
+
+    if (p.length === 0) {
+      this._renderRoot();
+    } else {
+      this._renderGroupEditor(p[0]);
+    }
+
+    if (this._hass) {
+
+      this._forms.forEach(
+        (f) => (f.hass = this._hass)
+      );
+
+      this._selectors.forEach(
+        (s) => (s.hass = this._hass)
+      );
+    }
+  }
+
+  _renderRoot() {
+
+    const groups = this._config.groups || [];
+
+    this.appendChild(
+      this._sectionTitle("Groupes")
+    );
+
+    groups.forEach((group, index) => {
+
+      this.appendChild(
+        this._row(
+          group.icon || "mdi:lightbulb-outline",
+          group.name || "(sans nom)",
+          [
+            group.brightness ? "Luminosité" : "",
+            group.color ? "RGB" : "",
+            group.white ? "Blanc" : "",
+          ]
+            .filter(Boolean)
+            .join(" · "),
+          () => {
+
+            this._path = [index];
+            this._render();
+
+          },
+          () => {
+
+            this._update(
+              (c) => c.groups.splice(index, 1)
+            );
+
+            this._render();
+
+          },
+          index > 0
+            ? () =>
+                this._moveItem(
+                  (c) => c.groups,
+                  index,
+                  -1
+                )
+            : null,
+          index < groups.length - 1
+            ? () =>
+                this._moveItem(
+                  (c) => c.groups,
+                  index,
+                  1
+                )
+            : null
+        )
+      );
+    });
+
+    this.appendChild(
+      this._addButton(
+        "Ajouter un groupe",
+        () => {
+
+          let index;
+
+          this._update((c) => {
+
+            c.groups = c.groups || [];
+
+            c.groups.push({
+              name: "",
+              icon: "mdi:lightbulb-outline",
+              brightness: "",
+              color: "",
+              white: "",
+            });
+
+            index = c.groups.length - 1;
+
+          });
+
+          this._path = [index];
+
+          this._render();
+        }
+      )
+    );
+  }
+
+  _renderGroupEditor(index) {
+
+    const group =
+      this._config.groups[index] || {};
+
+    const merge = (value) => {
+
+      this._update((c) => {
+
+        c.groups[index] = {
+          ...c.groups[index],
+          ...value,
+        };
+
+      });
+    };
+
+    this.appendChild(
+      this._backHeader(
+        group.name || "Groupe",
+        () => {
+
+          this._path = [];
+          this._render();
+
+        }
+      )
+    );
+
+    /*
+     * Général
+     */
+
+    this.appendChild(
+      this._sectionTitle("Général")
+    );
+
+    this.appendChild(
+      this._form(
+        [
+          {
+            name: "name",
+            selector: { text: {} },
+          },
+          {
+            name: "icon",
+            selector: { icon: {} },
+          },
+        ],
+        {
+          name: group.name || "",
+          icon:
+            group.icon ||
+            "mdi:lightbulb-outline",
+        },
+        {
+          name: "Nom",
+          icon: "Icône",
+        },
+        merge
+      )
+    );
+
+    /*
+     * Entités
+     */
+
+    this.appendChild(
+      this._sectionTitle("Paramètres lumineux")
+    );
+
+    this.appendChild(
+      this._form(
+        [
+          {
+            name: "brightness",
+            selector: {
+              entity: {
+                domain: "input_number",
+              },
+            },
+          },
+          {
+            name: "color",
+            selector: {
+              entity: {
+                domain: "input_text",
+              },
+            },
+          },
+          {
+            name: "white",
+            selector: {
+              entity: {
+                domain: "input_number",
+              },
+            },
+          },
+        ],
+        {
+          brightness: group.brightness || "",
+          color: group.color || "",
+          white: group.white || "",
+        },
+        {
+          brightness: "Luminosité",
+          color: "Couleur RGB",
+          white: "Température du blanc",
+        },
+        merge
+      )
+    );
+
+    /*
+     * Configuration du Kelvin
+     */
+
+    const whiteConfig = document.createElement("div");
+
+    whiteConfig.style.cssText =
+      "margin-top:10px;";
+
+    whiteConfig.appendChild(
+      this._form(
+        [
+          {
+            name: "white_min",
+            selector: {
+              number: {
+                min: 1000,
+                max: 10000,
+                step: 50,
+                mode: "box",
+              },
+            },
+          },
+          {
+            name: "white_max",
+            selector: {
+              number: {
+                min: 1000,
+                max: 10000,
+                step: 50,
+                mode: "box",
+              },
+            },
+          },
+        ],
+        {
+          white_min:
+            group.white_min != null
+              ? group.white_min
+              : 2000,
+
+          white_max:
+            group.white_max != null
+              ? group.white_max
+              : 6500,
+        },
+        {
+          white_min: "Kelvin minimum",
+          white_max: "Kelvin maximum",
+        },
+        merge
+      )
+    );
+
+    this.appendChild(
+      this._panel(
+        "Plage du blanc",
+        "mdi:thermometer",
+        whiteConfig,
+        false
+      )
+    );
+  }
+}
+
+customElements.define(
+  "alex-input-color-editor",
+  AlexInputColorCardEditor
+);
+
+window.customCards.push({
+  type: "alex-input-color",
+  name: "Alex Input Color",
+  description:
+    "Gestion compacte de luminosité, couleur RGB et température de blanc.",
+  preview: false,
+  documentationURL:
+    "https://github.com/<user>/alex-cards",
+});
