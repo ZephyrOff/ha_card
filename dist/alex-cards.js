@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.32.5";
+const ALEX_CARDS_VERSION = "0.32.6";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -5625,10 +5625,14 @@ window.customCards.push({
  *
  * ========================================================================= */
 
+/* =========================================================================
+ * === ALEX INPUT COLOR =====================================================
+ * ========================================================================= */
+
 class AlexInputColorCard extends HTMLElement {
 
   static getConfigElement() {
-    return document.createElement("alex-input-color-card-editor");
+    return document.createElement("alex-input-color-editor");
   }
 
   static getStubConfig() {
@@ -5640,6 +5644,8 @@ class AlexInputColorCard extends HTMLElement {
           brightness: "",
           color: "",
           white: "",
+          white_min: 2000,
+          white_max: 6500,
         },
       ],
     };
@@ -5651,375 +5657,613 @@ class AlexInputColorCard extends HTMLElement {
     }
 
     this._config = config;
-    this._built = false;
-    this._lastSig = null;
-    this._colorPickers = [];
-    this._whitePickers = [];
+    this._hass = null;
+    this._rendered = false;
   }
 
   set hass(hass) {
     this._hass = hass;
-    this._render();
+
+    if (!this._rendered) {
+      this._render();
+      return;
+    }
+
+    this._updateValues();
   }
 
   getCardSize() {
-    const groups = this._config?.groups || [];
-    return Math.max(1, groups.length);
+    return Math.max(1, this._config?.groups?.length || 1);
   }
 
   /* -----------------------------------------------------------------------
-   * Helpers
+   * HA state helpers
    * --------------------------------------------------------------------- */
 
-  _getState(entityId) {
-    if (!entityId || !this._hass) return null;
-    return this._hass.states[entityId] || null;
+  _state(entity) {
+    return entity ? this._hass?.states?.[entity] : null;
   }
 
-  _getNumber(entityId, fallback = 0) {
-    const state = this._getState(entityId);
+  _number(entity, fallback = 0) {
+    const state = this._state(entity);
 
-    if (!state) return fallback;
+    if (!state) {
+      return fallback;
+    }
 
     const value = Number(state.state);
 
     return Number.isFinite(value) ? value : fallback;
   }
 
-  _getColor(entityId) {
-    const state = this._getState(entityId);
+  _color(entity) {
 
-    if (!state || !state.state || state.state === "unknown" || state.state === "unavailable") {
-      return [255, 255, 255];
+    const state = this._state(entity);
+
+    if (!state || !state.state) {
+      return "#ffffff";
     }
 
     const value = String(state.state).trim();
 
-    /*
-     * HEX #RRGGBB
-     */
-
-    const match = value.match(/^#?([0-9a-f]{6})$/i);
-
-    if (match) {
-      const hex = match[1];
-
-      return [
-        parseInt(hex.substring(0, 2), 16),
-        parseInt(hex.substring(2, 4), 16),
-        parseInt(hex.substring(4, 6), 16),
-      ];
+    if (/^#[0-9a-f]{6}$/i.test(value)) {
+      return value;
     }
-
-    /*
-     * RGB "255, 120, 50"
-     */
 
     const rgb = value.match(
       /^rgb\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)$/i
     );
 
     if (rgb) {
-      return [
-        Number(rgb[1]),
-        Number(rgb[2]),
-        Number(rgb[3]),
-      ];
+
+      return "#" + [
+        rgb[1],
+        rgb[2],
+        rgb[3],
+      ].map(v =>
+        Number(v)
+          .toString(16)
+          .padStart(2, "0")
+      ).join("");
     }
 
-    return [255, 255, 255];
+    return "#ffffff";
   }
 
-  _rgbToHex(rgb) {
-    if (!Array.isArray(rgb) || rgb.length < 3) {
-      return "#ffffff";
+  /* -----------------------------------------------------------------------
+   * Services
+   * --------------------------------------------------------------------- */
+
+  _setNumber(entity, value) {
+
+    if (!entity || !this._hass) {
+      return;
     }
-
-    return (
-      "#" +
-      rgb
-        .slice(0, 3)
-        .map((v) =>
-          Math.max(0, Math.min(255, Number(v) || 0))
-            .toString(16)
-            .padStart(2, "0")
-        )
-        .join("")
-        .toUpperCase()
-    );
-  }
-
-  _setInputText(entityId, value) {
-    if (!entityId || !this._hass) return;
-
-    this._hass.callService(
-      "input_text",
-      "set_value",
-      {
-        entity_id: entityId,
-        value,
-      }
-    );
-  }
-
-  _setInputNumber(entityId, value) {
-    if (!entityId || !this._hass) return;
 
     this._hass.callService(
       "input_number",
       "set_value",
       {
-        entity_id: entityId,
-        value,
+        entity_id: entity,
+        value: value,
       }
     );
   }
 
-  _createRgbPicker(entityId) {
+  _setText(entity, value) {
+
+    if (!entity || !this._hass) {
+      return;
+    }
+
+    this._hass.callService(
+      "input_text",
+      "set_value",
+      {
+        entity_id: entity,
+        value: value,
+      }
+    );
+  }
+
+  /* -----------------------------------------------------------------------
+   * Native RGB picker
+   * --------------------------------------------------------------------- */
+
+  _openColorPicker(entity, groupName) {
+
+    const current = this._color(entity);
+
+    const dialog = document.createElement("ha-dialog");
+
+    dialog.heading = true;
+    dialog.open = true;
+
+    dialog.style.setProperty(
+      "--mdc-dialog-min-width",
+      "320px"
+    );
+
+    const title = document.createElement("div");
+
+    title.textContent =
+      `Couleur — ${groupName || ""}`;
+
+    title.style.cssText =
+      "font-size:18px;" +
+      "font-weight:500;" +
+      "margin-bottom:16px;";
 
     const picker = document.createElement("ha-selector");
+
+    picker.hass = this._hass;
 
     picker.selector = {
       color_rgb: {},
     };
 
-    picker.value = this._getColor(entityId);
-
-    if (this._hass) {
-      picker.hass = this._hass;
-    }
+    picker.value = this._hexToRgb(current);
 
     picker.style.cssText =
-      "flex:0 0 auto;" +
-      "min-width:42px;" +
-      "max-width:120px;";
+      "display:block;" +
+      "width:100%;";
 
-    picker.addEventListener("value-changed", (ev) => {
+    picker.addEventListener(
+      "value-changed",
+      ev => {
 
-      ev.stopPropagation();
+        const rgb = ev.detail?.value;
 
-      const rgb = ev.detail?.value;
+        if (!Array.isArray(rgb) || rgb.length < 3) {
+          return;
+        }
 
-      if (!Array.isArray(rgb) || rgb.length < 3) {
-        return;
+        const hex = this._rgbToHex(rgb);
+
+        this._setText(entity, hex);
+
+        dialog.close();
       }
+    );
 
-      picker.value = rgb;
+    dialog.appendChild(title);
+    dialog.appendChild(picker);
 
-      const hex = this._rgbToHex(rgb);
+    dialog.addEventListener(
+      "closed",
+      () => dialog.remove(),
+      { once: true }
+    );
 
-      this._setInputText(entityId, hex);
-    });
-
-    this._colorPickers.push(picker);
-
-    return picker;
+    document.body.appendChild(dialog);
   }
 
-  _createWhitePicker(entityId) {
+  /* -----------------------------------------------------------------------
+   * Native Kelvin picker
+   * --------------------------------------------------------------------- */
 
-    const value = this._getNumber(entityId, 4000);
+  _openWhitePicker(entity, group, groupName) {
+
+    const min =
+      Number(group.white_min ?? 2000);
+
+    const max =
+      Number(group.white_max ?? 6500);
+
+    const current =
+      this._number(
+        entity,
+        Math.round((min + max) / 2)
+      );
+
+    const dialog = document.createElement("ha-dialog");
+
+    dialog.heading = true;
+    dialog.open = true;
+
+    dialog.style.setProperty(
+      "--mdc-dialog-min-width",
+      "320px"
+    );
+
+    const title = document.createElement("div");
+
+    title.textContent =
+      `Température — ${groupName || ""}`;
+
+    title.style.cssText =
+      "font-size:18px;" +
+      "font-weight:500;" +
+      "margin-bottom:16px;";
 
     const picker = document.createElement("ha-selector");
+
+    picker.hass = this._hass;
 
     picker.selector = {
       color_temp: {
         unit: "kelvin",
-        min: 2000,
-        max: 6500,
+        min: min,
+        max: max,
       },
     };
 
-    picker.value = value;
-
-    if (this._hass) {
-      picker.hass = this._hass;
-    }
+    picker.value = current;
 
     picker.style.cssText =
-      "flex:1 1 auto;" +
-      "min-width:90px;" +
-      "max-width:180px;";
+      "display:block;" +
+      "width:100%;";
 
-    picker.addEventListener("value-changed", (ev) => {
+    picker.addEventListener(
+      "value-changed",
+      ev => {
 
-      ev.stopPropagation();
+        const value =
+          Number(ev.detail?.value);
 
-      const kelvin = Number(ev.detail?.value);
+        if (!Number.isFinite(value)) {
+          return;
+        }
 
-      if (!Number.isFinite(kelvin)) {
-        return;
+        this._setNumber(
+          entity,
+          Math.round(value)
+        );
+
+        dialog.close();
       }
+    );
 
-      picker.value = kelvin;
+    dialog.appendChild(title);
+    dialog.appendChild(picker);
 
-      this._setInputNumber(entityId, kelvin);
-    });
+    dialog.addEventListener(
+      "closed",
+      () => dialog.remove(),
+      { once: true }
+    );
 
-    this._whitePickers.push(picker);
+    document.body.appendChild(dialog);
+  }
 
-    return picker;
+  /* -----------------------------------------------------------------------
+   * RGB conversion
+   * --------------------------------------------------------------------- */
+
+  _hexToRgb(hex) {
+
+    const value =
+      String(hex || "")
+        .replace("#", "");
+
+    if (!/^[0-9a-f]{6}$/i.test(value)) {
+      return [255, 255, 255];
+    }
+
+    return [
+      parseInt(value.substring(0, 2), 16),
+      parseInt(value.substring(2, 4), 16),
+      parseInt(value.substring(4, 6), 16),
+    ];
+  }
+
+  _rgbToHex(rgb) {
+
+    return "#" +
+      rgb
+        .slice(0, 3)
+        .map(v =>
+          Math.max(
+            0,
+            Math.min(
+              255,
+              Number(v) || 0
+            )
+          )
+            .toString(16)
+            .padStart(2, "0")
+        )
+        .join("")
+        .toUpperCase();
+  }
+
+  /* -----------------------------------------------------------------------
+   * Brightness slider
+   * --------------------------------------------------------------------- */
+
+  _createBrightness(group, row) {
+
+    if (!group.brightness) {
+      return;
+    }
+
+    const value =
+      this._number(
+        group.brightness,
+        0
+      );
+
+    const wrapper =
+      document.createElement("div");
+
+    wrapper.className =
+      "brightness-control";
+
+    const slider =
+      document.createElement("input");
+
+    slider.type = "range";
+    slider.min = "0";
+    slider.max = "254";
+    slider.step = "1";
+    slider.value = value;
+
+    const valueLabel =
+      document.createElement("span");
+
+    valueLabel.className =
+      "brightness-value";
+
+    valueLabel.textContent =
+      Math.round(value);
+
+    slider.addEventListener(
+      "input",
+      ev => {
+
+        const newValue =
+          Number(ev.target.value);
+
+        valueLabel.textContent =
+          Math.round(newValue);
+
+        this._setNumber(
+          group.brightness,
+          newValue
+        );
+      }
+    );
+
+    wrapper.appendChild(slider);
+    wrapper.appendChild(valueLabel);
+
+    row.appendChild(wrapper);
+  }
+
+  /* -----------------------------------------------------------------------
+   * RGB swatch
+   * --------------------------------------------------------------------- */
+
+  _createColorButton(group, row) {
+
+    if (!group.color) {
+      return;
+    }
+
+    const button =
+      document.createElement("button");
+
+    button.className =
+      "color-button";
+
+    button.style.background =
+      this._color(group.color);
+
+    button.title =
+      "Modifier la couleur";
+
+    button.addEventListener(
+      "click",
+      ev => {
+
+        ev.stopPropagation();
+
+        this._openColorPicker(
+          group.color,
+          group.name
+        );
+      }
+    );
+
+    row.appendChild(button);
+  }
+
+  /* -----------------------------------------------------------------------
+   * Kelvin control
+   * --------------------------------------------------------------------- */
+
+  _createWhiteControl(group, row) {
+
+    if (!group.white) {
+      return;
+    }
+
+    const min =
+      Number(group.white_min ?? 2000);
+
+    const max =
+      Number(group.white_max ?? 6500);
+
+    const value =
+      this._number(
+        group.white,
+        Math.round((min + max) / 2)
+      );
+
+    const wrapper =
+      document.createElement("div");
+
+    wrapper.className =
+      "white-control";
+
+    /*
+     * Icône thermomètre
+     */
+
+    const thermometer =
+      document.createElement("ha-icon");
+
+    thermometer.icon =
+      "mdi:thermometer";
+
+    thermometer.className =
+      "white-icon";
+
+    /*
+     * Barre Kelvin
+     */
+
+    const bar =
+      document.createElement("div");
+
+    bar.className =
+      "white-bar";
+
+    /*
+     * Position du curseur
+     */
+
+    const position =
+      Math.max(
+        0,
+        Math.min(
+          100,
+          ((value - min) /
+            (max - min)) * 100
+        )
+      );
+
+    const pin =
+      document.createElement("div");
+
+    pin.className =
+      "white-pin";
+
+    pin.style.left =
+      `${position}%`;
+
+    bar.appendChild(pin);
+
+    bar.addEventListener(
+      "click",
+      ev => {
+
+        const rect =
+          bar.getBoundingClientRect();
+
+        const ratio =
+          (ev.clientX - rect.left) /
+          rect.width;
+
+        const kelvin =
+          min +
+          Math.max(
+            0,
+            Math.min(1, ratio)
+          ) *
+          (max - min);
+
+        this._setNumber(
+          group.white,
+          Math.round(kelvin)
+        );
+
+        this._openWhitePicker(
+          group.white,
+          group,
+          group.name
+        );
+      }
+    );
+
+    /*
+     * Valeur
+     */
+
+    const label =
+      document.createElement("span");
+
+    label.className =
+      "white-value";
+
+    label.textContent =
+      `${Math.round(value)} K`;
+
+    wrapper.appendChild(thermometer);
+    wrapper.appendChild(bar);
+    wrapper.appendChild(label);
+
+    row.appendChild(wrapper);
   }
 
   /* -----------------------------------------------------------------------
    * Row
    * --------------------------------------------------------------------- */
 
-  _renderGroup(group) {
+  _createRow(group) {
 
-    const row = document.createElement("div");
+    const row =
+      document.createElement("div");
 
-    row.style.cssText =
-      "display:flex;" +
-      "align-items:center;" +
-      "gap:8px;" +
-      "min-height:42px;" +
-      "padding:3px 0;";
+    row.className =
+      "alex-light-row";
 
     /*
      * Icône
      */
 
-    const iconWrap = document.createElement("div");
+    const icon =
+      document.createElement("ha-icon");
 
-    iconWrap.style.cssText =
-      "width:28px;" +
-      "height:28px;" +
-      "border-radius:8px;" +
-      "display:flex;" +
-      "align-items:center;" +
-      "justify-content:center;" +
-      "background:rgba(var(--rgb-primary-text-color,0,0,0),0.06);" +
-      "flex:0 0 auto;";
+    icon.icon =
+      group.icon ||
+      "mdi:lightbulb-outline";
 
-    const icon = document.createElement("ha-icon");
-
-    icon.icon = group.icon || "mdi:lightbulb-outline";
-
-    icon.style.cssText =
-      "--mdc-icon-size:17px;" +
-      "color:var(--secondary-text-color);";
-
-    iconWrap.appendChild(icon);
+    icon.className =
+      "group-icon";
 
     /*
      * Nom
      */
 
-    const name = document.createElement("div");
+    const name =
+      document.createElement("div");
 
-    name.textContent = group.name || "";
+    name.className =
+      "group-name";
 
-    name.style.cssText =
-      "flex:0 0 76px;" +
-      "min-width:0;" +
-      "font-size:13px;" +
-      "font-weight:500;" +
-      "color:var(--primary-text-color);" +
-      "white-space:nowrap;" +
-      "overflow:hidden;" +
-      "text-overflow:ellipsis;";
+    name.textContent =
+      group.name || "";
 
-    row.append(iconWrap, name);
+    row.appendChild(icon);
+    row.appendChild(name);
 
     /*
-     * BRIGHTNESS
+     * Brightness
      */
 
-    if (group.brightness) {
-
-      const brightness = document.createElement("ha-selector");
-
-      brightness.selector = {
-        number: {
-          min: 0,
-          max: 254,
-          step: 1,
-          mode: "slider",
-        },
-      };
-
-      brightness.value = this._getNumber(group.brightness, 0);
-
-      if (this._hass) {
-        brightness.hass = this._hass;
-      }
-
-      brightness.style.cssText =
-        "flex:1 1 auto;" +
-        "min-width:70px;" +
-        "max-width:170px;";
-
-      brightness.addEventListener("value-changed", (ev) => {
-
-        ev.stopPropagation();
-
-        const value = Number(ev.detail?.value);
-
-        if (!Number.isFinite(value)) {
-          return;
-        }
-
-        brightness.value = value;
-
-        this._setInputNumber(group.brightness, value);
-      });
-
-      this._colorPickers.push(brightness);
-
-      row.appendChild(brightness);
-
-      const brightnessValue = document.createElement("div");
-
-      brightnessValue.textContent =
-        `${Math.round(this._getNumber(group.brightness, 0))}`;
-
-      brightnessValue.style.cssText =
-        "width:28px;" +
-        "flex:0 0 28px;" +
-        "text-align:right;" +
-        "font-size:11px;" +
-        "color:var(--secondary-text-color);";
-
-      row.appendChild(brightnessValue);
-    }
+    this._createBrightness(
+      group,
+      row
+    );
 
     /*
-     * RGB
+     * Couleur RGB
      */
 
-    if (group.color) {
-
-      const picker = this._createRgbPicker(group.color);
-
-      row.appendChild(picker);
-    }
+    this._createColorButton(
+      group,
+      row
+    );
 
     /*
-     * WHITE / KELVIN
+     * Blanc / Kelvin
      */
 
-    if (group.white) {
-
-      const picker = this._createWhitePicker(group.white);
-
-      row.appendChild(picker);
-
-      const kelvinValue = document.createElement("div");
-
-      kelvinValue.textContent =
-        `${Math.round(this._getNumber(group.white, 4000))} K`;
-
-      kelvinValue.style.cssText =
-        "width:48px;" +
-        "flex:0 0 48px;" +
-        "text-align:right;" +
-        "font-size:11px;" +
-        "color:var(--secondary-text-color);" +
-        "white-space:nowrap;";
-
-      row.appendChild(kelvinValue);
-    }
+    this._createWhiteControl(
+      group,
+      row
+    );
 
     return row;
   }
@@ -6030,86 +6274,391 @@ class AlexInputColorCard extends HTMLElement {
 
   _render() {
 
-    if (!this._config || !this._hass) {
+    if (!this._hass || !this._config) {
       return;
     }
 
-    const groups = this._config.groups || [];
+    const card =
+      document.createElement("ha-card");
 
-    const signature = groups
-      .map((g) => {
+    card.className =
+      "alex-input-color-card";
 
-        const brightness = g.brightness
-          ? this._getNumber(g.brightness, 0)
-          : "";
+    const container =
+      document.createElement("div");
 
-        const color = g.color
-          ? this._getState(g.color)?.state || ""
-          : "";
+    container.className =
+      "alex-light-container";
 
-        const white = g.white
-          ? this._getNumber(g.white, 4000)
-          : "";
+    const groups =
+      this._config.groups || [];
 
-        return [
-          g.name,
-          g.icon,
-          g.brightness,
-          brightness,
-          g.color,
-          color,
-          g.white,
-          white,
-        ].join("|");
+    groups.forEach(
+      (group, index) => {
 
-      })
-      .join("~");
+        const row =
+          this._createRow(group);
 
-    if (this._built && signature === this._lastSig) {
-      return;
-    }
+        if (
+          index <
+          groups.length - 1
+        ) {
+          row.classList.add(
+            "has-divider"
+          );
+        }
 
-    this._lastSig = signature;
-
-    this._colorPickers = [];
-    this._whitePickers = [];
-
-    const card = document.createElement("ha-card");
-
-    card.style.cssText =
-      "border-radius:20px;" +
-      "box-shadow:none;" +
-      "border:none;" +
-      "background:var(--ha-card-background,var(--card-background-color));" +
-      "padding:8px 12px;";
-
-    const container = document.createElement("div");
-
-    container.style.cssText =
-      "display:flex;" +
-      "flex-direction:column;" +
-      "width:100%;" +
-      "gap:1px;";
-
-    groups.forEach((group, index) => {
-
-      const row = this._renderGroup(group);
-
-      if (index < groups.length - 1) {
-
-        row.style.borderBottom =
-          "1px solid var(--divider-color)";
+        container.appendChild(row);
       }
-
-      container.appendChild(row);
-    });
+    );
 
     card.appendChild(container);
 
     this.innerHTML = "";
+
     this.appendChild(card);
 
-    this._built = true;
+    this._injectStyles();
+
+    this._rendered = true;
+  }
+
+  /* -----------------------------------------------------------------------
+   * Update live values
+   * --------------------------------------------------------------------- */
+
+  _updateValues() {
+
+    /*
+     * Pour garder le rendu très propre,
+     * on reconstruit uniquement lorsque
+     * les valeurs HA changent.
+     */
+
+    this._rendered = false;
+
+    this._render();
+  }
+
+  /* -----------------------------------------------------------------------
+   * Styles
+   * --------------------------------------------------------------------- */
+
+  _injectStyles() {
+
+    if (
+      this.querySelector(
+        "style.alex-input-color-style"
+      )
+    ) {
+      return;
+    }
+
+    const style =
+      document.createElement("style");
+
+    style.className =
+      "alex-input-color-style";
+
+    style.textContent = `
+
+      .alex-input-color-card {
+        border: none !important;
+        box-shadow: none !important;
+        border-radius: 20px !important;
+        overflow: hidden;
+        background:
+          var(
+            --ha-card-background,
+            var(--card-background-color)
+          );
+      }
+
+      .alex-light-container {
+        padding: 7px 12px;
+        display: flex;
+        flex-direction: column;
+      }
+
+      .alex-light-row {
+        min-height: 43px;
+
+        display: flex;
+        align-items: center;
+
+        gap: 8px;
+
+        position: relative;
+      }
+
+      .alex-light-row.has-divider {
+        border-bottom:
+          1px solid
+          color-mix(
+            in srgb,
+            var(--divider-color) 30%,
+            transparent
+          );
+      }
+
+      .group-icon {
+        width: 22px;
+        flex: 0 0 22px;
+
+        --mdc-icon-size: 17px;
+
+        color:
+          var(
+            --secondary-text-color
+          );
+      }
+
+      .group-name {
+        width: 68px;
+        flex: 0 0 68px;
+
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+
+        font-size: 13px;
+        font-weight: 500;
+
+        color:
+          var(
+            --primary-text-color
+          );
+      }
+
+      /* ---------------------------------------------------------------
+       * Brightness
+       * ------------------------------------------------------------- */
+
+      .brightness-control {
+        flex: 1 1 100px;
+
+        min-width: 70px;
+
+        display: flex;
+        align-items: center;
+
+        gap: 5px;
+      }
+
+      .brightness-control input {
+        width: 100%;
+        height: 4px;
+
+        margin: 0;
+
+        appearance: none;
+
+        border-radius: 10px;
+
+        background:
+          var(
+            --disabled-color,
+            #999
+          );
+
+        opacity: .65;
+
+        cursor: pointer;
+      }
+
+      .brightness-control input::-webkit-slider-thumb {
+        appearance: none;
+
+        width: 15px;
+        height: 15px;
+
+        border-radius: 50%;
+
+        background:
+          var(
+            --primary-color,
+            #8f91d8
+          );
+
+        border: none;
+
+        box-shadow: none;
+      }
+
+      .brightness-control input::-moz-range-thumb {
+        width: 15px;
+        height: 15px;
+
+        border-radius: 50%;
+
+        background:
+          var(
+            --primary-color,
+            #8f91d8
+          );
+
+        border: none;
+      }
+
+      .brightness-value {
+        width: 28px;
+        flex: 0 0 28px;
+
+        text-align: right;
+
+        font-size: 10px;
+
+        color:
+          var(
+            --secondary-text-color
+          );
+
+        opacity: .8;
+      }
+
+      /* ---------------------------------------------------------------
+       * RGB
+       * ------------------------------------------------------------- */
+
+      .color-button {
+        width: 24px;
+        height: 24px;
+
+        flex: 0 0 24px;
+
+        padding: 0;
+
+        border-radius: 5px;
+
+        border:
+          1px solid
+          rgba(0,0,0,.20);
+
+        box-shadow:
+          inset 0 0 0 1px
+          rgba(255,255,255,.12);
+
+        cursor: pointer;
+
+        transition:
+          transform .12s ease,
+          box-shadow .12s ease;
+      }
+
+      .color-button:hover {
+        transform: scale(1.08);
+
+        box-shadow:
+          0 0 0 2px
+          rgba(
+            var(--rgb-primary-color, 140,140,220),
+            .20
+          );
+      }
+
+      /* ---------------------------------------------------------------
+       * Kelvin
+       * ------------------------------------------------------------- */
+
+      .white-control {
+        flex: 1.1 1 130px;
+
+        min-width: 120px;
+
+        display: flex;
+        align-items: center;
+
+        gap: 6px;
+      }
+
+      .white-icon {
+        --mdc-icon-size: 17px;
+
+        flex: 0 0 17px;
+
+        color:
+          var(
+            --secondary-text-color
+          );
+
+        opacity: .85;
+      }
+
+      .white-bar {
+        position: relative;
+
+        flex: 1;
+
+        min-width: 45px;
+
+        height: 7px;
+
+        border-radius: 10px;
+
+        background:
+          linear-gradient(
+            90deg,
+            #ff9d55 0%,
+            #ffd6a0 25%,
+            #fff5dd 45%,
+            #f5f7ff 65%,
+            #cbdcff 82%,
+            #8eb2ff 100%
+          );
+
+        cursor: pointer;
+      }
+
+      .white-pin {
+        position: absolute;
+
+        top: 50%;
+
+        width: 13px;
+        height: 13px;
+
+        transform:
+          translate(-50%, -50%);
+
+        border-radius: 50%;
+
+        background:
+          var(
+            --primary-color,
+            #8f91d8
+          );
+
+        border:
+          1px solid
+          rgba(0,0,0,.15);
+
+        box-shadow:
+          0 1px 3px
+          rgba(0,0,0,.25);
+      }
+
+      .white-value {
+        width: 45px;
+
+        flex: 0 0 45px;
+
+        text-align: right;
+
+        font-size: 10px;
+
+        color:
+          var(
+            --secondary-text-color
+          );
+
+        white-space: nowrap;
+
+        opacity: .85;
+      }
+
+    `;
+
+    this.appendChild(style);
   }
 }
 
