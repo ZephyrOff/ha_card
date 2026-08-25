@@ -5771,64 +5771,53 @@ class AlexInputColorCard extends HTMLElement {
    * --------------------------------------------------------------------- */
 
   _openColorPicker(entity, groupName) {
-
     const current = this._color(entity);
+    const rgb = this._hexToRgb(current);
 
     const dialog = document.createElement("ha-dialog");
 
     dialog.heading = true;
     dialog.open = true;
 
-    dialog.style.setProperty(
-      "--mdc-dialog-min-width",
-      "320px"
-    );
-
     const title = document.createElement("div");
+    title.textContent = `Couleur — ${groupName || ""}`;
 
-    title.textContent =
-      `Couleur — ${groupName || ""}`;
+    title.style.cssText = `
+      font-size: 18px;
+      font-weight: 500;
+      margin-bottom: 12px;
+    `;
 
-    title.style.cssText =
-      "font-size:18px;" +
-      "font-weight:500;" +
-      "margin-bottom:16px;";
-
-    const picker = document.createElement("ha-selector");
+    /*
+     * Vrai color picker Home Assistant
+     */
+    const picker = document.createElement("ha-color-picker");
 
     picker.hass = this._hass;
 
-    picker.selector = {
-      color_rgb: {},
-    };
+    /*
+     * HA attend une valeur RGB sous forme de tableau.
+     */
+    picker.value = rgb;
 
-    picker.value = this._hexToRgb(current);
+    picker.style.cssText = `
+      display: block;
+      width: 100%;
+    `;
 
-    picker.style.cssText =
-      "display:block;" +
-      "width:100%;" +
-      "margin:0;";
+    picker.addEventListener("value-changed", ev => {
+      ev.stopPropagation();
 
-    picker.addEventListener(
-      "value-changed",
-      ev => {
+      const value = ev.detail?.value;
 
-        ev.stopPropagation();
-
-        const rgb = ev.detail?.value;
-
-        if (!Array.isArray(rgb) || rgb.length < 3) {
-          return;
-        }
-
-        const hex = this._rgbToHex(rgb);
-
-        this._setText(entity, hex);
-
-        // On ferme uniquement après avoir choisi une couleur.
-        dialog.close();
+      if (!Array.isArray(value) || value.length < 3) {
+        return;
       }
-    );
+
+      const hex = this._rgbToHex(value);
+
+      this._setText(entity, hex);
+    });
 
     dialog.appendChild(title);
     dialog.appendChild(picker);
