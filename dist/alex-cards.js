@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.30.0";
+const ALEX_CARDS_VERSION = "0.31.0";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -5298,12 +5298,29 @@ window.customCards.push({
  * bandeau au chargement (impossible techniquement), ils partent neutres.
  * ========================================================================= */
 
+// Conversion hex -> objet {r,g,b} pour le format Aqara (segment_colors),
+// distinct du simple tableau de hex utilise par le format Hue (gradient).
+function hexToRgbObj(hex) {
+  const h = (hex || "#ffffff").replace("#", "");
+  return {
+    r: parseInt(h.slice(0, 2), 16) || 0,
+    g: parseInt(h.slice(2, 4), 16) || 0,
+    b: parseInt(h.slice(4, 6), 16) || 0,
+  };
+}
+
 class GradientCard extends HTMLElement {
   static getConfigElement() {
     return document.createElement("alex-gradient-card-editor");
   }
   static getStubConfig() {
-    return { entity: "", segments: 5, name: "Bandeau", icon: "mdi:led-strip-variant" };
+    return {
+      entity: "",
+      device_type: "hue",
+      segments: 5,
+      name: "Bandeau",
+      icon: "mdi:led-strip-variant",
+    };
   }
 
   setConfig(config) {
@@ -5332,6 +5349,24 @@ class GradientCard extends HTMLElement {
     return "";
   }
 
+  // Nombre de segments effectif. Pour l'Aqara T1, deduit automatiquement de
+  // l'attribut `length` (lisible, contrairement au gradient Hue) : 5
+  // segments de 20cm par metre de bandeau — bien plus fiable qu'une saisie
+  // manuelle. Pour Hue (ou si `length` n'est pas encore disponible), repli
+  // sur le champ `segments` configure manuellement.
+  _effectiveSegments() {
+    const c = this._config;
+    if (c.device_type === "aqara" && c.entity && this._hass) {
+      const st = this._hass.states[c.entity];
+      const length = st && st.attributes && st.attributes.length;
+      if (length != null && !Number.isNaN(Number(length))) {
+        const n = Math.round(Number(length) * 5);
+        if (n > 0) return Math.min(50, n);
+      }
+    }
+    return Math.max(2, Math.min(50, c.segments || 5));
+  }
+
   _render() {
     if (!this._config || !this._hass) return;
     const c = this._config;
@@ -5339,7 +5374,7 @@ class GradientCard extends HTMLElement {
     const entity = c.entity;
     const stateObj = entity ? hass.states[entity] : null;
     const isOn = !!stateObj && stateObj.state === "on";
-    const segmentsCount = Math.max(2, Math.min(10, c.segments || 5));
+    const segmentsCount = this._effectiveSegments();
     const friendlyName = this._friendlyName();
 
     // Etat local des pickers (jamais lu depuis Z2M, voir note en tete de
@@ -5354,6 +5389,7 @@ class GradientCard extends HTMLElement {
     const sig = [
       c.name,
       c.icon,
+      c.device_type,
       JSON.stringify(c.icon_color || null),
       JSON.stringify(c.background || null),
       JSON.stringify(c.primary_color || null),
@@ -5379,12 +5415,14 @@ class GradientCard extends HTMLElement {
       .map(
         (color, i) => `
           <input type="color" class="ac-gradient-seg" data-index="${i}" value="${color}"
-            style="width:100%;height:44px;min-width:0;border:none;border-radius:10px;padding:0;
+            style="flex:1 1 32px;min-width:32px;height:44px;border:none;border-radius:10px;padding:0;
                    cursor:pointer;background:${color};-webkit-appearance:none;appearance:none;" />`
       )
       .join("");
 
     const missingConfig = !entity || !friendlyName;
+    const autoDetected =
+      c.device_type === "aqara" && !!stateObj && stateObj.attributes && stateObj.attributes.length != null;
 
     this.innerHTML = `
       <ha-card style="border-radius:20px;box-shadow:none;background:${cardBg};padding:16px 18px;">
@@ -5413,15 +5451,22 @@ class GradientCard extends HTMLElement {
             ? `<div style="font-size:13px;color:${secondaryColor};padding:8px 0;">
                 Configure l'entité de la lumière (et le nom convivial Z2M si besoin) dans les réglages de la carte.
               </div>`
-            : `<div style="display:grid;grid-template-columns:repeat(${segmentsCount}, 1fr);gap:6px;margin-bottom:14px;">
+            : `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;">
                 ${segmentsHtml}
+              </div>
+              <div style="font-size:11px;color:${secondaryColor};margin-bottom:10px;">
+                ${
+                  autoDetected
+                    ? `${segmentsCount} segments détectés automatiquement (longueur du bandeau).`
+                    : `${segmentsCount} segments (réglage manuel).`
+                }
               </div>
               <div class="ac-gradient-apply" style="text-align:center;padding:10px;border-radius:12px;
                           background:${accentColor};color:#000;font-size:14px;font-weight:600;cursor:pointer;">
                 Appliquer le dégradé
               </div>
               <div style="font-size:11px;color:${secondaryColor};text-align:center;margin-top:8px;">
-                Réglage à l'aveugle — Zigbee2MQTT ne permet pas de relire le dégradé actuellement affiché.
+                Réglage à l'aveugle — Zigbee2MQTT ne permet pas de relire les couleurs actuellement affichées.
               </div>`
         }
       </ha-card>`;
@@ -5445,9 +5490,18 @@ class GradientCard extends HTMLElement {
     if (applyEl) {
       applyEl.addEventListener("click", () => {
         if (!friendlyName) return;
+        const payload =
+          c.device_type === "aqara"
+            ? {
+                segment_colors: this._segmentColors.map((hex, i) => ({
+                  segment: i + 1,
+                  color: hexToRgbObj(hex),
+                })),
+              }
+            : { gradient: this._segmentColors };
         hass.callService("mqtt", "publish", {
           topic: `zigbee2mqtt/${friendlyName}/set`,
-          payload: JSON.stringify({ gradient: this._segmentColors }),
+          payload: JSON.stringify(payload),
         });
       });
     }
@@ -5466,8 +5520,23 @@ class GradientCardEditor extends AlexFormEditor {
     super();
     this._schema = [
       { name: "entity", selector: { entity: { domain: "light" } } },
+      {
+        name: "device_type",
+        selector: {
+          select: {
+            mode: "dropdown",
+            options: [
+              { value: "hue", label: "Philips Hue Gradient" },
+              { value: "aqara", label: "Aqara LED Strip T1 (LGYCDD01LM)" },
+            ],
+          },
+        },
+      },
       { name: "friendly_name", selector: { text: {} } },
-      { name: "segments", selector: { number: { min: 2, max: 10, step: 1, mode: "box" } } },
+      {
+        name: "segments",
+        selector: { number: { min: 2, max: 50, step: 1, mode: "box" } },
+      },
       { name: "name", selector: { text: {} } },
       { name: "icon", selector: { icon: {} } },
       {
@@ -5487,8 +5556,9 @@ class GradientCardEditor extends AlexFormEditor {
     ];
     this._labels = {
       entity: "Entité de la lumière",
+      device_type: "Type d'appareil",
       friendly_name: "Nom convivial Z2M (vide = déduit de l'entité)",
-      segments: "Nombre de segments",
+      segments: "Nombre de segments (Aqara : ignoré si détecté automatiquement)",
       name: "Nom",
       icon: "Icône",
       icon_color: "Couleur du badge",

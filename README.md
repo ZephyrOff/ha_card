@@ -484,35 +484,42 @@ servers:
 
 ### Alex Gradient Card
 
-Pilotage des segments de couleur des lampes/bandeaux « Gradient » Philips Hue, via
-Zigbee2MQTT — pas d'intégration tierce nécessaire, juste le service natif
-`mqtt.publish` de Home Assistant (déjà disponible dès que Z2M tourne).
+Pilotage des segments de couleur des lampes/bandeaux à zones — Philips Hue Gradient ou
+Aqara LED Strip T1 — via Zigbee2MQTT. Pas d'intégration tierce nécessaire, juste le
+service natif `mqtt.publish` de Home Assistant (déjà disponible dès que Z2M tourne).
+Les deux familles utilisent un **format de payload différent**, géré automatiquement
+selon `device_type`.
 
 ```yaml
 type: custom:alex-gradient-card
 entity: light.bandeau_salon
+device_type: hue               # hue / aqara
 friendly_name: bandeau_salon   # optionnel, vide = déduit de l'entité
-segments: 5                    # 5 pour la Lightstrip Gradient (caractéristique physique du modèle)
+segments: 5                    # ignoré pour aqara si détecté automatiquement
 name: Bandeau Salon
 icon: mdi:led-strip-variant
 ```
 
-- **Réglage à l'aveugle, assumé** : Zigbee2MQTT expose `gradient` en écriture seule —
-  confirmé dans sa documentation officielle (« It's not possible to read (/get) this
-  value »). La carte ne peut donc pas pré-remplir les sélecteurs de couleur avec l'état
-  réellement affiché sur le bandeau ; ils partent toujours neutres (blanc) au chargement.
-  Un rappel de ce point est affiché sous les sélecteurs.
-- **Nombre de segments** configurable, mais ce n'est pas une limite arbitraire de la
-  carte : c'est une caractéristique physique du modèle (5 zones pour la Lightstrip
-  Gradient `929002994901` — d'autres produits Hue Gradient, comme la lampe Signe,
-  peuvent différer). Envoyer un nombre différent de celui réellement câblé sur le
-  bandeau ne donne pas plus/moins de zones indépendantes, le firmware du bandeau
-  interprète à sa façon.
+- **Réglage à l'aveugle, assumé pour les deux types** : Zigbee2MQTT expose ces
+  fonctionnalités en écriture seule — confirmé dans sa documentation officielle
+  (« It's not possible to read (/get) this value »). La carte ne peut donc pas
+  pré-remplir les sélecteurs de couleur avec ce qui est réellement affiché sur le
+  bandeau ; ils partent toujours neutres (blanc) au chargement. Un rappel de ce point
+  est affiché sur la carte.
+- **`device_type: hue`** — payload `{"gradient": ["#hex", ...]}`. Nombre de segments non
+  limité par Z2M pour cette famille (`929002994901`, `929004610602`…) ; le champ
+  `segments` reste utile pour choisir combien de couleurs envoyer (5 est une valeur
+  courante pour la Lightstrip Gradient d'origine, à ajuster selon ton modèle).
+- **`device_type: aqara`** — payload différent : `{"segment_colors": [{"segment": 1,
+  "color": {"r":.., "g":.., "b":..}}, ...]}`. **Nombre de segments détecté
+  automatiquement** à partir de l'attribut `length` de l'entité (lisible, contrairement
+  au dégradé Hue) — 5 segments de 20cm par mètre de bandeau. Le champ `segments` ne sert
+  que de repli si `length` n'est pas encore disponible. Un message sous les sélecteurs
+  indique si la détection automatique a fonctionné.
 - **`friendly_name`** doit correspondre au nom convivial **Zigbee2MQTT** de l'appareil
   (celui utilisé dans le topic MQTT), pas nécessairement au nom de l'entité HA si tu
   l'as renommée séparément. Vide par défaut = déduit du dernier segment de l'entity_id.
-  Le bouton d'application appelle `mqtt.publish` sur
-  `zigbee2mqtt/<nom_convivial>/set` avec `{"gradient": [...]}` (couleurs hex).
+  Le bouton d'application appelle `mqtt.publish` sur `zigbee2mqtt/<nom_convivial>/set`.
 - Un interrupteur dans l'en-tête permet d'allumer/éteindre la lumière elle-même
   (`homeassistant.toggle` sur l'entité configurée) — les segments n'ont de sens que
   lumière allumée.
