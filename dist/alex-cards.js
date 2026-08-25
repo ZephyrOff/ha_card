@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.32.1";
+const ALEX_CARDS_VERSION = "0.32.2";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -5629,62 +5629,82 @@ window.customCards.push({
  * === ALEX INPUT COLOR =====================================================
  * ========================================================================= */
 
+/* ==========================================================================
+ * ALEX INPUT COLOR
+ * ========================================================================== */
+
 class AlexInputColorCard extends HTMLElement {
 
   static getConfigElement() {
-    return document.createElement("alex-input-color-editor");
+    return document.createElement(
+      "alex-input-color-editor"
+    );
   }
 
   static getStubConfig() {
     return {
-      groups: [
-        {
-          name: "Matin",
-          icon: "mdi:weather-sunset-up",
-          brightness: "",
-          color: "",
-          white: "",
-          white_min: 2000,
-          white_max: 6500,
-        },
-      ],
+      name: "Éclairage",
+      icon: "mdi:lightbulb-auto",
+
+      background_color: "",
+      primary_color: "",
+      secondary_color: "",
+      icon_color: "",
+      divider_color: "",
+
+      groups: []
     };
   }
 
   setConfig(config) {
-    if (!config) {
-      throw new Error("Configuration invalide");
-    }
 
-    this._config = config;
-    this._hass = null;
-    this._rendered = false;
+    this._config = {
+      name: "Éclairage",
+      icon: "mdi:lightbulb-auto",
+
+      background_color: "",
+      primary_color: "",
+      secondary_color: "",
+      icon_color: "",
+      divider_color: "",
+
+      groups: [],
+
+      ...config
+    };
+
+    this._render();
   }
 
   set hass(hass) {
+
     this._hass = hass;
 
     if (!this._rendered) {
       this._render();
-      return;
     }
-
-    this._updateValues();
   }
 
   getCardSize() {
-    return Math.max(1, this._config?.groups?.length || 1);
+    return Math.max(
+      2,
+      (this._config?.groups?.length || 0) + 1
+    );
   }
 
-  /* -----------------------------------------------------------------------
-   * HA state helpers
-   * --------------------------------------------------------------------- */
+  /* ========================================================================
+   * HELPERS
+   * ====================================================================== */
 
   _state(entity) {
-    return entity ? this._hass?.states?.[entity] : null;
+
+    return entity
+      ? this._hass?.states?.[entity]
+      : null;
   }
 
   _number(entity, fallback = 0) {
+
     const state = this._state(entity);
 
     if (!state) {
@@ -5693,7 +5713,9 @@ class AlexInputColorCard extends HTMLElement {
 
     const value = Number(state.state);
 
-    return Number.isFinite(value) ? value : fallback;
+    return Number.isFinite(value)
+      ? value
+      : fallback;
   }
 
   _color(entity) {
@@ -5704,35 +5726,17 @@ class AlexInputColorCard extends HTMLElement {
       return "#ffffff";
     }
 
-    const value = String(state.state).trim();
+    const value =
+      String(state.state).trim();
 
-    if (/^#[0-9a-f]{6}$/i.test(value)) {
+    if (
+      /^#[0-9a-f]{6}$/i.test(value)
+    ) {
       return value;
-    }
-
-    const rgb = value.match(
-      /^rgb\s*\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)$/i
-    );
-
-    if (rgb) {
-
-      return "#" + [
-        rgb[1],
-        rgb[2],
-        rgb[3],
-      ].map(v =>
-        Number(v)
-          .toString(16)
-          .padStart(2, "0")
-      ).join("");
     }
 
     return "#ffffff";
   }
-
-  /* -----------------------------------------------------------------------
-   * Services
-   * --------------------------------------------------------------------- */
 
   _setNumber(entity, value) {
 
@@ -5745,7 +5749,7 @@ class AlexInputColorCard extends HTMLElement {
       "set_value",
       {
         entity_id: entity,
-        value: value,
+        value
       }
     );
   }
@@ -5761,174 +5765,10 @@ class AlexInputColorCard extends HTMLElement {
       "set_value",
       {
         entity_id: entity,
-        value: value,
+        value
       }
     );
   }
-
-  /* -----------------------------------------------------------------------
-   * Native RGB picker
-   * --------------------------------------------------------------------- */
-
-  _openColorPicker(entity, groupName) {
-
-    const current = this._color(entity);
-
-    const dialog = document.createElement("ha-dialog");
-
-    dialog.heading = true;
-    dialog.open = true;
-
-    dialog.style.setProperty(
-      "--mdc-dialog-min-width",
-      "320px"
-    );
-
-    const title = document.createElement("div");
-
-    title.textContent =
-      `Couleur — ${groupName || ""}`;
-
-    title.style.cssText =
-      "font-size:18px;" +
-      "font-weight:500;" +
-      "margin-bottom:16px;";
-
-    const picker = document.createElement("ha-selector");
-
-    picker.hass = this._hass;
-
-    picker.selector = {
-      color_rgb: {},
-    };
-
-    picker.value = this._hexToRgb(current);
-
-    picker.style.cssText =
-      "display:block;" +
-      "width:100%;";
-
-    picker.addEventListener(
-      "value-changed",
-      ev => {
-
-        const rgb = ev.detail?.value;
-
-        if (!Array.isArray(rgb) || rgb.length < 3) {
-          return;
-        }
-
-        const hex = this._rgbToHex(rgb);
-
-        this._setText(entity, hex);
-
-        dialog.close();
-      }
-    );
-
-    dialog.appendChild(title);
-    dialog.appendChild(picker);
-
-    dialog.addEventListener(
-      "closed",
-      () => dialog.remove(),
-      { once: true }
-    );
-
-    document.body.appendChild(dialog);
-  }
-
-  /* -----------------------------------------------------------------------
-   * Native Kelvin picker
-   * --------------------------------------------------------------------- */
-
-  _openWhitePicker(entity, group, groupName) {
-
-    const min =
-      Number(group.white_min ?? 2000);
-
-    const max =
-      Number(group.white_max ?? 6500);
-
-    const current =
-      this._number(
-        entity,
-        Math.round((min + max) / 2)
-      );
-
-    const dialog = document.createElement("ha-dialog");
-
-    dialog.heading = true;
-    dialog.open = true;
-
-    dialog.style.setProperty(
-      "--mdc-dialog-min-width",
-      "320px"
-    );
-
-    const title = document.createElement("div");
-
-    title.textContent =
-      `Température — ${groupName || ""}`;
-
-    title.style.cssText =
-      "font-size:18px;" +
-      "font-weight:500;" +
-      "margin-bottom:16px;";
-
-    const picker = document.createElement("ha-selector");
-
-    picker.hass = this._hass;
-
-    picker.selector = {
-      color_temp: {
-        unit: "kelvin",
-        min: min,
-        max: max,
-      },
-    };
-
-    picker.value = current;
-
-    picker.style.cssText =
-      "display:block;" +
-      "width:100%;";
-
-    picker.addEventListener(
-      "value-changed",
-      ev => {
-
-        const value =
-          Number(ev.detail?.value);
-
-        if (!Number.isFinite(value)) {
-          return;
-        }
-
-        this._setNumber(
-          entity,
-          Math.round(value)
-        );
-
-        dialog.close();
-      }
-    );
-
-    dialog.appendChild(title);
-    dialog.appendChild(picker);
-
-    dialog.addEventListener(
-      "closed",
-      () => dialog.remove(),
-      { once: true }
-    );
-
-    document.body.appendChild(dialog);
-  }
-
-  /* -----------------------------------------------------------------------
-   * RGB conversion
-   * --------------------------------------------------------------------- */
 
   _hexToRgb(hex) {
 
@@ -5943,7 +5783,7 @@ class AlexInputColorCard extends HTMLElement {
     return [
       parseInt(value.substring(0, 2), 16),
       parseInt(value.substring(2, 4), 16),
-      parseInt(value.substring(4, 6), 16),
+      parseInt(value.substring(4, 6), 16)
     ];
   }
 
@@ -5952,12 +5792,12 @@ class AlexInputColorCard extends HTMLElement {
     return "#" +
       rgb
         .slice(0, 3)
-        .map(v =>
+        .map(value =>
           Math.max(
             0,
             Math.min(
               255,
-              Number(v) || 0
+              Number(value) || 0
             )
           )
             .toString(16)
@@ -5967,264 +5807,114 @@ class AlexInputColorCard extends HTMLElement {
         .toUpperCase();
   }
 
-  /* -----------------------------------------------------------------------
-   * Brightness slider
-   * --------------------------------------------------------------------- */
+  /* ========================================================================
+   * RGB PICKER
+   * ====================================================================== */
 
-  _createBrightness(group, row) {
+  _openColorPicker(entity, name) {
 
-    if (!group.brightness) {
-      return;
-    }
-
-    const value =
-      this._number(
-        group.brightness,
-        0
+    const dialog =
+      document.createElement(
+        "ha-dialog"
       );
 
-    const wrapper =
+    dialog.open = true;
+
+    const title =
       document.createElement("div");
 
-    wrapper.className =
-      "brightness-control";
+    title.textContent =
+      `Couleur — ${name}`;
 
-    const slider =
-      document.createElement("input");
+    title.style.cssText = `
+      font-size:18px;
+      font-weight:500;
+      margin-bottom:16px;
+    `;
 
-    slider.type = "range";
-    slider.min = "0";
-    slider.max = "254";
-    slider.step = "1";
-    slider.value = value;
+    const picker =
+      document.createElement(
+        "ha-selector"
+      );
 
-    const valueLabel =
-      document.createElement("span");
+    picker.hass =
+      this._hass;
 
-    valueLabel.className =
-      "brightness-value";
+    picker.selector = {
+      color_rgb: {}
+    };
 
-    valueLabel.textContent =
-      Math.round(value);
+    picker.value =
+      this._hexToRgb(
+        this._color(entity)
+      );
 
-    slider.addEventListener(
-      "input",
-      ev => {
+    picker.style.width =
+      "100%";
 
-        const newValue =
-          Number(ev.target.value);
+    picker.addEventListener(
+      "value-changed",
+      event => {
 
-        valueLabel.textContent =
-          Math.round(newValue);
+        const rgb =
+          event.detail?.value;
 
-        this._setNumber(
-          group.brightness,
-          newValue
+        if (
+          !Array.isArray(rgb)
+        ) {
+          return;
+        }
+
+        this._setText(
+          entity,
+          this._rgbToHex(rgb)
         );
+
+        dialog.close();
       }
     );
 
-    wrapper.appendChild(slider);
-    wrapper.appendChild(valueLabel);
+    dialog.appendChild(title);
+    dialog.appendChild(picker);
 
-    row.appendChild(wrapper);
-  }
-
-  /* -----------------------------------------------------------------------
-   * RGB swatch
-   * --------------------------------------------------------------------- */
-
-  _createColorButton(group, row) {
-
-    if (!group.color) {
-      return;
-    }
-
-    const button =
-      document.createElement("button");
-
-    button.className =
-      "color-button";
-
-    button.style.background =
-      this._color(group.color);
-
-    button.title =
-      "Modifier la couleur";
-
-    button.addEventListener(
-      "click",
-      ev => {
-
-        ev.stopPropagation();
-
-        this._openColorPicker(
-          group.color,
-          group.name
-        );
-      }
+    dialog.addEventListener(
+      "closed",
+      () => dialog.remove(),
+      { once: true }
     );
 
-    row.appendChild(button);
-  }
-
-  /* -----------------------------------------------------------------------
-   * Kelvin control
-   * --------------------------------------------------------------------- */
-
-  _createWhiteControl(group, row) {
-
-    if (!group.white) {
-      return;
-    }
-
-    const min =
-      Number(group.white_min ?? 2000);
-
-    const max =
-      Number(group.white_max ?? 6500);
-
-    const value =
-      this._number(
-        group.white,
-        Math.round((min + max) / 2)
-      );
-
-    const wrapper =
-      document.createElement("div");
-
-    wrapper.className =
-      "white-control";
-
-    /*
-     * Icône thermomètre
-     */
-
-    const thermometer =
-      document.createElement("ha-icon");
-
-    thermometer.icon =
-      "mdi:thermometer";
-
-    thermometer.className =
-      "white-icon";
-
-    /*
-     * Barre Kelvin
-     */
-
-    const bar =
-      document.createElement("div");
-
-    bar.className =
-      "white-bar";
-
-    /*
-     * Position du curseur
-     */
-
-    const position =
-      Math.max(
-        0,
-        Math.min(
-          100,
-          ((value - min) /
-            (max - min)) * 100
-        )
-      );
-
-    const pin =
-      document.createElement("div");
-
-    pin.className =
-      "white-pin";
-
-    pin.style.left =
-      `${position}%`;
-
-    bar.appendChild(pin);
-
-    bar.addEventListener(
-      "click",
-      ev => {
-
-        const rect =
-          bar.getBoundingClientRect();
-
-        const ratio =
-          (ev.clientX - rect.left) /
-          rect.width;
-
-        const kelvin =
-          min +
-          Math.max(
-            0,
-            Math.min(1, ratio)
-          ) *
-          (max - min);
-
-        this._setNumber(
-          group.white,
-          Math.round(kelvin)
-        );
-
-        this._openWhitePicker(
-          group.white,
-          group,
-          group.name
-        );
-      }
+    document.body.appendChild(
+      dialog
     );
-
-    /*
-     * Valeur
-     */
-
-    const label =
-      document.createElement("span");
-
-    label.className =
-      "white-value";
-
-    label.textContent =
-      `${Math.round(value)} K`;
-
-    wrapper.appendChild(thermometer);
-    wrapper.appendChild(bar);
-    wrapper.appendChild(label);
-
-    row.appendChild(wrapper);
   }
 
-  /* -----------------------------------------------------------------------
-   * Row
-   * --------------------------------------------------------------------- */
+  /* ========================================================================
+   * GROUP ROW
+   * ====================================================================== */
 
-  _createRow(group) {
+  _createGroup(group) {
 
     const row =
       document.createElement("div");
 
     row.className =
-      "alex-light-row";
+      "alex-input-color-row";
 
-    /*
-     * Icône
-     */
+    /* ICON */
 
     const icon =
-      document.createElement("ha-icon");
+      document.createElement(
+        "ha-icon"
+      );
 
     icon.icon =
       group.icon ||
-      "mdi:lightbulb-outline";
+      "mdi:lightbulb";
 
     icon.className =
       "group-icon";
 
-    /*
-     * Nom
-     */
+    /* NAME */
 
     const name =
       document.createElement("div");
@@ -6238,394 +5928,804 @@ class AlexInputColorCard extends HTMLElement {
     row.appendChild(icon);
     row.appendChild(name);
 
-    /*
-     * Brightness
-     */
+    /* BRIGHTNESS */
 
-    this._createBrightness(
-      group,
-      row
-    );
+    if (group.brightness) {
 
-    /*
-     * Couleur RGB
-     */
+      const brightness =
+        document.createElement(
+          "div"
+        );
 
-    this._createColorButton(
-      group,
-      row
-    );
+      brightness.className =
+        "brightness";
 
-    /*
-     * Blanc / Kelvin
-     */
+      const slider =
+        document.createElement(
+          "input"
+        );
 
-    this._createWhiteControl(
-      group,
-      row
-    );
+      slider.type =
+        "range";
+
+      slider.min = "0";
+      slider.max = "254";
+      slider.step = "1";
+
+      slider.value =
+        this._number(
+          group.brightness
+        );
+
+      const brightnessValue =
+        document.createElement(
+          "span"
+        );
+
+      brightnessValue.className =
+        "brightness-value";
+
+      brightnessValue.textContent =
+        Math.round(
+          slider.value
+        );
+
+      slider.addEventListener(
+        "input",
+        event => {
+
+          const value =
+            Number(
+              event.target.value
+            );
+
+          brightnessValue.textContent =
+            Math.round(value);
+
+          this._setNumber(
+            group.brightness,
+            value
+          );
+        }
+      );
+
+      brightness.appendChild(
+        slider
+      );
+
+      brightness.appendChild(
+        brightnessValue
+      );
+
+      row.appendChild(
+        brightness
+      );
+    }
+
+    /* RGB */
+
+    if (group.color) {
+
+      const colorButton =
+        document.createElement(
+          "button"
+        );
+
+      colorButton.className =
+        "color-button";
+
+      colorButton.style.background =
+        this._color(
+          group.color
+        );
+
+      colorButton.title =
+        "Modifier la couleur";
+
+      colorButton.addEventListener(
+        "click",
+        event => {
+
+          event.stopPropagation();
+
+          this._openColorPicker(
+            group.color,
+            group.name
+          );
+        }
+      );
+
+      row.appendChild(
+        colorButton
+      );
+    }
+
+    /* WHITE */
+
+    if (group.white) {
+
+      const white =
+        document.createElement(
+          "div"
+        );
+
+      white.className =
+        "white";
+
+      const thermometer =
+        document.createElement(
+          "ha-icon"
+        );
+
+      thermometer.icon =
+        "mdi:thermometer";
+
+      thermometer.className =
+        "white-icon";
+
+      const bar =
+        document.createElement(
+          "div"
+        );
+
+      bar.className =
+        "white-bar";
+
+      const min =
+        Number(
+          group.white_min ?? 2000
+        );
+
+      const max =
+        Number(
+          group.white_max ?? 6500
+        );
+
+      const value =
+        this._number(
+          group.white,
+          Math.round(
+            (min + max) / 2
+          )
+        );
+
+      const position =
+        Math.max(
+          0,
+          Math.min(
+            100,
+            (
+              (value - min) /
+              (max - min)
+            ) * 100
+          )
+        );
+
+      const pin =
+        document.createElement(
+          "div"
+        );
+
+      pin.className =
+        "white-pin";
+
+      pin.style.left =
+        `${position}%`;
+
+      bar.appendChild(pin);
+
+      const whiteValue =
+        document.createElement(
+          "span"
+        );
+
+      whiteValue.className =
+        "white-value";
+
+      whiteValue.textContent =
+        `${Math.round(value)} K`;
+
+      bar.addEventListener(
+        "click",
+        event => {
+
+          const rect =
+            bar.getBoundingClientRect();
+
+          const ratio =
+            (
+              event.clientX -
+              rect.left
+            ) / rect.width;
+
+          const kelvin =
+            min +
+            Math.max(
+              0,
+              Math.min(
+                1,
+                ratio
+              )
+            ) *
+            (max - min);
+
+          this._setNumber(
+            group.white,
+            Math.round(kelvin)
+          );
+
+          pin.style.left =
+            `${ratio * 100}%`;
+
+          whiteValue.textContent =
+            `${Math.round(kelvin)} K`;
+        }
+      );
+
+      white.appendChild(
+        thermometer
+      );
+
+      white.appendChild(
+        bar
+      );
+
+      white.appendChild(
+        whiteValue
+      );
+
+      row.appendChild(
+        white
+      );
+    }
 
     return row;
   }
 
-  /* -----------------------------------------------------------------------
-   * Render
-   * --------------------------------------------------------------------- */
+  /* ========================================================================
+   * RENDER
+   * ====================================================================== */
 
   _render() {
 
-    if (!this._hass || !this._config) {
+    if (!this._hass) {
       return;
     }
 
+    this.innerHTML = "";
+
+    this._injectStyles();
+
     const card =
-      document.createElement("ha-card");
+      document.createElement(
+        "ha-card"
+      );
 
     card.className =
       "alex-input-color-card";
 
-    const container =
-      document.createElement("div");
+    /* CUSTOM COLORS */
 
-    container.className =
-      "alex-light-container";
+    if (
+      this._config.background_color
+    ) {
+      card.style.setProperty(
+        "--alex-background",
+        this._config.background_color
+      );
+    }
+
+    if (
+      this._config.primary_color
+    ) {
+      card.style.setProperty(
+        "--alex-primary",
+        this._config.primary_color
+      );
+    }
+
+    if (
+      this._config.secondary_color
+    ) {
+      card.style.setProperty(
+        "--alex-secondary",
+        this._config.secondary_color
+      );
+    }
+
+    if (
+      this._config.icon_color
+    ) {
+      card.style.setProperty(
+        "--alex-icon",
+        this._config.icon_color
+      );
+    }
+
+    if (
+      this._config.divider_color
+    ) {
+      card.style.setProperty(
+        "--alex-divider",
+        this._config.divider_color
+      );
+    }
+
+    /* HEADER */
+
+    if (
+      this._config.name ||
+      this._config.icon
+    ) {
+
+      const header =
+        document.createElement(
+          "div"
+        );
+
+      header.className =
+        "alex-header";
+
+      if (this._config.icon) {
+
+        const headerIcon =
+          document.createElement(
+            "ha-icon"
+          );
+
+        headerIcon.icon =
+          this._config.icon;
+
+        headerIcon.className =
+          "header-icon";
+
+        header.appendChild(
+          headerIcon
+        );
+      }
+
+      if (this._config.name) {
+
+        const headerName =
+          document.createElement(
+            "div"
+          );
+
+        headerName.className =
+          "header-name";
+
+        headerName.textContent =
+          this._config.name;
+
+        header.appendChild(
+          headerName
+        );
+      }
+
+      card.appendChild(
+        header
+      );
+    }
+
+    /* GROUPS */
 
     const groups =
       this._config.groups || [];
+
+    const container =
+      document.createElement(
+        "div"
+      );
+
+    container.className =
+      "groups";
 
     groups.forEach(
       (group, index) => {
 
         const row =
-          this._createRow(group);
+          this._createGroup(
+            group
+          );
 
         if (
           index <
           groups.length - 1
         ) {
           row.classList.add(
-            "has-divider"
+            "divider"
           );
         }
 
-        container.appendChild(row);
+        container.appendChild(
+          row
+        );
       }
     );
 
-    card.appendChild(container);
+    card.appendChild(
+      container
+    );
 
-    this.innerHTML = "";
-
-    this.appendChild(card);
-
-    this._injectStyles();
+    this.appendChild(
+      card
+    );
 
     this._rendered = true;
   }
 
-  /* -----------------------------------------------------------------------
-   * Update live values
-   * --------------------------------------------------------------------- */
-
-  _updateValues() {
-
-    /*
-     * Pour garder le rendu très propre,
-     * on reconstruit uniquement lorsque
-     * les valeurs HA changent.
-     */
-
-    this._rendered = false;
-
-    this._render();
-  }
-
-  /* -----------------------------------------------------------------------
-   * Styles
-   * --------------------------------------------------------------------- */
+  /* ========================================================================
+   * STYLES
+   * ====================================================================== */
 
   _injectStyles() {
 
-    if (
-      this.querySelector(
-        "style.alex-input-color-style"
-      )
-    ) {
-      return;
-    }
-
     const style =
-      document.createElement("style");
-
-    style.className =
-      "alex-input-color-style";
+      document.createElement(
+        "style"
+      );
 
     style.textContent = `
 
       .alex-input-color-card {
-        border: none !important;
-        box-shadow: none !important;
-        border-radius: 20px !important;
-        overflow: hidden;
+
         background:
           var(
-            --ha-card-background,
-            var(--card-background-color)
+            --alex-background,
+            var(
+              --ha-card-background,
+              var(
+                --card-background-color
+              )
+            )
+          ) !important;
+
+        border:
+          none !important;
+
+        box-shadow:
+          none !important;
+
+        border-radius:
+          20px !important;
+
+        overflow:
+          hidden;
+      }
+
+      /* HEADER */
+
+      .alex-header {
+
+        display:
+          flex;
+
+        align-items:
+          center;
+
+        gap:
+          8px;
+
+        padding:
+          12px 14px 6px;
+      }
+
+      .header-icon {
+
+        --mdc-icon-size:
+          18px;
+
+        color:
+          var(
+            --alex-icon,
+            var(--secondary-text-color)
           );
       }
 
-      .alex-light-container {
-        padding: 7px 12px;
-        display: flex;
-        flex-direction: column;
+      .header-name {
+
+        font-size:
+          14px;
+
+        font-weight:
+          500;
+
+        color:
+          var(
+            --alex-primary,
+            var(--primary-text-color)
+          );
       }
 
-      .alex-light-row {
-        min-height: 43px;
+      /* GROUPS */
 
-        display: flex;
-        align-items: center;
+      .groups {
 
-        gap: 8px;
-
-        position: relative;
+        padding:
+          2px 12px 9px;
       }
 
-      .alex-light-row.has-divider {
+      .alex-input-color-row {
+
+        min-height:
+          43px;
+
+        display:
+          flex;
+
+        align-items:
+          center;
+
+        gap:
+          8px;
+      }
+
+      .alex-input-color-row.divider {
+
         border-bottom:
           1px solid
-          color-mix(
-            in srgb,
-            var(--divider-color) 30%,
-            transparent
+          var(
+            --alex-divider,
+            var(--divider-color)
           );
       }
+
+      /* GROUP ICON */
 
       .group-icon {
-        width: 22px;
-        flex: 0 0 22px;
 
-        --mdc-icon-size: 17px;
+        flex:
+          0 0 20px;
+
+        --mdc-icon-size:
+          17px;
 
         color:
           var(
-            --secondary-text-color
+            --alex-icon,
+            var(--secondary-text-color)
           );
       }
+
+      /* NAME */
 
       .group-name {
-        width: 68px;
-        flex: 0 0 68px;
 
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
+        flex:
+          0 0 62px;
 
-        font-size: 13px;
-        font-weight: 500;
+        width:
+          62px;
+
+        font-size:
+          13px;
+
+        font-weight:
+          500;
 
         color:
           var(
-            --primary-text-color
+            --alex-primary,
+            var(--primary-text-color)
           );
+
+        white-space:
+          nowrap;
+
+        overflow:
+          hidden;
+
+        text-overflow:
+          ellipsis;
       }
 
-      /* ---------------------------------------------------------------
-       * Brightness
-       * ------------------------------------------------------------- */
+      /* BRIGHTNESS */
 
-      .brightness-control {
-        flex: 1 1 100px;
+      .brightness {
 
-        min-width: 70px;
+        flex:
+          1 1 100px;
 
-        display: flex;
-        align-items: center;
+        min-width:
+          65px;
 
-        gap: 5px;
+        display:
+          flex;
+
+        align-items:
+          center;
+
+        gap:
+          5px;
       }
 
-      .brightness-control input {
-        width: 100%;
-        height: 4px;
+      .brightness input {
 
-        margin: 0;
+        width:
+          100%;
 
-        appearance: none;
+        height:
+          4px;
 
-        border-radius: 10px;
+        margin:
+          0;
+
+        appearance:
+          none;
+
+        border-radius:
+          10px;
 
         background:
           var(
-            --disabled-color,
-            #999
+            --alex-secondary,
+            var(--disabled-color)
           );
 
-        opacity: .65;
-
-        cursor: pointer;
+        cursor:
+          pointer;
       }
 
-      .brightness-control input::-webkit-slider-thumb {
-        appearance: none;
+      .brightness input::-webkit-slider-thumb {
 
-        width: 15px;
-        height: 15px;
+        appearance:
+          none;
 
-        border-radius: 50%;
+        width:
+          15px;
+
+        height:
+          15px;
+
+        border-radius:
+          50%;
+
+        border:
+          none;
 
         background:
           var(
-            --primary-color,
-            #8f91d8
+            --alex-primary,
+            var(--primary-color)
           );
-
-        border: none;
-
-        box-shadow: none;
-      }
-
-      .brightness-control input::-moz-range-thumb {
-        width: 15px;
-        height: 15px;
-
-        border-radius: 50%;
-
-        background:
-          var(
-            --primary-color,
-            #8f91d8
-          );
-
-        border: none;
       }
 
       .brightness-value {
-        width: 28px;
-        flex: 0 0 28px;
 
-        text-align: right;
+        width:
+          28px;
 
-        font-size: 10px;
+        flex:
+          0 0 28px;
+
+        text-align:
+          right;
+
+        font-size:
+          10px;
 
         color:
           var(
-            --secondary-text-color
+            --alex-secondary,
+            var(--secondary-text-color)
           );
-
-        opacity: .8;
       }
 
-      /* ---------------------------------------------------------------
-       * RGB
-       * ------------------------------------------------------------- */
+      /* COLOR */
 
       .color-button {
-        width: 24px;
-        height: 24px;
 
-        flex: 0 0 24px;
+        width:
+          23px;
 
-        padding: 0;
+        height:
+          23px;
 
-        border-radius: 5px;
+        flex:
+          0 0 23px;
+
+        padding:
+          0;
 
         border:
           1px solid
-          rgba(0,0,0,.20);
+          rgba(0,0,0,.25);
 
-        box-shadow:
-          inset 0 0 0 1px
-          rgba(255,255,255,.12);
+        border-radius:
+          5px;
 
-        cursor: pointer;
-
-        transition:
-          transform .12s ease,
-          box-shadow .12s ease;
+        cursor:
+          pointer;
       }
 
-      .color-button:hover {
-        transform: scale(1.08);
+      /* WHITE */
 
-        box-shadow:
-          0 0 0 2px
-          rgba(
-            var(--rgb-primary-color, 140,140,220),
-            .20
-          );
-      }
+      .white {
 
-      /* ---------------------------------------------------------------
-       * Kelvin
-       * ------------------------------------------------------------- */
+        flex:
+          1.1 1 120px;
 
-      .white-control {
-        flex: 1.1 1 130px;
+        min-width:
+          105px;
 
-        min-width: 120px;
+        display:
+          flex;
 
-        display: flex;
-        align-items: center;
+        align-items:
+          center;
 
-        gap: 6px;
+        gap:
+          6px;
       }
 
       .white-icon {
-        --mdc-icon-size: 17px;
 
-        flex: 0 0 17px;
+        --mdc-icon-size:
+          17px;
 
         color:
           var(
-            --secondary-text-color
+            --alex-icon,
+            var(--secondary-text-color)
           );
-
-        opacity: .85;
       }
 
       .white-bar {
-        position: relative;
 
-        flex: 1;
+        position:
+          relative;
 
-        min-width: 45px;
+        flex:
+          1;
 
-        height: 7px;
+        height:
+          7px;
 
-        border-radius: 10px;
+        border-radius:
+          10px;
 
         background:
           linear-gradient(
             90deg,
             #ff9d55 0%,
-            #ffd6a0 25%,
-            #fff5dd 45%,
-            #f5f7ff 65%,
-            #cbdcff 82%,
+            #ffd5a0 25%,
+            #fff3dc 45%,
+            #f4f7ff 65%,
+            #c8d9ff 82%,
             #8eb2ff 100%
           );
 
-        cursor: pointer;
+        cursor:
+          pointer;
       }
 
       .white-pin {
-        position: absolute;
 
-        top: 50%;
+        position:
+          absolute;
 
-        width: 13px;
-        height: 13px;
+        top:
+          50%;
+
+        width:
+          13px;
+
+        height:
+          13px;
 
         transform:
-          translate(-50%, -50%);
+          translate(
+            -50%,
+            -50%
+          );
 
-        border-radius: 50%;
+        border-radius:
+          50%;
 
         background:
           var(
-            --primary-color,
-            #8f91d8
+            --alex-primary,
+            var(--primary-color)
           );
 
         border:
@@ -6638,33 +6738,818 @@ class AlexInputColorCard extends HTMLElement {
       }
 
       .white-value {
-        width: 45px;
 
-        flex: 0 0 45px;
+        flex:
+          0 0 43px;
 
-        text-align: right;
+        width:
+          43px;
 
-        font-size: 10px;
+        text-align:
+          right;
+
+        font-size:
+          10px;
+
+        white-space:
+          nowrap;
 
         color:
           var(
-            --secondary-text-color
+            --alex-secondary,
+            var(--secondary-text-color)
           );
-
-        white-space: nowrap;
-
-        opacity: .85;
       }
 
     `;
 
-    this.appendChild(style);
+    this.appendChild(
+      style
+    );
   }
 }
 
 customElements.define(
   "alex-input-color",
   AlexInputColorCard
+);
+
+
+/* ==========================================================================
+ * EDITOR
+ * ========================================================================== */
+
+class AlexInputColorEditor extends HTMLElement {
+
+  setConfig(config) {
+
+    this._config = {
+      name: "Éclairage",
+      icon: "mdi:lightbulb-auto",
+
+      background_color: "",
+      primary_color: "",
+      secondary_color: "",
+      icon_color: "",
+      divider_color: "",
+
+      groups: [],
+
+      ...config
+    };
+
+    this._render();
+  }
+
+  set hass(hass) {
+
+    this._hass = hass;
+
+    this._render();
+  }
+
+  /* ========================================================================
+   * CONFIG CHANGED
+   * ====================================================================== */
+
+  _fireConfig() {
+
+    this.dispatchEvent(
+      new CustomEvent(
+        "config-changed",
+        {
+          bubbles: true,
+          composed: true,
+          detail: {
+            config: {
+              ...this._config
+            }
+          }
+        }
+      )
+    );
+  }
+
+  /* ========================================================================
+   * HA FORM
+   * ====================================================================== */
+
+  _form(
+    schema,
+    data,
+    callback
+  ) {
+
+    const form =
+      document.createElement(
+        "ha-form"
+      );
+
+    form.hass =
+      this._hass;
+
+    form.schema =
+      schema;
+
+    form.data =
+      data;
+
+    form.computeLabel =
+      item => {
+
+        const labels = {
+
+          name:
+            "Nom",
+
+          icon:
+            "Icône",
+
+          background_color:
+            "Fond de la carte",
+
+          primary_color:
+            "Couleur du texte principal",
+
+          secondary_color:
+            "Couleur du texte secondaire",
+
+          icon_color:
+            "Couleur des icônes",
+
+          divider_color:
+            "Couleur des séparateurs",
+
+          brightness:
+            "Luminosité",
+
+          color:
+            "Couleur RGB",
+
+          white:
+            "Blanc",
+
+          white_min:
+            "Température minimale",
+
+          white_max:
+            "Température maximale"
+        };
+
+        return (
+          labels[item.name] ||
+          item.name
+        );
+      };
+
+    form.addEventListener(
+      "value-changed",
+      event => {
+
+        callback(
+          event.detail.value
+        );
+      }
+    );
+
+    return form;
+  }
+
+  /* ========================================================================
+   * EDIT GROUP
+   * ====================================================================== */
+
+  _editGroup(index) {
+
+    const group =
+      this._config.groups[index];
+
+    const dialog =
+      document.createElement(
+        "ha-dialog"
+      );
+
+    dialog.open = true;
+
+    const title =
+      document.createElement(
+        "div"
+      );
+
+    title.textContent =
+      `Configurer ${group.name || "le groupe"}`;
+
+    title.style.cssText = `
+      font-size:18px;
+      font-weight:500;
+      margin-bottom:8px;
+    `;
+
+    const form =
+      this._form(
+
+        [
+
+          {
+            name: "name",
+
+            required: true,
+
+            selector: {
+              text: {}
+            }
+          },
+
+          {
+            name: "icon",
+
+            selector: {
+              icon: {}
+            }
+          },
+
+          {
+            name: "brightness",
+
+            selector: {
+              entity: {
+                filter: [
+                  {
+                    domain:
+                      "input_number"
+                  }
+                ]
+              }
+            }
+          },
+
+          {
+            name: "color",
+
+            selector: {
+              entity: {
+                filter: [
+                  {
+                    domain:
+                      "input_text"
+                  }
+                ]
+              }
+            }
+          },
+
+          {
+            name: "white",
+
+            selector: {
+              entity: {
+                filter: [
+                  {
+                    domain:
+                      "input_number"
+                  }
+                ]
+              }
+            }
+          },
+
+          {
+            name: "white_min",
+
+            selector: {
+              number: {
+                min: 1000,
+                max: 10000,
+                step: 100,
+                mode: "box",
+                unit_of_measurement: "K"
+              }
+            }
+          },
+
+          {
+            name: "white_max",
+
+            selector: {
+              number: {
+                min: 1000,
+                max: 10000,
+                step: 100,
+                mode: "box",
+                unit_of_measurement: "K"
+              }
+            }
+          }
+
+        ],
+
+        {
+          name:
+            group.name || "",
+
+          icon:
+            group.icon ||
+            "mdi:lightbulb",
+
+          brightness:
+            group.brightness || "",
+
+          color:
+            group.color || "",
+
+          white:
+            group.white || "",
+
+          white_min:
+            group.white_min ??
+            2000,
+
+          white_max:
+            group.white_max ??
+            6500
+        },
+
+        values => {
+
+          this._config.groups[index] = {
+            ...this._config.groups[index],
+            ...values
+          };
+
+          this._fireConfig();
+        }
+      );
+
+    dialog.appendChild(
+      title
+    );
+
+    dialog.appendChild(
+      form
+    );
+
+    dialog.addEventListener(
+      "closed",
+      () => {
+
+        dialog.remove();
+
+        this._render();
+      },
+      { once: true }
+    );
+
+    document.body.appendChild(
+      dialog
+    );
+  }
+
+  /* ========================================================================
+   * ADD GROUP
+   * ====================================================================== */
+
+  _addGroup() {
+
+    this._config.groups.push({
+
+      name:
+        "Nouveau groupe",
+
+      icon:
+        "mdi:lightbulb",
+
+      brightness:
+        "",
+
+      color:
+        "",
+
+      white:
+        "",
+
+      white_min:
+        2000,
+
+      white_max:
+        6500
+    });
+
+    this._fireConfig();
+
+    this._render();
+  }
+
+  /* ========================================================================
+   * DELETE GROUP
+   * ====================================================================== */
+
+  _deleteGroup(index) {
+
+    this._config.groups.splice(
+      index,
+      1
+    );
+
+    this._fireConfig();
+
+    this._render();
+  }
+
+  /* ========================================================================
+   * RENDER EDITOR
+   * ====================================================================== */
+
+  _render() {
+
+    if (!this._hass) {
+      return;
+    }
+
+    this.innerHTML = "";
+
+    const root =
+      document.createElement(
+        "div"
+      );
+
+    root.className =
+      "alex-input-color-editor";
+
+    /* ================================================================
+     * CUSTOMISATION
+     * ============================================================= */
+
+    const customizationTitle =
+      document.createElement(
+        "div"
+      );
+
+    customizationTitle.className =
+      "section-title";
+
+    customizationTitle.textContent =
+      "Customisation";
+
+    root.appendChild(
+      customizationTitle
+    );
+
+    const customization =
+      this._form(
+
+        [
+
+          {
+            name: "name",
+
+            selector: {
+              text: {}
+            }
+          },
+
+          {
+            name: "icon",
+
+            selector: {
+              icon: {}
+            }
+          },
+
+          {
+            name: "background_color",
+
+            selector: {
+              text: {}
+            }
+          },
+
+          {
+            name: "primary_color",
+
+            selector: {
+              text: {}
+            }
+          },
+
+          {
+            name: "secondary_color",
+
+            selector: {
+              text: {}
+            }
+          },
+
+          {
+            name: "icon_color",
+
+            selector: {
+              text: {}
+            }
+          },
+
+          {
+            name: "divider_color",
+
+            selector: {
+              text: {}
+            }
+          }
+
+        ],
+
+        {
+          name:
+            this._config.name || "",
+
+          icon:
+            this._config.icon ||
+            "mdi:lightbulb-auto",
+
+          background_color:
+            this._config.background_color || "",
+
+          primary_color:
+            this._config.primary_color || "",
+
+          secondary_color:
+            this._config.secondary_color || "",
+
+          icon_color:
+            this._config.icon_color || "",
+
+          divider_color:
+            this._config.divider_color || ""
+        },
+
+        values => {
+
+          this._config = {
+            ...this._config,
+            ...values
+          };
+
+          this._fireConfig();
+        }
+      );
+
+    root.appendChild(
+      customization
+    );
+
+    /* ================================================================
+     * GROUPES
+     * ============================================================= */
+
+    const groupsTitle =
+      document.createElement(
+        "div"
+      );
+
+    groupsTitle.className =
+      "section-title";
+
+    groupsTitle.textContent =
+      "Catégories";
+
+    root.appendChild(
+      groupsTitle
+    );
+
+    const groups =
+      this._config.groups || [];
+
+    groups.forEach(
+      (group, index) => {
+
+        const item =
+          document.createElement(
+            "div"
+          );
+
+        item.className =
+          "group-item";
+
+        /* ICON */
+
+        const icon =
+          document.createElement(
+            "ha-icon"
+          );
+
+        icon.icon =
+          group.icon ||
+          "mdi:lightbulb";
+
+        /* NAME */
+
+        const name =
+          document.createElement(
+            "span"
+          );
+
+        name.textContent =
+          group.name ||
+          "Nouveau groupe";
+
+        /* SPACER */
+
+        const spacer =
+          document.createElement(
+            "div"
+          );
+
+        spacer.className =
+          "group-spacer";
+
+        /* EDIT */
+
+        const edit =
+          document.createElement(
+            "ha-icon-button"
+          );
+
+        edit.title =
+          "Modifier";
+
+        edit.innerHTML = `
+          <ha-icon
+            icon="mdi:pencil"
+          ></ha-icon>
+        `;
+
+        edit.addEventListener(
+          "click",
+          () => {
+            this._editGroup(
+              index
+            );
+          }
+        );
+
+        /* DELETE */
+
+        const remove =
+          document.createElement(
+            "ha-icon-button"
+          );
+
+        remove.title =
+          "Supprimer";
+
+        remove.innerHTML = `
+          <ha-icon
+            icon="mdi:delete-outline"
+          ></ha-icon>
+        `;
+
+        remove.addEventListener(
+          "click",
+          () => {
+            this._deleteGroup(
+              index
+            );
+          }
+        );
+
+        item.appendChild(
+          icon
+        );
+
+        item.appendChild(
+          name
+        );
+
+        item.appendChild(
+          spacer
+        );
+
+        item.appendChild(
+          edit
+        );
+
+        item.appendChild(
+          remove
+        );
+
+        root.appendChild(
+          item
+        );
+      }
+    );
+
+    /* ================================================================
+     * ADD CATEGORY
+     * ============================================================= */
+
+    const add =
+      document.createElement(
+        "ha-button"
+      );
+
+    add.appearance =
+      "outlined";
+
+    add.textContent =
+      "Ajouter une catégorie";
+
+    add.addEventListener(
+      "click",
+      () => {
+        this._addGroup();
+      }
+    );
+
+    root.appendChild(
+      add
+    );
+
+    /* ================================================================
+     * STYLE
+     * ============================================================= */
+
+    const style =
+      document.createElement(
+        "style"
+      );
+
+    style.textContent = `
+
+      .alex-input-color-editor {
+
+        padding:
+          4px 0 16px;
+      }
+
+      .section-title {
+
+        font-size:
+          14px;
+
+        font-weight:
+          600;
+
+        margin:
+          18px 0 8px;
+      }
+
+      .group-item {
+
+        min-height:
+          48px;
+
+        display:
+          flex;
+
+        align-items:
+          center;
+
+        gap:
+          8px;
+
+        border-bottom:
+          1px solid
+          var(--divider-color);
+      }
+
+      .group-item > ha-icon {
+
+        --mdc-icon-size:
+          20px;
+
+        color:
+          var(--secondary-text-color);
+      }
+
+      .group-item span {
+
+        font-size:
+          14px;
+
+        color:
+          var(--primary-text-color);
+      }
+
+      .group-spacer {
+
+        flex:
+          1;
+      }
+
+    `;
+
+    root.appendChild(
+      style
+    );
+
+    this.appendChild(
+      root
+    );
+  }
+}
+
+customElements.define(
+  "alex-input-color-editor",
+  AlexInputColorEditor
 );
 
 
