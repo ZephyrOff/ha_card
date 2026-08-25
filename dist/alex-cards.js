@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.32.7";
+const ALEX_CARDS_VERSION = "0.32.8";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -5770,52 +5770,59 @@ class AlexInputColorCard extends HTMLElement {
    * Native RGB picker
    * --------------------------------------------------------------------- */
 
-  _openColorPicker(entity, groupName, row) {
+  _openColorPicker(entity, groupName) {
+    const selector = document.createElement("ha-selector");
 
-    // Si déjà ouvert → on le ferme
-    const existing = row.querySelector(".inline-color-picker");
+    selector.hass = this._hass;
 
-    if (existing) {
-      existing.remove();
-      return;
-    }
-
-    const current = this._color(entity);
-
-    const picker = document.createElement("ha-selector");
-
-    picker.className = "inline-color-picker";
-
-    picker.hass = this._hass;
-
-    picker.selector = {
+    selector.selector = {
       color_rgb: {},
     };
 
-    picker.value = this._hexToRgb(current);
+    const current = this._color(entity);
 
-    picker.style.cssText = `
-      display:block;
-      width:100%;
-      margin-top:10px;
-      margin-bottom:4px;
-    `;
+    if (current) {
+      selector.value = this._hexToRgb(current);
+    }
 
-    picker.addEventListener("value-changed", ev => {
+    // Le selector doit exister dans le DOM pour que HA puisse
+    // correctement ouvrir son popup.
+    selector.style.position = "fixed";
+    selector.style.left = "-10000px";
+    selector.style.top = "0";
+    selector.style.width = "1px";
+    selector.style.height = "1px";
+
+    document.body.appendChild(selector);
+
+    const cleanup = () => {
+      selector.remove();
+    };
+
+    selector.addEventListener("value-changed", (ev) => {
+      ev.stopPropagation();
 
       const rgb = ev.detail?.value;
 
-      if (!Array.isArray(rgb) || rgb.length < 3) {
-        return;
+      if (Array.isArray(rgb) && rgb.length >= 3) {
+        const hex = this._rgbToHex(rgb);
+
+        this._setText(entity, hex);
       }
 
-      const hex = this._rgbToHex(rgb);
+      cleanup();
+    }, { once: true });
 
-      this._setText(entity, hex);
+    // Ouvre directement le picker natif HA
+    requestAnimationFrame(() => {
+      const input =
+        selector.shadowRoot?.querySelector("ha-color-picker") ||
+        selector.shadowRoot?.querySelector("ha-color-picker");
 
+      if (input) {
+        input.click();
+      }
     });
-
-    row.appendChild(picker);
   }
 
   /* -----------------------------------------------------------------------
