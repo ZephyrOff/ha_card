@@ -493,9 +493,10 @@ selon `device_type`.
 ```yaml
 type: custom:alex-gradient-card
 entity: light.bandeau_salon
-device_type: hue               # hue / aqara
+device_type: aqara             # hue / aqara
 friendly_name: bandeau_salon   # optionnel, vide = déduit de l'entité
-segments: 5                    # ignoré pour aqara si détecté automatiquement
+length_entity: number.bandeau_salon_length   # aqara uniquement, voir plus bas
+segments: 5                    # ignoré si length_entity est configurée et lisible
 name: Bandeau Salon
 icon: mdi:led-strip-variant
 ```
@@ -512,10 +513,14 @@ icon: mdi:led-strip-variant
   courante pour la Lightstrip Gradient d'origine, à ajuster selon ton modèle).
 - **`device_type: aqara`** — payload différent : `{"segment_colors": [{"segment": 1,
   "color": {"r":.., "g":.., "b":..}}, ...]}`. **Nombre de segments détecté
-  automatiquement** à partir de l'attribut `length` de l'entité (lisible, contrairement
-  au dégradé Hue) — 5 segments de 20cm par mètre de bandeau. Le champ `segments` ne sert
-  que de repli si `length` n'est pas encore disponible. Un message sous les sélecteurs
-  indique si la détection automatique a fonctionné.
+  automatiquement** à partir de **`length_entity`** — 5 segments de 20cm par mètre de
+  bandeau. Important : `length` est exposée par Z2M comme une **entité séparée**
+  (`number.*`, parfois aussi un `sensor.*` associé) — **pas** un attribut de l'entité
+  lumière — c'est pourquoi ce champ doit être renseigné explicitement, la carte ne peut
+  pas le déduire de `entity` tout seule. Cherche l'entité correspondant à « Length » sur
+  l'appareil dans Réglages → Appareils → (ton bandeau), ou dans le frontend Z2M. Sans
+  cette entité configurée (ou si elle n'est pas lisible), repli sur `segments` réglé
+  manuellement. Un message sous les sélecteurs indique si la détection a fonctionné.
 - **`friendly_name`** doit correspondre au nom convivial **Zigbee2MQTT** de l'appareil
   (celui utilisé dans le topic MQTT), pas nécessairement au nom de l'entité HA si tu
   l'as renommée séparément. Vide par défaut = déduit du dernier segment de l'entity_id.

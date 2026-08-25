@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.31.0";
+const ALEX_CARDS_VERSION = "0.31.1";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -5350,17 +5350,17 @@ class GradientCard extends HTMLElement {
   }
 
   // Nombre de segments effectif. Pour l'Aqara T1, deduit automatiquement de
-  // l'attribut `length` (lisible, contrairement au gradient Hue) : 5
-  // segments de 20cm par metre de bandeau — bien plus fiable qu'une saisie
-  // manuelle. Pour Hue (ou si `length` n'est pas encore disponible), repli
-  // sur le champ `segments` configure manuellement.
+  // `length_entity` (une entite number.*/sensor.* SEPAREE de la lumiere —
+  // Z2M expose les proprietes numeriques parametrables ainsi, jamais comme
+  // simple attribut de l'entite light) : 5 segments de 20cm par metre de
+  // bandeau. Pour Hue (ou si `length_entity` n'est pas configuree/lisible),
+  // repli sur le champ `segments` regle manuellement.
   _effectiveSegments() {
     const c = this._config;
-    if (c.device_type === "aqara" && c.entity && this._hass) {
-      const st = this._hass.states[c.entity];
-      const length = st && st.attributes && st.attributes.length;
-      if (length != null && !Number.isNaN(Number(length))) {
-        const n = Math.round(Number(length) * 5);
+    if (c.device_type === "aqara" && c.length_entity && this._hass) {
+      const st = this._hass.states[c.length_entity];
+      if (st && st.state != null && !Number.isNaN(Number(st.state))) {
+        const n = Math.round(Number(st.state) * 5);
         if (n > 0) return Math.min(50, n);
       }
     }
@@ -5390,6 +5390,7 @@ class GradientCard extends HTMLElement {
       c.name,
       c.icon,
       c.device_type,
+      c.length_entity,
       JSON.stringify(c.icon_color || null),
       JSON.stringify(c.background || null),
       JSON.stringify(c.primary_color || null),
@@ -5421,8 +5422,8 @@ class GradientCard extends HTMLElement {
       .join("");
 
     const missingConfig = !entity || !friendlyName;
-    const autoDetected =
-      c.device_type === "aqara" && !!stateObj && stateObj.attributes && stateObj.attributes.length != null;
+    const lengthStateObj = c.device_type === "aqara" && c.length_entity ? hass.states[c.length_entity] : null;
+    const autoDetected = !!lengthStateObj && lengthStateObj.state != null && !Number.isNaN(Number(lengthStateObj.state));
 
     this.innerHTML = `
       <ha-card style="border-radius:20px;box-shadow:none;background:${cardBg};padding:16px 18px;">
@@ -5533,6 +5534,7 @@ class GradientCardEditor extends AlexFormEditor {
         },
       },
       { name: "friendly_name", selector: { text: {} } },
+      { name: "length_entity", selector: { entity: { domain: ["number", "sensor"] } } },
       {
         name: "segments",
         selector: { number: { min: 2, max: 50, step: 1, mode: "box" } },
@@ -5558,7 +5560,8 @@ class GradientCardEditor extends AlexFormEditor {
       entity: "Entité de la lumière",
       device_type: "Type d'appareil",
       friendly_name: "Nom convivial Z2M (vide = déduit de l'entité)",
-      segments: "Nombre de segments (Aqara : ignoré si détecté automatiquement)",
+      length_entity: "Entité longueur du bandeau (Aqara — number.*, pas un attribut de la lumière)",
+      segments: "Nombre de segments (Aqara : ignoré si longueur détectée)",
       name: "Nom",
       icon: "Icône",
       icon_color: "Couleur du badge",
