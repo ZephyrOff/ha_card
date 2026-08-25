@@ -532,6 +532,11 @@ icon: mdi:led-strip-variant
 - Un interrupteur dans l'en-tête permet d'allumer/éteindre la lumière elle-même
   (`homeassistant.toggle` sur l'entité configurée) — les segments n'ont de sens que
   lumière allumée.
+- Les sélecteurs de couleur se répartissent sur plusieurs lignes de façon **équilibrée**
+  au-delà de 6 segments (jamais un simple retour à la ligne façon `flex-wrap`, qui
+  laisserait un reliquat difforme — ex. 11 puis 1 pour 12 segments). Le nombre de lignes
+  nécessaires est calculé selon un maximum de 6 par ligne, puis le total est redistribué
+  également entre ces lignes (12 segments → 6+6, 13 → 5+5+3, etc.).
 - Personnalisation (panneau Customisation) : couleur du badge, fond de la carte,
   couleur du nom, couleur secondaire, couleur du bouton « Appliquer »/interrupteur actif.
 

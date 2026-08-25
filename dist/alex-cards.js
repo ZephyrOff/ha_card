@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.31.3";
+const ALEX_CARDS_VERSION = "0.31.4";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -5427,14 +5427,32 @@ class GradientCard extends HTMLElement {
     const badgeRgb = Array.isArray(c.icon_color) ? c.icon_color : [139, 122, 230];
     const badgeBg = `rgba(${badgeRgb[0]}, ${badgeRgb[1]}, ${badgeRgb[2]}, 0.16)`;
 
-    const segmentsHtml = this._segmentColors
-      .map(
-        (color, i) => `
-          <input type="color" class="ac-gradient-seg" data-index="${i}" value="${color}"
-            style="flex:1 1 32px;min-width:32px;height:44px;border:none;border-radius:10px;padding:0;
-                   cursor:pointer;background:${color};-webkit-appearance:none;appearance:none;" />`
-      )
-      .join("");
+    // Repartition equilibree sur plusieurs lignes (plutot qu'un flex-wrap
+    // qui remplit une ligne au maximum et laisse un reliquat difforme sur
+    // la suivante, ex. 11 puis 1 pour 12 segments) : calcule le nombre de
+    // lignes necessaires selon un maximum par ligne, puis redistribue le
+    // total de facon egale entre ces lignes.
+    const maxPerRow = 6;
+    const rowsNeeded = Math.max(1, Math.ceil(segmentsCount / maxPerRow));
+    const perRow = Math.ceil(segmentsCount / rowsNeeded);
+    const segmentRows = [];
+    for (let r = 0; r < rowsNeeded; r++) {
+      const start = r * perRow;
+      const end = Math.min(start + perRow, segmentsCount);
+      if (start >= end) break;
+      const rowItems = this._segmentColors
+        .slice(start, end)
+        .map((color, localIdx) => {
+          const i = start + localIdx;
+          return `
+            <input type="color" class="ac-gradient-seg" data-index="${i}" value="${color}"
+              style="flex:1;min-width:0;height:44px;border:none;border-radius:10px;padding:0;
+                     cursor:pointer;background:${color};-webkit-appearance:none;appearance:none;" />`;
+        })
+        .join("");
+      segmentRows.push(`<div style="display:flex;gap:6px;">${rowItems}</div>`);
+    }
+    const segmentsHtml = `<div style="display:flex;flex-direction:column;gap:6px;">${segmentRows.join("")}</div>`;
 
     const missingConfig = !entity || !friendlyName;
     const resolvedLengthEntity = c.device_type === "aqara" ? c.length_entity || this._defaultLengthEntity() : null;
@@ -5469,7 +5487,7 @@ class GradientCard extends HTMLElement {
             ? `<div style="font-size:13px;color:${secondaryColor};padding:8px 0;">
                 Configure l'entité de la lumière (et le nom convivial Z2M si besoin) dans les réglages de la carte.
               </div>`
-            : `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;">
+            : `<div style="margin-bottom:8px;">
                 ${segmentsHtml}
               </div>
               <div style="font-size:11px;color:${secondaryColor};margin-bottom:10px;">
