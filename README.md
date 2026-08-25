@@ -504,8 +504,7 @@ icon: mdi:led-strip-variant
   fonctionnalités en écriture seule — confirmé dans sa documentation officielle
   (« It's not possible to read (/get) this value »). La carte ne peut donc pas
   pré-remplir les sélecteurs de couleur avec ce qui est réellement affiché sur le
-  bandeau ; ils partent toujours neutres (blanc) au chargement. Un rappel de ce point
-  est affiché sur la carte.
+  bandeau ; ils partent toujours neutres (blanc) au chargement.
 - **`device_type: hue`** — payload `{"gradient": ["#hex", ...]}`. Nombre de segments non
   limité par Z2M pour cette famille (`929002994901`, `929004610602`…) ; le champ
   `segments` reste utile pour choisir combien de couleurs envoyer (5 est une valeur
@@ -522,9 +521,7 @@ icon: mdi:led-strip-variant
   n'apparaît pas dans l'éditeur visuel (cas rare, pour ne pas alourdir le formulaire),
   mais reste pris en compte s'il est présent dans la config, en priorité sur la
   déduction automatique. Sans entité résolvable (déduite ou explicite) ou si elle n'est
-  pas lisible, repli sur `segments` réglé manuellement. Un message sous les sélecteurs
-  indique la source de la détection (déduite/explicite/
-  manuelle).
+  pas lisible, repli sur `segments` réglé manuellement.
 - **`friendly_name`** doit correspondre au nom convivial **Zigbee2MQTT** de l'appareil
   (celui utilisé dans le topic MQTT), pas nécessairement au nom de l'entité HA si tu
   l'as renommée séparément. Vide par défaut = déduit du dernier segment de l'entity_id.

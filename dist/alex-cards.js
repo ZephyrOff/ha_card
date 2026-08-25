@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.31.4";
+const ALEX_CARDS_VERSION = "0.31.5";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -5455,10 +5455,6 @@ class GradientCard extends HTMLElement {
     const segmentsHtml = `<div style="display:flex;flex-direction:column;gap:6px;">${segmentRows.join("")}</div>`;
 
     const missingConfig = !entity || !friendlyName;
-    const resolvedLengthEntity = c.device_type === "aqara" ? c.length_entity || this._defaultLengthEntity() : null;
-    const lengthStateObj = resolvedLengthEntity ? hass.states[resolvedLengthEntity] : null;
-    const autoDetected = !!lengthStateObj && lengthStateObj.state != null && !Number.isNaN(Number(lengthStateObj.state));
-    const lengthWasGuessed = autoDetected && !c.length_entity;
 
     this.innerHTML = `
       <ha-card style="border-radius:20px;box-shadow:none;background:${cardBg};padding:16px 18px;">
@@ -5487,24 +5483,12 @@ class GradientCard extends HTMLElement {
             ? `<div style="font-size:13px;color:${secondaryColor};padding:8px 0;">
                 Configure l'entité de la lumière (et le nom convivial Z2M si besoin) dans les réglages de la carte.
               </div>`
-            : `<div style="margin-bottom:8px;">
+            : `<div style="margin-bottom:14px;">
                 ${segmentsHtml}
-              </div>
-              <div style="font-size:11px;color:${secondaryColor};margin-bottom:10px;">
-                ${
-                  autoDetected
-                    ? lengthWasGuessed
-                      ? `${segmentsCount} segments détectés automatiquement (déduit de « ${resolvedLengthEntity} », vérifie que ça correspond).`
-                      : `${segmentsCount} segments détectés automatiquement (longueur du bandeau).`
-                    : `${segmentsCount} segments (réglage manuel).`
-                }
               </div>
               <div class="ac-gradient-apply" style="text-align:center;padding:10px;border-radius:12px;
                           background:${accentColor};color:#000;font-size:14px;font-weight:600;cursor:pointer;">
                 Appliquer le dégradé
-              </div>
-              <div style="font-size:11px;color:${secondaryColor};text-align:center;margin-top:8px;">
-                Réglage à l'aveugle — Zigbee2MQTT ne permet pas de relire les couleurs actuellement affichées.
               </div>`
         }
       </ha-card>`;
