@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.33.1";
+const ALEX_CARDS_VERSION = "0.34.0";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -6175,17 +6175,72 @@ class AlexInputColorCard extends HTMLElement {
       return;
     }
 
+    const c = this._config;
+
     const card =
       document.createElement("ha-card");
 
     card.className =
       "alex-input-color-card";
 
+    /*
+     * Variables CSS pilotees par la config (panneau Customisation) --
+     * necessaire car le <style> global n'est injecte qu'une seule fois et
+     * partage entre toutes les instances de la carte (voir _injectStyles),
+     * les couleurs ne peuvent donc pas y etre codees en dur.
+     */
+    card.style.setProperty(
+      "--aic-row-gap",
+      `${c.row_spacing != null ? c.row_spacing : 4}px`
+    );
+    card.style.setProperty(
+      "--aic-icon-color",
+      colorOr(c.icon_color, "var(--secondary-text-color)")
+    );
+    card.style.setProperty(
+      "--aic-name-color",
+      colorOr(c.secondary_color, "var(--primary-text-color)")
+    );
+    card.style.setProperty(
+      "--aic-bg",
+      colorOr(c.background, "var(--ha-card-background, var(--card-background-color))")
+    );
+    card.style.setProperty(
+      "--aic-title-color",
+      colorOr(c.primary_color, "var(--primary-text-color)")
+    );
+    const badgeRgb = Array.isArray(c.icon_color) ? c.icon_color : [139, 122, 230];
+    card.style.setProperty("--aic-badge-bg", rgba(badgeRgb, 0.16));
+
     const container =
       document.createElement("div");
 
     container.className =
       "alex-light-container";
+
+    /*
+     * En-tete (icone + nom), a l'image d'Alex Sensor Card -- optionnel,
+     * n'apparait que si un nom ou une icone est configure.
+     */
+    if (c.name || c.icon) {
+      const header = document.createElement("div");
+      header.className = "alex-input-color-header";
+
+      const badge = document.createElement("div");
+      badge.className = "alex-input-color-badge";
+
+      const badgeIcon = document.createElement("ha-icon");
+      badgeIcon.icon = c.icon || "mdi:palette";
+      badge.appendChild(badgeIcon);
+
+      const title = document.createElement("div");
+      title.className = "alex-input-color-title";
+      title.textContent = c.name || "";
+
+      header.appendChild(badge);
+      header.appendChild(title);
+      container.appendChild(header);
+    }
 
     const groups =
       this._config.groups || [];
@@ -6264,17 +6319,49 @@ class AlexInputColorCard extends HTMLElement {
         box-shadow: none !important;
         border-radius: 20px !important;
         overflow: hidden;
-        background:
-          var(
-            --ha-card-background,
-            var(--card-background-color)
-          );
+        background: var(--aic-bg);
+      }
+
+      .alex-input-color-header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 5px 0 12px;
+      }
+
+      .alex-input-color-badge {
+        width: 40px;
+        height: 40px;
+        flex: 0 0 40px;
+
+        border-radius: 12px;
+        background: var(--aic-badge-bg);
+
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .alex-input-color-badge ha-icon {
+        --mdc-icon-size: 20px;
+        color: var(--aic-icon-color);
+      }
+
+      .alex-input-color-title {
+        font-size: 17px;
+        font-weight: 700;
+        color: var(--aic-title-color);
+
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
       }
 
       .alex-light-container {
         padding: 7px 12px;
         display: flex;
         flex-direction: column;
+        gap: var(--aic-row-gap, 4px);
       }
 
       .alex-light-row {
@@ -6304,10 +6391,7 @@ class AlexInputColorCard extends HTMLElement {
 
         --mdc-icon-size: 17px;
 
-        color:
-          var(
-            --secondary-text-color
-          );
+        color: var(--aic-icon-color);
       }
 
       .group-name {
@@ -6321,10 +6405,7 @@ class AlexInputColorCard extends HTMLElement {
         font-size: 13px;
         font-weight: 500;
 
-        color:
-          var(
-            --primary-text-color
-          );
+        color: var(--aic-name-color);
       }
 
       /* ---------------------------------------------------------------
@@ -6438,7 +6519,7 @@ class AlexInputColorCard extends HTMLElement {
         cursor: pointer;
 
         transition:
-          transform .12s ease,
+          filter .12s ease,
           box-shadow .12s ease;
 
         /*
@@ -6466,7 +6547,15 @@ class AlexInputColorCard extends HTMLElement {
       }
 
       .color-button:hover {
-        transform: scale(1.08);
+        /*
+         * transform:scale() change la geometrie de rendu -- sur un
+         * <input type="color"> (contrairement a l'ancien <button> simple),
+         * ca cree une boucle de retroaction avec le rendu interne propre
+         * au navigateur pres du bord de la zone de survol (oscillation).
+         * filter:brightness() donne un effet visuel proche sans jamais
+         * deplacer/redimensionner la boite.
+         */
+        filter: brightness(1.12);
 
         box-shadow:
           0 0 0 2px
@@ -6657,7 +6746,68 @@ class AlexInputColorCardEditor extends AlexListEditor {
 
   _renderRoot() {
 
-    const groups = this._config.groups || [];
+    const c = this._config;
+    const groups = c.groups || [];
+
+    /*
+     * Général (carte)
+     */
+
+    this.appendChild(
+      this._form(
+        [
+          { name: "name", selector: { text: {} } },
+          { name: "icon", selector: { icon: {} } },
+        ],
+        {
+          name: c.name || "",
+          icon: c.icon || "",
+        },
+        {
+          name: "Nom de la carte",
+          icon: "Icône de la carte",
+        },
+        (v) => this._update((cfg) => Object.assign(cfg, v))
+      )
+    );
+
+    /*
+     * Customisation (carte)
+     */
+
+    this.appendChild(
+      this._panel(
+        "Customisation",
+        "mdi:palette",
+        this._mixed(
+          [
+            {
+              name: "row_spacing",
+              selector: { number: { min: 0, max: 40, step: 1, mode: "box" } },
+            },
+            { name: "icon_color", selector: { color_rgb: {} } },
+            { name: "background", selector: { color_rgb: {} } },
+            { name: "primary_color", selector: { color_rgb: {} } },
+            { name: "secondary_color", selector: { color_rgb: {} } },
+          ],
+          {
+            row_spacing: c.row_spacing != null ? c.row_spacing : 4,
+            icon_color: c.icon_color,
+            background: c.background,
+            primary_color: c.primary_color,
+            secondary_color: c.secondary_color,
+          },
+          {
+            row_spacing: "Écartement entre les lignes (px)",
+            icon_color: "Couleur du badge",
+            background: "Fond de la carte",
+            primary_color: "Couleur du nom de la carte",
+            secondary_color: "Couleur du texte des groupes",
+          },
+          (v) => this._update((cfg) => Object.assign(cfg, v))
+        )
+      )
+    );
 
     this.appendChild(
       this._sectionTitle("Groupes")
