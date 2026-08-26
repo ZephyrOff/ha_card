@@ -605,16 +605,22 @@ groups:
   depuis sa propre config). Pense à régler la bonne plage sur chaque aide
   `input_number` dans Réglages → Appareils et services → Aides.
 - Le curseur de température de blanc affiche en fond un **dégradé
-  orange → blanc** (orange = chaud/kelvin bas, blanc = froid/kelvin haut),
-  pour repérer en un coup d'œil de quel côté on se rapproche — appliqué via
-  `card_mod` avec sélecteur imbriqué
-  (`mushroom-number-value-control$: mushroom-slider$:`), qui cible le
-  curseur interne à travers les shadow DOM successifs de la carte mushroom.
-  La propriété `background` est ciblée directement (pas la variable
-  `--bg-color`) — plus fiable, indépendant de la propriété CSS interne
-  réellement consommée par mushroom-slider. Si le sens te paraît inversé par
-  rapport au min/max réel de ton entité, les deux couleurs s'échangent en une
-  ligne dans `_createWhiteControl`.
+  orange → blanc** (orange = chaud/kelvin bas, blanc = froid/kelvin haut,
+  saturation renforcée pour se rapprocher du rendu natif HA), pour repérer en
+  un coup d'œil de quel côté on se rapproche — appliqué via `card_mod` avec
+  sélecteur imbriqué (`mushroom-number-value-control$: mushroom-slider$:`),
+  qui cible le curseur interne à travers les shadow DOM successifs de la
+  carte mushroom. La propriété `background` est ciblée directement (pas la
+  variable `--bg-color`) — plus fiable, indépendant de la propriété CSS
+  interne réellement consommée par mushroom-slider. Si le sens te paraît
+  inversé par rapport au min/max réel de ton entité, les deux couleurs
+  s'échangent en une ligne dans `_createWhiteControl`.
+- Le remplissage qui indique la valeur actuelle (`--main-color`, bleu du
+  thème par défaut) est rendu **très translucide** plutôt que retiré
+  complètement — incertitude assumée : selon que mushroom-slider ait ou non
+  un curseur distinct de ce remplissage, le rendre totalement transparent
+  aurait risqué de faire disparaître toute indication de position, pas
+  seulement la couleur bleue. À affiner selon le rendu réel une fois testé.
 - La carte ne se reconstruit que lorsque sa config ou l'état d'une de ses
   entités change réellement (pas à chaque mise à jour de `hass` ailleurs dans
   la maison) — nécessaire pour que le sélecteur de couleur natif ne se ferme

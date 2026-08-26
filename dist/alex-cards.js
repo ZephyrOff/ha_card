@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.35.2";
+const ALEX_CARDS_VERSION = "0.35.3";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -5890,17 +5890,23 @@ class AlexInputColorCard extends HTMLElement {
           ".":
             "ha-card {\n  background: none !important;\n  box-shadow: none !important;\n" +
             "  border: none !important;\n  padding: 0 !important;\n}\n",
-          // Degrade orange (chaud, kelvin bas) -> blanc (froid, kelvin haut).
-          // Cible directement `background` (pas la variable --bg-color) :
-          // si le CSS interne de mushroom-slider consomme cette variable via
+          // Degrade orange (chaud, kelvin bas) -> blanc (froid, kelvin haut) --
+          // sature davantage pour se rapprocher du rendu natif HA. Cible
+          // directement `background` (pas la variable --bg-color) : si le CSS
+          // interne de mushroom-slider consomme cette variable via
           // `background-color` plutot que `background`, un degrade y est
           // invalide et silencieusement ignore -- `background` en direct
           // ecrase le mecanisme interne quel qu'il soit.
+          // --main-color pilote le remplissage qui avance jusqu'a la valeur
+          // actuelle (bleu par defaut du theme, non touche jusqu'ici) --
+          // rendu tres translucide plutot que totalement transparent, pour
+          // garder une indication de position sans recouvrir le degrade.
           "mushroom-number-value-control$": {
             "mushroom-slider$":
               ".slider {\n  height: 22px !important;\n" +
-              "  background: linear-gradient(90deg, #ff9d55 0%, #ffffff 100%) !important;\n" +
-              "  background-color: transparent !important;\n}\n",
+              "  background: linear-gradient(90deg, #ff7a00 0%, #ffffff 100%) !important;\n" +
+              "  background-color: transparent !important;\n" +
+              "  --main-color: rgba(255, 255, 255, 0.35) !important;\n}\n",
           },
         },
       },
