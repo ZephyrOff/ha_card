@@ -23,6 +23,7 @@ Collection de cartes Lovelace custom pour Home Assistant, distribuée en **plugi
 | `custom:alex-server-card`       | oui        | Liste de serveurs/VM avec statut en ligne et bouton power. |
 | `custom:alex-gradient-card`     | oui        | Réglage des segments de couleur des lampes Gradient Philips Hue (Zigbee2MQTT). |
 | `custom:alex-gradient-scene-card` | oui      | Liste et applique les scènes enregistrées via l'intégration Alex Gradient Studio. |
+| `custom:alex-input-color`       | oui        | Réglage compact de luminosité/couleur RGB/température de blanc par groupes. |
 
 Toutes les cartes apparaissent dans le sélecteur « Ajouter une carte » avec un éditeur
 visuel. La `alex-light-card` a un éditeur type « chips » (liste + crayon pour éditer chaque
@@ -570,6 +571,45 @@ duplication de logique entre la carte et l'intégration.
 
 Personnalisation (panneau Customisation) : couleur du badge, fond de la carte,
 couleur du nom, couleur des noms de scène.
+
+### Alex Input Color
+
+Réglage compact de luminosité, couleur RGB et température de blanc, organisé en
+groupes (ex. « Matin », « Soir »...) — chaque groupe pilote un jeu d'entités
+`input_number`/`input_text` de son choix, pas nécessairement les attributs natifs
+d'une entité `light`.
+
+```yaml
+type: custom:alex-input-color
+name: Ambiances
+icon: mdi:palette
+row_spacing: 6
+groups:
+  - name: Matin
+    icon: mdi:weather-sunset-up
+    brightness: input_number.matin_brightness
+    color: input_text.matin_color
+    white: input_number.matin_white
+```
+
+- **En-tête optionnel** (icône + nom de la carte, à l'image d'Alex Sensor Card) —
+  n'apparaît que si `name` ou `icon` est renseigné au niveau de la carte.
+- **Sélecteur de couleur RGB** : `<input type="color">` natif — un clic ouvre
+  directement le sélecteur du système, sans étape intermédiaire.
+- **Luminosité et température de blanc** : chacune embarque une vraie
+  `custom:mushroom-number-card` (icône/nom/état masqués, seul le slider est
+  visible) plutôt qu'un contrôle fait maison — la plage (min/max/step) vient
+  entièrement de la configuration de l'entité `input_number` ciblée, **pas**
+  d'un réglage de cette carte (mushroom-number-card ne permet pas de surcharger
+  min/max depuis sa propre config). Pense à régler la bonne plage sur chaque
+  aide `input_number` dans Réglages → Appareils et services → Aides.
+- La carte ne se reconstruit que lorsque sa config ou l'état d'une de ses
+  entités change réellement (pas à chaque mise à jour de `hass` ailleurs dans
+  la maison) — nécessaire pour que le sélecteur de couleur natif ne se ferme
+  pas tout seul en cours de sélection.
+- Personnalisation (panneau Customisation) : écartement entre les lignes (px),
+  couleur du badge (aussi utilisée pour les icônes de chaque groupe), fond de
+  la carte, couleur du nom de la carte, couleur du texte des groupes.
 
 ## Ajouter une nouvelle carte
 

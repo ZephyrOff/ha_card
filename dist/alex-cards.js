@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.34.1";
+const ALEX_CARDS_VERSION = "0.35.0";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -5650,8 +5650,6 @@ class AlexInputColorCard extends HTMLElement {
           brightness: "",
           color: "",
           white: "",
-          white_min: 2000,
-          white_max: 6500,
         },
       ],
     };
@@ -5718,18 +5716,6 @@ class AlexInputColorCard extends HTMLElement {
     return entity ? this._hass?.states?.[entity] : null;
   }
 
-  _number(entity, fallback = 0) {
-    const state = this._state(entity);
-
-    if (!state) {
-      return fallback;
-    }
-
-    const value = Number(state.state);
-
-    return Number.isFinite(value) ? value : fallback;
-  }
-
   _color(entity) {
 
     const state = this._state(entity);
@@ -5768,22 +5754,6 @@ class AlexInputColorCard extends HTMLElement {
    * Services
    * --------------------------------------------------------------------- */
 
-  _setNumber(entity, value) {
-
-    if (!entity || !this._hass) {
-      return;
-    }
-
-    this._hass.callService(
-      "input_number",
-      "set_value",
-      {
-        entity_id: entity,
-        value: value,
-      }
-    );
-  }
-
   _setText(entity, value) {
 
     if (!entity || !this._hass) {
@@ -5801,108 +5771,14 @@ class AlexInputColorCard extends HTMLElement {
   }
 
   /* -----------------------------------------------------------------------
-   * Native Kelvin picker
-   * --------------------------------------------------------------------- */
-
-  _openWhitePicker(entity, group, groupName) {
-
-    const min =
-      Number(group.white_min ?? 2000);
-
-    const max =
-      Number(group.white_max ?? 6500);
-
-    const current =
-      this._number(
-        entity,
-        Math.round((min + max) / 2)
-      );
-
-    const dialog = document.createElement("ha-dialog");
-
-    dialog.heading = true;
-    dialog.open = true;
-
-    dialog.style.setProperty(
-      "--mdc-dialog-min-width",
-      "320px"
-    );
-
-    const title = document.createElement("div");
-
-    title.textContent =
-      `Température — ${groupName || ""}`;
-
-    title.style.cssText =
-      "font-size:18px;" +
-      "font-weight:500;" +
-      "margin-bottom:16px;";
-
-    const picker = document.createElement("ha-selector");
-
-    picker.hass = this._hass;
-
-    picker.selector = {
-      color_temp: {
-        unit: "kelvin",
-        min: min,
-        max: max,
-      },
-    };
-
-    picker.value = current;
-
-    picker.style.cssText =
-      "display:block;" +
-      "width:100%;";
-
-    picker.addEventListener(
-      "value-changed",
-      ev => {
-
-        const value =
-          Number(ev.detail?.value);
-
-        if (!Number.isFinite(value)) {
-          return;
-        }
-
-        this._setNumber(
-          entity,
-          Math.round(value)
-        );
-
-        dialog.close();
-      }
-    );
-
-    dialog.appendChild(title);
-    dialog.appendChild(picker);
-
-    dialog.addEventListener(
-      "closed",
-      () => dialog.remove(),
-      { once: true }
-    );
-
-    document.body.appendChild(dialog);
-  }
-
-  /* -----------------------------------------------------------------------
    * Brightness slider
    * --------------------------------------------------------------------- */
 
-  _createBrightness(group, row) {
+  async _createBrightness(group, row) {
 
     if (!group.brightness) {
       return;
     }
-
-    const value =
-      this._number(
-        group.brightness,
-        0
-      );
 
     const wrapper =
       document.createElement("div");
@@ -5910,43 +5786,27 @@ class AlexInputColorCard extends HTMLElement {
     wrapper.className =
       "brightness-control";
 
-    const slider =
-      document.createElement("input");
+    const helpers =
+      await window.loadCardHelpers();
 
-    slider.type = "range";
-    slider.min = "0";
-    slider.max = "254";
-    slider.step = "1";
-    slider.value = value;
+    const card = helpers.createCardElement({
+      type: "custom:mushroom-number-card",
+      entity: group.brightness,
+      icon_type: "none",
+      primary_info: "none",
+      secondary_info: "none",
+      display_mode: "slider",
+      fill_container: true,
+      card_mod: {
+        style:
+          "ha-card {\n  background: none !important;\n  box-shadow: none !important;\n" +
+          "  border: none !important;\n  padding: 0 !important;\n}\n",
+      },
+    });
 
-    const valueLabel =
-      document.createElement("span");
+    card.hass = this._hass;
 
-    valueLabel.className =
-      "brightness-value";
-
-    valueLabel.textContent =
-      Math.round(value);
-
-    slider.addEventListener(
-      "input",
-      ev => {
-
-        const newValue =
-          Number(ev.target.value);
-
-        valueLabel.textContent =
-          Math.round(newValue);
-
-        this._setNumber(
-          group.brightness,
-          newValue
-        );
-      }
-    );
-
-    wrapper.appendChild(slider);
-    wrapper.appendChild(valueLabel);
+    wrapper.appendChild(card);
 
     row.appendChild(wrapper);
   }
@@ -5997,23 +5857,11 @@ class AlexInputColorCard extends HTMLElement {
    * Kelvin control
    * --------------------------------------------------------------------- */
 
-  _createWhiteControl(group, row) {
+  async _createWhiteControl(group, row) {
 
     if (!group.white) {
       return;
     }
-
-    const min =
-      Number(group.white_min ?? 2000);
-
-    const max =
-      Number(group.white_max ?? 6500);
-
-    const value =
-      this._number(
-        group.white,
-        Math.round((min + max) / 2)
-      );
 
     const wrapper =
       document.createElement("div");
@@ -6021,102 +5869,27 @@ class AlexInputColorCard extends HTMLElement {
     wrapper.className =
       "white-control";
 
-    /*
-     * Icône thermomètre
-     */
+    const helpers =
+      await window.loadCardHelpers();
 
-    const thermometer =
-      document.createElement("ha-icon");
+    const card = helpers.createCardElement({
+      type: "custom:mushroom-number-card",
+      entity: group.white,
+      icon_type: "none",
+      primary_info: "none",
+      secondary_info: "none",
+      display_mode: "slider",
+      fill_container: true,
+      card_mod: {
+        style:
+          "ha-card {\n  background: none !important;\n  box-shadow: none !important;\n" +
+          "  border: none !important;\n  padding: 0 !important;\n}\n",
+      },
+    });
 
-    thermometer.icon =
-      "mdi:thermometer";
+    card.hass = this._hass;
 
-    thermometer.className =
-      "white-icon";
-
-    /*
-     * Barre Kelvin
-     */
-
-    const bar =
-      document.createElement("div");
-
-    bar.className =
-      "white-bar";
-
-    /*
-     * Position du curseur
-     */
-
-    const position =
-      Math.max(
-        0,
-        Math.min(
-          100,
-          ((value - min) /
-            (max - min)) * 100
-        )
-      );
-
-    const pin =
-      document.createElement("div");
-
-    pin.className =
-      "white-pin";
-
-    pin.style.left =
-      `${position}%`;
-
-    bar.appendChild(pin);
-
-    bar.addEventListener(
-      "click",
-      ev => {
-
-        const rect =
-          bar.getBoundingClientRect();
-
-        const ratio =
-          (ev.clientX - rect.left) /
-          rect.width;
-
-        const kelvin =
-          min +
-          Math.max(
-            0,
-            Math.min(1, ratio)
-          ) *
-          (max - min);
-
-        this._setNumber(
-          group.white,
-          Math.round(kelvin)
-        );
-
-        this._openWhitePicker(
-          group.white,
-          group,
-          group.name
-        );
-      }
-    );
-
-    /*
-     * Valeur
-     */
-
-    const label =
-      document.createElement("span");
-
-    label.className =
-      "white-value";
-
-    label.textContent =
-      `${Math.round(value)} K`;
-
-    wrapper.appendChild(thermometer);
-    wrapper.appendChild(bar);
-    wrapper.appendChild(label);
+    wrapper.appendChild(card);
 
     row.appendChild(wrapper);
   }
@@ -6125,7 +5898,7 @@ class AlexInputColorCard extends HTMLElement {
    * Row
    * --------------------------------------------------------------------- */
 
-  _createRow(group) {
+  async _createRow(group) {
 
     const row =
       document.createElement("div");
@@ -6167,7 +5940,7 @@ class AlexInputColorCard extends HTMLElement {
      * Brightness
      */
 
-    this._createBrightness(
+    await this._createBrightness(
       group,
       row
     );
@@ -6185,7 +5958,7 @@ class AlexInputColorCard extends HTMLElement {
      * Blanc / Kelvin
      */
 
-    this._createWhiteControl(
+    await this._createWhiteControl(
       group,
       row
     );
@@ -6197,87 +5970,101 @@ class AlexInputColorCard extends HTMLElement {
    * Render
    * --------------------------------------------------------------------- */
 
-  _render() {
+  async _render() {
 
     if (!this._hass || !this._config) {
       return;
     }
 
-    const c = this._config;
-
-    const card =
-      document.createElement("ha-card");
-
-    card.className =
-      "alex-input-color-card";
-
-    /*
-     * Variables CSS pilotees par la config (panneau Customisation) --
-     * necessaire car le <style> global n'est injecte qu'une seule fois et
-     * partage entre toutes les instances de la carte (voir _injectStyles),
-     * les couleurs ne peuvent donc pas y etre codees en dur.
-     */
-    card.style.setProperty(
-      "--aic-row-gap",
-      `${c.row_spacing != null ? c.row_spacing : 4}px`
-    );
-    card.style.setProperty(
-      "--aic-icon-color",
-      colorOr(c.icon_color, "var(--secondary-text-color)")
-    );
-    card.style.setProperty(
-      "--aic-name-color",
-      colorOr(c.secondary_color, "var(--primary-text-color)")
-    );
-    card.style.setProperty(
-      "--aic-bg",
-      colorOr(c.background, "var(--ha-card-background, var(--card-background-color))")
-    );
-    card.style.setProperty(
-      "--aic-title-color",
-      colorOr(c.primary_color, "var(--primary-text-color)")
-    );
-    const badgeRgb = Array.isArray(c.icon_color) ? c.icon_color : [139, 122, 230];
-    card.style.setProperty("--aic-badge-bg", rgba(badgeRgb, 0.16));
-
-    const container =
-      document.createElement("div");
-
-    container.className =
-      "alex-light-container";
-
-    /*
-     * En-tete (icone + nom), a l'image d'Alex Sensor Card -- optionnel,
-     * n'apparait que si un nom ou une icone est configure.
-     */
-    if (c.name || c.icon) {
-      const header = document.createElement("div");
-      header.className = "alex-input-color-header";
-
-      const badge = document.createElement("div");
-      badge.className = "alex-input-color-badge";
-
-      const badgeIcon = document.createElement("ha-icon");
-      badgeIcon.icon = c.icon || "mdi:palette";
-      badge.appendChild(badgeIcon);
-
-      const title = document.createElement("div");
-      title.className = "alex-input-color-title";
-      title.textContent = c.name || "";
-
-      header.appendChild(badge);
-      header.appendChild(title);
-      container.appendChild(header);
+    // Les lignes brightness/blanc embarquent desormais une vraie carte
+    // mushroom-number-card (creation asynchrone) -- garde anti-recouvrement
+    // au cas ou hass changerait de nouveau pendant qu'un rendu est deja en
+    // cours ; le rendu en cours se termine, puis un nouveau est relance
+    // immediatement pour refleter le changement le plus recent.
+    if (this._building) {
+      this._renderQueued = true;
+      return;
     }
 
-    const groups =
-      this._config.groups || [];
+    this._building = true;
 
-    groups.forEach(
-      (group, index) => {
+    try {
+      const c = this._config;
+
+      const card =
+        document.createElement("ha-card");
+
+      card.className =
+        "alex-input-color-card";
+
+      /*
+       * Variables CSS pilotees par la config (panneau Customisation) --
+       * necessaire car le <style> global n'est injecte qu'une seule fois et
+       * partage entre toutes les instances de la carte (voir _injectStyles),
+       * les couleurs ne peuvent donc pas y etre codees en dur.
+       */
+      card.style.setProperty(
+        "--aic-row-gap",
+        `${c.row_spacing != null ? c.row_spacing : 4}px`
+      );
+      card.style.setProperty(
+        "--aic-icon-color",
+        colorOr(c.icon_color, "var(--secondary-text-color)")
+      );
+      card.style.setProperty(
+        "--aic-name-color",
+        colorOr(c.secondary_color, "var(--primary-text-color)")
+      );
+      card.style.setProperty(
+        "--aic-bg",
+        colorOr(c.background, "var(--ha-card-background, var(--card-background-color))")
+      );
+      card.style.setProperty(
+        "--aic-title-color",
+        colorOr(c.primary_color, "var(--primary-text-color)")
+      );
+      const badgeRgb = Array.isArray(c.icon_color) ? c.icon_color : [139, 122, 230];
+      card.style.setProperty("--aic-badge-bg", rgba(badgeRgb, 0.16));
+
+      const container =
+        document.createElement("div");
+
+      container.className =
+        "alex-light-container";
+
+      /*
+       * En-tete (icone + nom), a l'image d'Alex Sensor Card -- optionnel,
+       * n'apparait que si un nom ou une icone est configure.
+       */
+      if (c.name || c.icon) {
+        const header = document.createElement("div");
+        header.className = "alex-input-color-header";
+
+        const badge = document.createElement("div");
+        badge.className = "alex-input-color-badge";
+
+        const badgeIcon = document.createElement("ha-icon");
+        badgeIcon.icon = c.icon || "mdi:palette";
+        badge.appendChild(badgeIcon);
+
+        const title = document.createElement("div");
+        title.className = "alex-input-color-title";
+        title.textContent = c.name || "";
+
+        header.appendChild(badge);
+        header.appendChild(title);
+        container.appendChild(header);
+      }
+
+      const groups =
+        this._config.groups || [];
+
+      for (let index = 0; index < groups.length; index++) {
+
+        const group = groups[index];
 
         const row =
-          this._createRow(group);
+          await this._createRow(group);
 
         if (
           index <
@@ -6290,17 +6077,24 @@ class AlexInputColorCard extends HTMLElement {
 
         container.appendChild(row);
       }
-    );
 
-    card.appendChild(container);
+      card.appendChild(container);
 
-    this.innerHTML = "";
+      this.innerHTML = "";
 
-    this.appendChild(card);
+      this.appendChild(card);
 
-    this._injectStyles();
+      this._injectStyles();
 
-    this._rendered = true;
+      this._rendered = true;
+    } finally {
+      this._building = false;
+
+      if (this._renderQueued) {
+        this._renderQueued = false;
+        this._render();
+      }
+    }
   }
 
   /* -----------------------------------------------------------------------
@@ -6430,79 +6224,10 @@ class AlexInputColorCard extends HTMLElement {
 
         display: flex;
         align-items: center;
-
-        gap: 5px;
       }
 
-      .brightness-control input {
+      .brightness-control > * {
         width: 100%;
-        height: 4px;
-
-        margin: 0;
-
-        appearance: none;
-
-        border-radius: 10px;
-
-        background:
-          var(
-            --disabled-color,
-            #999
-          );
-
-        opacity: .65;
-
-        cursor: pointer;
-      }
-
-      .brightness-control input::-webkit-slider-thumb {
-        appearance: none;
-
-        width: 15px;
-        height: 15px;
-
-        border-radius: 50%;
-
-        background:
-          var(
-            --primary-color,
-            #8f91d8
-          );
-
-        border: none;
-
-        box-shadow: none;
-      }
-
-      .brightness-control input::-moz-range-thumb {
-        width: 15px;
-        height: 15px;
-
-        border-radius: 50%;
-
-        background:
-          var(
-            --primary-color,
-            #8f91d8
-          );
-
-        border: none;
-      }
-
-      .brightness-value {
-        width: 28px;
-        flex: 0 0 28px;
-
-        text-align: right;
-
-        font-size: 10px;
-
-        color:
-          var(
-            --secondary-text-color
-          );
-
-        opacity: .8;
       }
 
       /* ---------------------------------------------------------------
@@ -6587,93 +6312,10 @@ class AlexInputColorCard extends HTMLElement {
 
         display: flex;
         align-items: center;
-
-        gap: 6px;
       }
 
-      .white-icon {
-        --mdc-icon-size: 17px;
-
-        flex: 0 0 17px;
-
-        color:
-          var(
-            --secondary-text-color
-          );
-
-        opacity: .85;
-      }
-
-      .white-bar {
-        position: relative;
-
-        flex: 1;
-
-        min-width: 45px;
-
-        height: 7px;
-
-        border-radius: 10px;
-
-        background:
-          linear-gradient(
-            90deg,
-            #ff9d55 0%,
-            #ffd6a0 25%,
-            #fff5dd 45%,
-            #f5f7ff 65%,
-            #cbdcff 82%,
-            #8eb2ff 100%
-          );
-
-        cursor: pointer;
-      }
-
-      .white-pin {
-        position: absolute;
-
-        top: 50%;
-
-        width: 13px;
-        height: 13px;
-
-        transform:
-          translate(-50%, -50%);
-
-        border-radius: 50%;
-
-        background:
-          var(
-            --primary-color,
-            #8f91d8
-          );
-
-        border:
-          1px solid
-          rgba(0,0,0,.15);
-
-        box-shadow:
-          0 1px 3px
-          rgba(0,0,0,.25);
-      }
-
-      .white-value {
-        width: 45px;
-
-        flex: 0 0 45px;
-
-        text-align: right;
-
-        font-size: 10px;
-
-        color:
-          var(
-            --secondary-text-color
-          );
-
-        white-space: nowrap;
-
-        opacity: .85;
+      .white-control > * {
+        width: 100%;
       }
 
     `;
@@ -7013,69 +6655,6 @@ class AlexInputColorCardEditor extends AlexListEditor {
           white: "Température du blanc",
         },
         merge
-      )
-    );
-
-    /*
-     * Configuration du Kelvin
-     */
-
-    const whiteConfig = document.createElement("div");
-
-    whiteConfig.style.cssText =
-      "margin-top:10px;";
-
-    whiteConfig.appendChild(
-      this._form(
-        [
-          {
-            name: "white_min",
-            selector: {
-              number: {
-                min: 1000,
-                max: 10000,
-                step: 50,
-                mode: "box",
-              },
-            },
-          },
-          {
-            name: "white_max",
-            selector: {
-              number: {
-                min: 1000,
-                max: 10000,
-                step: 50,
-                mode: "box",
-              },
-            },
-          },
-        ],
-        {
-          white_min:
-            group.white_min != null
-              ? group.white_min
-              : 2000,
-
-          white_max:
-            group.white_max != null
-              ? group.white_max
-              : 6500,
-        },
-        {
-          white_min: "Kelvin minimum",
-          white_max: "Kelvin maximum",
-        },
-        merge
-      )
-    );
-
-    this.appendChild(
-      this._panel(
-        "Plage du blanc",
-        "mdi:thermometer",
-        whiteConfig,
-        false
       )
     );
   }
