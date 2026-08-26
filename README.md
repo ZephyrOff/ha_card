@@ -597,12 +597,19 @@ groups:
 - **Sélecteur de couleur RGB** : `<input type="color">` natif — un clic ouvre
   directement le sélecteur du système, sans étape intermédiaire.
 - **Luminosité et température de blanc** : chacune embarque une vraie
-  `custom:mushroom-number-card` (icône/nom/état masqués, seul le slider est
-  visible) plutôt qu'un contrôle fait maison — la plage (min/max/step) vient
-  entièrement de la configuration de l'entité `input_number` ciblée, **pas**
-  d'un réglage de cette carte (mushroom-number-card ne permet pas de surcharger
-  min/max depuis sa propre config). Pense à régler la bonne plage sur chaque
-  aide `input_number` dans Réglages → Appareils et services → Aides.
+  `custom:mushroom-number-card` (icône/nom masqués, valeur affichée via
+  `secondary_info: state`, hauteur du curseur réduite à 22px) plutôt qu'un
+  contrôle fait maison — la plage (min/max/step) vient entièrement de la
+  configuration de l'entité `input_number` ciblée, **pas** d'un réglage de
+  cette carte (mushroom-number-card ne permet pas de surcharger min/max
+  depuis sa propre config). Pense à régler la bonne plage sur chaque aide
+  `input_number` dans Réglages → Appareils et services → Aides.
+- Le curseur de température de blanc affiche en fond un **dégradé
+  orange → blanc → bleu** (mêmes teintes que l'ancienne barre faite maison),
+  pour repérer en un coup d'œil si on se rapproche du blanc chaud ou froid —
+  appliqué via `card_mod` avec sélecteur imbriqué
+  (`mushroom-number-value-control$: mushroom-slider$:`), qui cible le
+  curseur interne à travers les shadow DOM successifs de la carte mushroom.
 - La carte ne se reconstruit que lorsque sa config ou l'état d'une de ses
   entités change réellement (pas à chaque mise à jour de `hass` ailleurs dans
   la maison) — nécessaire pour que le sélecteur de couleur natif ne se ferme

@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.35.0";
+const ALEX_CARDS_VERSION = "0.35.1";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -5794,13 +5794,18 @@ class AlexInputColorCard extends HTMLElement {
       entity: group.brightness,
       icon_type: "none",
       primary_info: "none",
-      secondary_info: "none",
+      secondary_info: "state",
       display_mode: "slider",
       fill_container: true,
       card_mod: {
-        style:
-          "ha-card {\n  background: none !important;\n  box-shadow: none !important;\n" +
-          "  border: none !important;\n  padding: 0 !important;\n}\n",
+        style: {
+          ".":
+            "ha-card {\n  background: none !important;\n  box-shadow: none !important;\n" +
+            "  border: none !important;\n  padding: 0 !important;\n}\n",
+          "mushroom-number-value-control$": {
+            "mushroom-slider$": ".slider {\n  height: 22px !important;\n}\n",
+          },
+        },
       },
     });
 
@@ -5877,13 +5882,25 @@ class AlexInputColorCard extends HTMLElement {
       entity: group.white,
       icon_type: "none",
       primary_info: "none",
-      secondary_info: "none",
+      secondary_info: "state",
       display_mode: "slider",
       fill_container: true,
       card_mod: {
-        style:
-          "ha-card {\n  background: none !important;\n  box-shadow: none !important;\n" +
-          "  border: none !important;\n  padding: 0 !important;\n}\n",
+        style: {
+          ".":
+            "ha-card {\n  background: none !important;\n  box-shadow: none !important;\n" +
+            "  border: none !important;\n  padding: 0 !important;\n}\n",
+          // Degrade orange -> blanc -> bleu (memes teintes que l'ancienne
+          // barre faite maison) pour voir en un coup d'oeil si on se
+          // rapproche du blanc chaud ou froid, quel que soit le min/max
+          // reel de l'entite (le degrade couvre toujours 0-100% du slider).
+          "mushroom-number-value-control$": {
+            "mushroom-slider$":
+              ".slider {\n  height: 22px !important;\n" +
+              "  --bg-color: linear-gradient(\n    90deg,\n    #ff9d55 0%,\n    #ffd6a0 25%,\n" +
+              "    #fff5dd 45%,\n    #f5f7ff 65%,\n    #cbdcff 82%,\n    #8eb2ff 100%\n  ) !important;\n}\n",
+          },
+        },
       },
     });
 
