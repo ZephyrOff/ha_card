@@ -22,6 +22,7 @@ Collection de cartes Lovelace custom pour Home Assistant, distribuée en **plugi
 | `custom:alex-media-player-card` | oui        | Contrôle média (pochette, lecture, volume) avec bascule entre lecteurs actifs. |
 | `custom:alex-server-card`       | oui        | Liste de serveurs/VM avec statut en ligne et bouton power. |
 | `custom:alex-gradient-card`     | oui        | Réglage des segments de couleur des lampes Gradient Philips Hue (Zigbee2MQTT). |
+| `custom:alex-gradient-scene-card` | oui      | Liste et applique les scènes enregistrées via l'intégration Alex Gradient Studio. |
 
 Toutes les cartes apparaissent dans le sélecteur « Ajouter une carte » avec un éditeur
 visuel. La `alex-light-card` a un éditeur type « chips » (liste + crayon pour éditer chaque
@@ -541,6 +542,34 @@ icon: mdi:led-strip-variant
   également entre ces lignes (12 segments → 6+6, 13 → 5+5+3, etc.).
 - Personnalisation (panneau Customisation) : couleur du badge, fond de la carte,
   couleur du nom, couleur secondaire, couleur du bouton « Appliquer »/interrupteur actif.
+
+### Alex Gradient Scene Card
+
+Liste et applique les scènes de dégradé enregistrées via l'intégration
+**Alex Gradient Studio** (dépôt séparé, `custom_components/alex_gradient_studio`)
+sur une lumière précise — l'équivalent d'un vrai bouton de scène, contrairement à
+Alex Gradient Card qui sert à éditer/tester en direct.
+
+```yaml
+type: custom:alex-gradient-scene-card
+entity: light.chambre_bled
+device_type: aqara             # hue / aqara
+friendly_name: ''              # optionnel, vide = déduit de l'attribut friendly_name de l'entité
+name: Scènes bandeau chambre
+icon: mdi:palette-swatch
+```
+
+Nécessite l'intégration Alex Gradient Studio installée et au moins une scène
+enregistrée (depuis son panel, ou via le service `save_scene`) — sans elle, la
+carte affiche un message plutôt que de planter. **Toute la logique** (détection
+du nombre de segments, interpolation, format du payload Hue vs Aqara) vit côté
+service Python `alex_gradient_studio.load_scene` ; la carte se contente de
+lister les scènes disponibles (lues depuis `sensor.alex_gradient_studio_scenes`)
+avec un aperçu visuel du dégradé, et d'appeler ce service au clic — aucune
+duplication de logique entre la carte et l'intégration.
+
+Personnalisation (panneau Customisation) : couleur du badge, fond de la carte,
+couleur du nom, couleur des noms de scène.
 
 ## Ajouter une nouvelle carte
 

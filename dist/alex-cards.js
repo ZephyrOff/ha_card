@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.32.12";
+const ALEX_CARDS_VERSION = "0.33.0";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -7015,3 +7015,202 @@ window.customCards.push({
   documentationURL:
     "https://github.com/<user>/alex-cards",
 });
+
+/* =========================================================================
+ * === alex-gradient-scene-card ============================================
+ * Liste et applique les scenes de degrade enregistrees via l'integration
+ * Alex Gradient Studio (custom_components/alex_gradient_studio) sur une
+ * lumiere precise. Delibrement simple : toute la logique de detection de
+ * segments/interpolation/format de payload (Hue vs Aqara) vit deja cote
+ * service Python `load_scene` -- la carte se contente de lister les scenes
+ * (via l'attribut de sensor.alex_gradient_studio_scenes) et d'appeler ce
+ * service au clic.
+ * ========================================================================= */
+
+class GradientSceneCard extends HTMLElement {
+  static getConfigElement() {
+    return document.createElement("alex-gradient-scene-card-editor");
+  }
+  static getStubConfig() {
+    return { entity: "", device_type: "hue", name: "Scènes", icon: "mdi:palette-swatch" };
+  }
+
+  setConfig(config) {
+    if (!config) throw new Error("Configuration invalide");
+    this._config = config;
+    this._built = false;
+    this._lastSig = null;
+  }
+
+  set hass(hass) {
+    this._hass = hass;
+    this._render();
+  }
+
+  getCardSize() {
+    const names = Object.keys(this._scenes());
+    return 1 + Math.max(1, names.length);
+  }
+
+  _scenes() {
+    if (!this._hass) return {};
+    const st = this._hass.states["sensor.alex_gradient_studio_scenes"];
+    return (st && st.attributes && st.attributes.scenes) || {};
+  }
+
+  _render() {
+    if (!this._config || !this._hass) return;
+    const c = this._config;
+    const scenes = this._scenes();
+    const names = Object.keys(scenes);
+
+    const sig = [
+      c.name,
+      c.icon,
+      c.entity,
+      c.device_type,
+      c.friendly_name,
+      JSON.stringify(c.icon_color || null),
+      JSON.stringify(c.background || null),
+      JSON.stringify(c.primary_color || null),
+      JSON.stringify(c.secondary_color || null),
+      JSON.stringify(scenes),
+    ].join("~");
+    if (this._built && sig === this._lastSig) return;
+    this._lastSig = sig;
+
+    const cardBg = colorOr(c.background, "var(--ha-card-background, var(--card-background-color))");
+    const primaryColor = colorOr(c.primary_color, "var(--primary-text-color)");
+    const secondaryColor = colorOr(c.secondary_color, "var(--secondary-text-color)");
+    const iconColor = colorOr(c.icon_color, "#8b7ae6");
+    const badgeRgb = Array.isArray(c.icon_color) ? c.icon_color : [139, 122, 230];
+    const badgeBg = `rgba(${badgeRgb[0]}, ${badgeRgb[1]}, ${badgeRgb[2]}, 0.16)`;
+    const missingConfig = !c.entity;
+
+    const rowsHtml = names
+      .map((name, i) => {
+        const stops = (scenes[name] && scenes[name].stops) || [];
+        const gradientCss = stops.length
+          ? stops
+              .slice()
+              .sort((a, b) => a.position - b.position)
+              .map((s) => `${s.color} ${Math.round(s.position * 100)}%`)
+              .join(", ")
+          : "#ffffff, #ffffff";
+        const border = i < names.length - 1 ? "border-bottom:1px solid var(--divider-color);" : "";
+        return `
+          <div class="ac-gscene-row" data-name="${escapeHtml(name)}"
+              style="display:flex;align-items:center;gap:12px;padding:10px 2px;cursor:pointer;${border}">
+            <div style="width:52px;height:24px;border-radius:8px;flex:0 0 auto;
+                        background:linear-gradient(90deg, ${gradientCss});"></div>
+            <div style="flex:1;min-width:0;font-size:14px;font-weight:600;color:${secondaryColor};
+                        overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(name)}</div>
+          </div>`;
+      })
+      .join("");
+
+    this.innerHTML = `
+      <ha-card style="border-radius:20px;box-shadow:none;background:${cardBg};padding:16px 18px;">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:${names.length ? "6px" : "0"};">
+          <div style="width:40px;height:40px;border-radius:12px;background:${badgeBg};
+                      display:flex;align-items:center;justify-content:center;flex:0 0 auto;">
+            <ha-icon icon="${c.icon || "mdi:palette-swatch"}" style="--mdc-icon-size:20px;color:${iconColor};"></ha-icon>
+          </div>
+          <div style="flex:1;min-width:0;font-size:17px;font-weight:700;color:${primaryColor};
+                      overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(c.name || "")}</div>
+        </div>
+        ${
+          missingConfig
+            ? `<div style="font-size:13px;color:${secondaryColor};padding:8px 0;">
+                Configure l'entité de la lumière dans les réglages de la carte.
+              </div>`
+            : names.length === 0
+            ? `<div style="font-size:13px;color:${secondaryColor};padding:8px 0;">
+                Aucune scène enregistrée pour l'instant (Alex Gradient Studio).
+              </div>`
+            : `<div>${rowsHtml}</div>`
+        }
+      </ha-card>`;
+
+    this.querySelectorAll(".ac-gscene-row").forEach((el) => {
+      el.addEventListener("click", () => {
+        const name = el.getAttribute("data-name");
+        const data = { entity_id: c.entity, name, device_type: c.device_type || "hue" };
+        if (c.friendly_name) data.friendly_name = c.friendly_name;
+        this._hass.callService("alex_gradient_studio", "load_scene", data);
+      });
+    });
+
+    this._built = true;
+  }
+}
+customElements.define("alex-gradient-scene-card", GradientSceneCard);
+
+class GradientSceneCardEditor extends AlexFormEditor {
+  static getStubConfig() {
+    return GradientSceneCard.getStubConfig();
+  }
+
+  constructor() {
+    super();
+    this._schema = [
+      { name: "entity", selector: { entity: { domain: "light" } } },
+      {
+        name: "device_type",
+        selector: {
+          select: {
+            mode: "dropdown",
+            options: [
+              { value: "hue", label: "Philips Hue Gradient" },
+              { value: "aqara", label: "Aqara LED Strip T1" },
+            ],
+          },
+        },
+      },
+      { name: "friendly_name", selector: { text: {} } },
+      { name: "name", selector: { text: {} } },
+      { name: "icon", selector: { icon: {} } },
+      {
+        name: "customisation",
+        type: "expandable",
+        flatten: true,
+        title: "Customisation",
+        icon: "mdi:palette",
+        schema: [
+          { name: "icon_color", selector: { color_rgb: {} } },
+          { name: "background", selector: { color_rgb: {} } },
+          { name: "primary_color", selector: { color_rgb: {} } },
+          { name: "secondary_color", selector: { color_rgb: {} } },
+        ],
+      },
+    ];
+    this._labels = {
+      entity: "Entité de la lumière",
+      device_type: "Type d'appareil",
+      friendly_name: "Nom convivial Z2M (vide = déduit de l'entité)",
+      name: "Nom",
+      icon: "Icône",
+      icon_color: "Couleur du badge",
+      background: "Fond de la carte",
+      primary_color: "Couleur du nom",
+      secondary_color: "Couleur des scènes",
+    };
+  }
+}
+customElements.define("alex-gradient-scene-card-editor", GradientSceneCardEditor);
+
+window.customCards.push({
+  type: "alex-gradient-scene-card",
+  name: "Alex Gradient Scene Card",
+  description: "Liste et applique les scènes de dégradé enregistrées via Alex Gradient Studio.",
+  preview: false,
+  documentationURL: "https://github.com/<user>/alex-cards",
+});
+
+/* =========================================================================
+ * === ma-prochaine-carte ==================================================
+ * Wrapper : étendre AlexWrapperCard + implémenter _innerConfig(config),
+ * éditeur simple : étendre AlexFormEditor (this._schema / this._labels),
+ * éditeur liste : étendre AlexListEditor (_normalize / _render).
+ * Puis customElements.define(...) x2 + window.customCards.push(...).
+ * ========================================================================= */
