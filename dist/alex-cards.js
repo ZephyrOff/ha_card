@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.34.0";
+const ALEX_CARDS_VERSION = "0.34.1";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -5670,12 +5670,40 @@ class AlexInputColorCard extends HTMLElement {
   set hass(hass) {
     this._hass = hass;
 
-    if (!this._rendered) {
-      this._render();
+    // Ne reconstruit le DOM que si quelque chose de pertinent a reellement
+    // change (config, ou etat des entites affichees) -- sans ca, le moindre
+    // changement d'etat ailleurs dans la maison (hass est repousse a chaque
+    // fois) reconstruisait toute la carte, y compris la pastille <input
+    // type="color"> en cours de clic, fermant le picker natif du systeme
+    // avant meme que l'utilisateur ait pu choisir une couleur.
+    const sig = this._computeSig();
+
+    if (this._rendered && sig === this._lastSig) {
       return;
     }
 
-    this._updateValues();
+    this._lastSig = sig;
+
+    this._render();
+  }
+
+  // Signature de tout ce qui doit declencher un rebuild : la config elle-
+  // meme, plus l'etat courant de chaque entite reellement affichee
+  // (luminosite/couleur/blanc de chaque groupe).
+  _computeSig() {
+    const c = this._config || {};
+    const groups = c.groups || [];
+
+    const entitiesSig = groups
+      .flatMap((g) => [g.brightness, g.color, g.white])
+      .filter(Boolean)
+      .map((entity) => {
+        const st = this._state(entity);
+        return `${entity}=${st ? st.state : ""}`;
+      })
+      .join(";");
+
+    return JSON.stringify(c) + "~" + entitiesSig;
   }
 
   getCardSize() {
@@ -6273,23 +6301,6 @@ class AlexInputColorCard extends HTMLElement {
     this._injectStyles();
 
     this._rendered = true;
-  }
-
-  /* -----------------------------------------------------------------------
-   * Update live values
-   * --------------------------------------------------------------------- */
-
-  _updateValues() {
-
-    /*
-     * Pour garder le rendu très propre,
-     * on reconstruit uniquement lorsque
-     * les valeurs HA changent.
-     */
-
-    this._rendered = false;
-
-    this._render();
   }
 
   /* -----------------------------------------------------------------------
