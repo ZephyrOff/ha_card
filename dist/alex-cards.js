@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.35.3";
+const ALEX_CARDS_VERSION = "0.35.4";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -5692,8 +5692,15 @@ class AlexInputColorCard extends HTMLElement {
     const c = this._config || {};
     const groups = c.groups || [];
 
+    // group.color est volontairement exclu : <input type="color"> affiche
+    // deja sa propre valeur en direct pendant la selection, pas besoin de
+    // rendu pour ca -- et le surveiller ici causait un rebuild complet a
+    // chaque changement (puisque _setText declenche justement ce
+    // changement), detruisant le picker natif du systeme en cours
+    // d'utilisation, exactement le meme symptome qu'on venait de corriger
+    // pour un declencheur externe.
     const entitiesSig = groups
-      .flatMap((g) => [g.brightness, g.color, g.white])
+      .flatMap((g) => [g.brightness, g.white])
       .filter(Boolean)
       .map((entity) => {
         const st = this._state(entity);
@@ -5898,15 +5905,16 @@ class AlexInputColorCard extends HTMLElement {
           // invalide et silencieusement ignore -- `background` en direct
           // ecrase le mecanisme interne quel qu'il soit.
           // --main-color pilote le remplissage qui avance jusqu'a la valeur
-          // actuelle (bleu par defaut du theme, non touche jusqu'ici) --
-          // rendu tres translucide plutot que totalement transparent, pour
-          // garder une indication de position sans recouvrir le degrade.
+          // actuelle (bleu par defaut du theme, non touche jusqu'ici) -- gris
+          // semi-transparent plutot que blanc translucide, pour rester
+          // nettement visible par-dessus n'importe quelle partie du degrade
+          // (orange ou blanc) sans le recouvrir completement.
           "mushroom-number-value-control$": {
             "mushroom-slider$":
               ".slider {\n  height: 22px !important;\n" +
               "  background: linear-gradient(90deg, #ff7a00 0%, #ffffff 100%) !important;\n" +
               "  background-color: transparent !important;\n" +
-              "  --main-color: rgba(255, 255, 255, 0.35) !important;\n}\n",
+              "  --main-color: rgba(90, 90, 90, 0.55) !important;\n}\n",
           },
         },
       },

@@ -616,11 +616,17 @@ groups:
   inversé par rapport au min/max réel de ton entité, les deux couleurs
   s'échangent en une ligne dans `_createWhiteControl`.
 - Le remplissage qui indique la valeur actuelle (`--main-color`, bleu du
-  thème par défaut) est rendu **très translucide** plutôt que retiré
-  complètement — incertitude assumée : selon que mushroom-slider ait ou non
-  un curseur distinct de ce remplissage, le rendre totalement transparent
-  aurait risqué de faire disparaître toute indication de position, pas
-  seulement la couleur bleue. À affiner selon le rendu réel une fois testé.
+  thème par défaut à l'origine) est en **gris semi-transparent** — reste
+  nettement visible par-dessus n'importe quelle partie du dégradé (orange ou
+  blanc) sans le recouvrir complètement.
+- La sélection de couleur RGB (`<input type="color">`) ne déclenche plus de
+  reconstruction de la carte pendant la sélection : l'entité `color` de
+  chaque groupe est volontairement exclue de la détection de changement
+  pertinent (contrairement à `brightness`/`white`) — la pastille affiche déjà
+  sa propre valeur en direct nativement, la surveiller aurait provoqué un
+  rebuild à chaque changement de couleur (puisque c'est justement ce qu'on
+  vient de modifier), fermant le sélecteur natif du système en cours
+  d'utilisation.
 - La carte ne se reconstruit que lorsque sa config ou l'état d'une de ses
   entités change réellement (pas à chaque mise à jour de `hass` ailleurs dans
   la maison) — nécessaire pour que le sélecteur de couleur natif ne se ferme
