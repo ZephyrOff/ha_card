@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.32.10";
+const ALEX_CARDS_VERSION = "0.32.12";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -5339,14 +5339,20 @@ class GradientCard extends HTMLElement {
     return 2;
   }
 
-  // Nom convivial Z2M utilise dans le topic MQTT : deduit de l'entite si non
-  // renseigne explicitement (souvent identique, mais pas garanti si
-  // l'entite HA a ete renommee independamment du peripherique Z2M).
+  // Nom convivial Z2M utilise dans le topic MQTT : par priorite, le champ
+  // explicite, puis l'attribut friendly_name de l'entite (HA le copie tel
+  // quel depuis la decouverte MQTT Z2M, casse d'origine comprise), et en
+  // dernier repli le dernier segment de l'entity_id -- qui, lui, est
+  // "slugifie" par HA (tout en minuscules) et peut donc diverger du vrai
+  // nom Z2M des que celui-ci contient de la casse mixte (ex. "Chambre_BLed"
+  // -> entity_id "chambre_bled", qui ne correspond plus au topic MQTT reel).
   _friendlyName() {
     const c = this._config;
     if (c.friendly_name) return c.friendly_name;
-    if (c.entity) return c.entity.split(".")[1] || "";
-    return "";
+    const st = c.entity && this._hass && this._hass.states[c.entity];
+    const attrName = st && st.attributes && st.attributes.friendly_name;
+    if (attrName) return attrName;
+    return c.entity ? c.entity.split(".")[1] || "" : "";
   }
 
   // Entite number.*_length deduite du nom de l'entite lumiere elle-meme

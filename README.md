@@ -524,8 +524,13 @@ icon: mdi:led-strip-variant
   pas lisible, repli sur `segments` réglé manuellement.
 - **`friendly_name`** doit correspondre au nom convivial **Zigbee2MQTT** de l'appareil
   (celui utilisé dans le topic MQTT), pas nécessairement au nom de l'entité HA si tu
-  l'as renommée séparément. Vide par défaut = déduit du dernier segment de l'entity_id.
-  Le bouton d'application appelle `mqtt.publish` sur `zigbee2mqtt/<nom_convivial>/set`.
+  l'as renommée séparément. Vide par défaut = déduit de l'attribut `friendly_name` de
+  l'entité (HA le copie tel quel depuis la découverte MQTT Z2M, casse d'origine
+  comprise), avec repli sur le dernier segment de l'entity_id si l'attribut est absent —
+  ce dernier est « slugifié » par HA (tout en minuscules) et peut donc diverger du vrai
+  nom Z2M dès que celui-ci contient de la casse mixte (ex. « Chambre_BLed » →
+  entity_id `chambre_bled`, qui ne correspond plus au topic MQTT réel). Le bouton
+  d'application appelle `mqtt.publish` sur `zigbee2mqtt/<nom_convivial>/set`.
 - Un interrupteur dans l'en-tête permet d'allumer/éteindre la lumière elle-même
   (`homeassistant.toggle` sur l'entité configurée) — les segments n'ont de sens que
   lumière allumée.
