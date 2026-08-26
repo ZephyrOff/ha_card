@@ -605,11 +605,16 @@ groups:
   depuis sa propre config). Pense à régler la bonne plage sur chaque aide
   `input_number` dans Réglages → Appareils et services → Aides.
 - Le curseur de température de blanc affiche en fond un **dégradé
-  orange → blanc → bleu** (mêmes teintes que l'ancienne barre faite maison),
-  pour repérer en un coup d'œil si on se rapproche du blanc chaud ou froid —
-  appliqué via `card_mod` avec sélecteur imbriqué
+  orange → blanc** (orange = chaud/kelvin bas, blanc = froid/kelvin haut),
+  pour repérer en un coup d'œil de quel côté on se rapproche — appliqué via
+  `card_mod` avec sélecteur imbriqué
   (`mushroom-number-value-control$: mushroom-slider$:`), qui cible le
   curseur interne à travers les shadow DOM successifs de la carte mushroom.
+  La propriété `background` est ciblée directement (pas la variable
+  `--bg-color`) — plus fiable, indépendant de la propriété CSS interne
+  réellement consommée par mushroom-slider. Si le sens te paraît inversé par
+  rapport au min/max réel de ton entité, les deux couleurs s'échangent en une
+  ligne dans `_createWhiteControl`.
 - La carte ne se reconstruit que lorsque sa config ou l'état d'une de ses
   entités change réellement (pas à chaque mise à jour de `hass` ailleurs dans
   la maison) — nécessaire pour que le sélecteur de couleur natif ne se ferme

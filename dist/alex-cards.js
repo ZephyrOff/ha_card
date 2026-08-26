@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.35.1";
+const ALEX_CARDS_VERSION = "0.35.2";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -5890,15 +5890,17 @@ class AlexInputColorCard extends HTMLElement {
           ".":
             "ha-card {\n  background: none !important;\n  box-shadow: none !important;\n" +
             "  border: none !important;\n  padding: 0 !important;\n}\n",
-          // Degrade orange -> blanc -> bleu (memes teintes que l'ancienne
-          // barre faite maison) pour voir en un coup d'oeil si on se
-          // rapproche du blanc chaud ou froid, quel que soit le min/max
-          // reel de l'entite (le degrade couvre toujours 0-100% du slider).
+          // Degrade orange (chaud, kelvin bas) -> blanc (froid, kelvin haut).
+          // Cible directement `background` (pas la variable --bg-color) :
+          // si le CSS interne de mushroom-slider consomme cette variable via
+          // `background-color` plutot que `background`, un degrade y est
+          // invalide et silencieusement ignore -- `background` en direct
+          // ecrase le mecanisme interne quel qu'il soit.
           "mushroom-number-value-control$": {
             "mushroom-slider$":
               ".slider {\n  height: 22px !important;\n" +
-              "  --bg-color: linear-gradient(\n    90deg,\n    #ff9d55 0%,\n    #ffd6a0 25%,\n" +
-              "    #fff5dd 45%,\n    #f5f7ff 65%,\n    #cbdcff 82%,\n    #8eb2ff 100%\n  ) !important;\n}\n",
+              "  background: linear-gradient(90deg, #ff9d55 0%, #ffffff 100%) !important;\n" +
+              "  background-color: transparent !important;\n}\n",
           },
         },
       },
