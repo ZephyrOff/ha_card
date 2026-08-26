@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.33.0";
+const ALEX_CARDS_VERSION = "0.33.1";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -5773,73 +5773,6 @@ class AlexInputColorCard extends HTMLElement {
   }
 
   /* -----------------------------------------------------------------------
-   * Native RGB picker
-   * --------------------------------------------------------------------- */
-
-  _openColorPicker(entity, groupName) {
-    const current = this._color(entity);
-    const rgb = this._hexToRgb(current);
-
-    const dialog = document.createElement("ha-dialog");
-
-    dialog.heading = true;
-    dialog.open = true;
-
-    const title = document.createElement("div");
-    title.textContent = `Couleur — ${groupName || ""}`;
-
-    title.style.cssText = `
-      font-size: 18px;
-      font-weight: 500;
-      margin-bottom: 12px;
-    `;
-
-    /*
-     * Vrai color picker Home Assistant
-     */
-    const picker = document.createElement("ha-color-picker");
-
-    picker.hass = this._hass;
-
-    /*
-     * HA attend une valeur RGB sous forme de tableau.
-     */
-    picker.value = rgb;
-
-    picker.style.cssText = `
-      display: block;
-      width: 100%;
-    `;
-
-    picker.addEventListener("value-changed", ev => {
-      ev.stopPropagation();
-
-      const value = ev.detail?.value;
-
-      if (!Array.isArray(value) || value.length < 3) {
-        return;
-      }
-
-      const hex = this._rgbToHex(value);
-
-      this._setText(entity, hex);
-    });
-
-    dialog.appendChild(title);
-    dialog.appendChild(picker);
-
-    dialog.addEventListener(
-      "closed",
-      () => {
-        dialog.remove();
-      },
-      { once: true }
-    );
-
-    document.body.appendChild(dialog);
-  }
-
-  /* -----------------------------------------------------------------------
    * Native Kelvin picker
    * --------------------------------------------------------------------- */
 
@@ -5928,47 +5861,6 @@ class AlexInputColorCard extends HTMLElement {
   }
 
   /* -----------------------------------------------------------------------
-   * RGB conversion
-   * --------------------------------------------------------------------- */
-
-  _hexToRgb(hex) {
-
-    const value =
-      String(hex || "")
-        .replace("#", "");
-
-    if (!/^[0-9a-f]{6}$/i.test(value)) {
-      return [255, 255, 255];
-    }
-
-    return [
-      parseInt(value.substring(0, 2), 16),
-      parseInt(value.substring(2, 4), 16),
-      parseInt(value.substring(4, 6), 16),
-    ];
-  }
-
-  _rgbToHex(rgb) {
-
-    return "#" +
-      rgb
-        .slice(0, 3)
-        .map(v =>
-          Math.max(
-            0,
-            Math.min(
-              255,
-              Number(v) || 0
-            )
-          )
-            .toString(16)
-            .padStart(2, "0")
-        )
-        .join("")
-        .toUpperCase();
-  }
-
-  /* -----------------------------------------------------------------------
    * Brightness slider
    * --------------------------------------------------------------------- */
 
@@ -6041,32 +5933,36 @@ class AlexInputColorCard extends HTMLElement {
       return;
     }
 
-    const button =
-      document.createElement("button");
+    const input =
+      document.createElement("input");
 
-    button.className =
+    input.type = "color";
+
+    input.className =
       "color-button";
 
-    button.style.background =
-      this._color(group.color);
+    // <input type="color"> exige un hex minuscule exact pour accepter
+    // l'assignation de .value -- sinon l'assignation est silencieusement
+    // ignorée (_color() peut renvoyer de la casse mixte selon la source).
+    input.value =
+      this._color(group.color).toLowerCase();
 
-    button.title =
+    input.title =
       "Modifier la couleur";
 
-    button.addEventListener(
-      "click",
+    input.addEventListener(
+      "input",
       ev => {
         ev.stopPropagation();
 
-        this._openColorPicker(
+        this._setText(
           group.color,
-          group.name,
-          row
+          ev.target.value
         );
       }
     );
 
-    row.appendChild(button);
+    row.appendChild(input);
   }
 
   /* -----------------------------------------------------------------------
@@ -6544,6 +6440,29 @@ class AlexInputColorCard extends HTMLElement {
         transition:
           transform .12s ease,
           box-shadow .12s ease;
+
+        /*
+         * <input type="color"> a un rendu natif propre au navigateur
+         * (bordure/marge internes) -- neutralise pour que la pastille
+         * remplisse exactement le meme espace qu'avant (ex-<button>).
+         */
+        -webkit-appearance: none;
+        appearance: none;
+        overflow: hidden;
+      }
+
+      .color-button::-webkit-color-swatch-wrapper {
+        padding: 0;
+      }
+
+      .color-button::-webkit-color-swatch {
+        border: none;
+        border-radius: 4px;
+      }
+
+      .color-button::-moz-color-swatch {
+        border: none;
+        border-radius: 4px;
       }
 
       .color-button:hover {
