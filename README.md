@@ -541,6 +541,12 @@ icon: mdi:led-strip-variant
   laisserait un reliquat difforme — ex. 11 puis 1 pour 12 segments). Le nombre de lignes
   nécessaires est calculé selon un maximum de 6 par ligne, puis le total est redistribué
   également entre ces lignes (12 segments → 6+6, 13 → 5+5+3, etc.).
+- **Points d'édition ajustables** (boutons + Point / − Point, même principe que le panel
+  Alex Gradient Studio) : édite moins de couleurs que le nombre réel de segments et laisse
+  la carte réinterpoler le reste au moment d'appliquer — pratique pour un bandeau à
+  beaucoup de segments (11+) sans avoir à régler chaque pastille individuellement. Borné
+  entre 2 et le nombre réel de segments ; la réinterpolation (linéaire, par point) n'a
+  lieu qu'au clic sur « Appliquer le dégradé », jamais pendant l'édition elle-même.
 - Personnalisation (panneau Customisation) : couleur du badge, fond de la carte,
   couleur du nom, couleur secondaire, couleur du bouton « Appliquer »/interrupteur actif.
 
