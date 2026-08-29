@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.36.0";
+const ALEX_CARDS_VERSION = "0.36.1";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -6794,12 +6794,13 @@ window.customCards.push({
 /* =========================================================================
  * === alex-gradient-scene-card ============================================
  * Liste et applique les scenes de degrade enregistrees via l'integration
- * Alex Gradient Studio (custom_components/alex_gradient_studio) sur une
- * lumiere precise. Delibrement simple : toute la logique de detection de
+ * Alex Light Studio (custom_components/alex_light_studio, vue Gradient --
+ * fusion d'Alex Gradient Studio et d'Alex Scene Studio) sur une lumiere
+ * precise. Delibrement simple : toute la logique de detection de
  * segments/interpolation/format de payload (Hue vs Aqara) vit deja cote
  * service Python `load_scene` -- la carte se contente de lister les scenes
- * (via l'attribut de sensor.alex_gradient_studio_scenes) et d'appeler ce
- * service au clic.
+ * (via l'attribut de sensor.alex_light_studio_gradient_scenes) et d'appeler
+ * ce service au clic.
  * ========================================================================= */
 
 class GradientSceneCard extends HTMLElement {
@@ -6829,7 +6830,7 @@ class GradientSceneCard extends HTMLElement {
 
   _scenes() {
     if (!this._hass) return {};
-    const st = this._hass.states["sensor.alex_gradient_studio_scenes"];
+    const st = this._hass.states["sensor.alex_light_studio_gradient_scenes"];
     return (st && st.attributes && st.attributes.scenes) || {};
   }
 
@@ -6912,7 +6913,7 @@ class GradientSceneCard extends HTMLElement {
         const name = el.getAttribute("data-name");
         const data = { entity_id: c.entity, name, device_type: c.device_type || "hue" };
         if (c.friendly_name) data.friendly_name = c.friendly_name;
-        this._hass.callService("alex_gradient_studio", "load_scene", data);
+        this._hass.callService("alex_light_studio", "load_scene", data);
       });
     });
 
