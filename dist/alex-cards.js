@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.38.1";
+const ALEX_CARDS_VERSION = "0.39.0";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -5034,6 +5034,11 @@ const SWITCH_DEFAULT_COLORS = [
   [127, 119, 221],
 ];
 
+const SWITCH_STYLE_OPTIONS = [
+  { value: "separate", label: "Séparé (puces indépendantes)" },
+  { value: "switch", label: "Interrupteur (segments groupés)" },
+];
+
 class SwitchCard extends HTMLElement {
   static getConfigElement() {
     return document.createElement("alex-switch-card-editor");
@@ -5082,6 +5087,7 @@ class SwitchCard extends HTMLElement {
       c.icon_size,
       c.entity_name_size,
       c.entity_icon_size,
+      c.chip_style,
       entities.map((e) => `${e.entity}|${e.name}|${e.icon}|${JSON.stringify(e.color || null)}`).join(";"),
       entities
         .map((e) => {
@@ -5110,6 +5116,7 @@ class SwitchCard extends HTMLElement {
     const rowIconRadius = Math.round(rowIconBox * 0.28);
     const badgeBox = Math.round(iconSize * 2);
     const badgeRadius = Math.round(badgeBox * 0.3);
+    const chipStyle = c.chip_style === "switch" ? "switch" : "separate";
 
     const rowsHtml = entities
       .map((entry, i) => {
@@ -5124,25 +5131,50 @@ class SwitchCard extends HTMLElement {
         const rowOptions = (stateObj && stateObj.attributes && stateObj.attributes.options) || [];
         const border = i < entities.length - 1 ? "border-bottom:1px solid var(--divider-color);" : "";
 
-        const chips = rowOptions
-          .map((value, oi) => {
-            const active = currentValue === value;
-            const defaultActive = SWITCH_DEFAULT_COLORS[oi % SWITCH_DEFAULT_COLORS.length];
+        const chips =
+          chipStyle === "switch"
+            ? // Segments regroupes dans un seul rail, comme un vrai interrupteur a
+              // plusieurs positions - un accent de theme partage (pas de couleur
+              // par option), pas de bordure individuelle.
+              `<div style="display:inline-flex;align-items:center;gap:2px;padding:3px;
+                          border-radius:${Math.max(8, rowIconRadius + 2)}px;
+                          background:rgba(var(--rgb-primary-text-color,0,0,0),0.06);">
+                ${rowOptions
+                  .map((value) => {
+                    const active = currentValue === value;
+                    return `
+                      <button class="ac-chip" data-entity="${escapeHtml(entityId)}" data-value="${escapeHtml(value)}"
+                        style="border:none;background:${active ? "var(--primary-color)" : "transparent"};
+                               color:${active ? "var(--text-primary-color)" : "var(--primary-text-color)"};
+                               font-size:12px;font-weight:${active ? "600" : "400"};padding:5px 12px;
+                               border-radius:${Math.max(6, rowIconRadius)}px;cursor:pointer;font-family:inherit;
+                               white-space:nowrap;transition:background .15s,color .15s;">
+                        ${escapeHtml(value)}
+                      </button>`;
+                  })
+                  .join("")}
+              </div>`
+            : rowOptions
+                .map((value, oi) => {
+                  const active = currentValue === value;
+                  const defaultActive = SWITCH_DEFAULT_COLORS[oi % SWITCH_DEFAULT_COLORS.length];
 
-            const chipBg = active ? rgba(defaultActive, 0.18, defaultActive) : "transparent";
-            const chipBorder = active ? rgba(defaultActive, 0.45, defaultActive) : "var(--divider-color)";
-            const chipText = active ? rgbaCss([...defaultActive, 1]) : "var(--secondary-text-color)";
+                  const chipBg = active ? rgba(defaultActive, 0.18, defaultActive) : "transparent";
+                  const chipBorder = active
+                    ? rgba(defaultActive, 0.45, defaultActive)
+                    : "var(--divider-color)";
+                  const chipText = active ? rgbaCss([...defaultActive, 1]) : "var(--secondary-text-color)";
 
-            return `
-              <button class="ac-chip" data-entity="${escapeHtml(entityId)}" data-value="${escapeHtml(value)}"
-                style="border:1px solid ${chipBorder};background:${chipBg};color:${chipText};
-                       font-size:12px;font-weight:${active ? "600" : "400"};padding:5px 10px;
-                       border-radius:8px;cursor:pointer;font-family:inherit;white-space:nowrap;
-                       transition:background .15s,border-color .15s,color .15s;">
-                ${escapeHtml(value)}
-              </button>`;
-          })
-          .join("");
+                  return `
+                    <button class="ac-chip" data-entity="${escapeHtml(entityId)}" data-value="${escapeHtml(value)}"
+                      style="border:1px solid ${chipBorder};background:${chipBg};color:${chipText};
+                             font-size:12px;font-weight:${active ? "600" : "400"};padding:5px 10px;
+                             border-radius:8px;cursor:pointer;font-family:inherit;white-space:nowrap;
+                             transition:background .15s,border-color .15s,color .15s;">
+                      ${escapeHtml(value)}
+                    </button>`;
+                })
+                .join("");
 
         return `
           <div style="display:flex;align-items:center;gap:12px;padding:${rowSpacing}px 2px;${border}">
@@ -5290,6 +5322,7 @@ class SwitchCardEditor extends AlexListEditor {
         "mdi:palette",
         this._mixed(
           [
+            { name: "chip_style", selector: { select: { mode: "dropdown", options: SWITCH_STYLE_OPTIONS } } },
             { name: "row_spacing", selector: { number: { min: 0, max: 40, step: 1, mode: "box" } } },
             { name: "entity_icon", selector: { icon: {} } },
             { name: "icon_color", selector: { color_rgb: {} } },
@@ -5308,6 +5341,7 @@ class SwitchCardEditor extends AlexListEditor {
             },
           ],
           {
+            chip_style: cfg.chip_style === "switch" ? "switch" : "separate",
             row_spacing: cfg.row_spacing != null ? cfg.row_spacing : 12,
             entity_icon: cfg.entity_icon,
             icon_color: cfg.icon_color,
@@ -5320,6 +5354,7 @@ class SwitchCardEditor extends AlexListEditor {
             entity_icon_size: cfg.entity_icon_size != null ? cfg.entity_icon_size : 16,
           },
           {
+            chip_style: "Style de sélecteur",
             row_spacing: "Écartement entre les entités (px)",
             entity_icon: "Icône des lignes (vide = icône du badge)",
             icon_color: "Couleur du badge",

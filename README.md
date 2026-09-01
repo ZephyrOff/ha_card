@@ -452,9 +452,16 @@ entities:
   partir de l'attribut `options` de l'`input_select` de cette ligne (celui déjà
   configuré côté `input_select`, dans Réglages > Aides ou en YAML) — chaque entité
   peut donc avoir son propre jeu de valeurs, sans rien déclarer côté carte. Le nom
-  affiché sur la puce est la valeur brute de l'option ; les couleurs suivent une
-  palette par défaut qui cycle selon la position de l'option dans la liste de
-  l'entité (pas de personnalisation par valeur pour l'instant).
+  affiché sur la puce est la valeur brute de l'option.
+- **`chip_style`** (dans Customisation) : deux rendus possibles pour les puces d'une
+  ligne.
+  - `separate` (défaut) : puces indépendantes avec bordure, espacées, chacune sa
+    propre couleur (palette par défaut qui cycle selon la position).
+  - `switch` : toutes les options d'une ligne regroupées dans un seul rail arrondi,
+    sans bordure individuelle — l'option active prend `var(--primary-color)` (accent
+    du thème, partagé entre toutes les options, pas de couleur par position),
+    vraiment l'aspect d'un interrupteur à plusieurs positions plutôt que des puces
+    séparées.
 - **`entities`** : même structure qu'Alex Select Label Card (entité, nom, icône,
   couleur d'icône optionnels par ligne), restreinte au domaine `input_select` dans le
   picker d'ajout et le champ entité du détail.
