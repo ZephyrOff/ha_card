@@ -127,6 +127,8 @@ Le mini-graphe en fond (`fill: fade`) peut, selon `mini-graph-card`, dessiner un
 ### Shutter Card
 
 Couleurs en CSS libre (accepte `rgba(...)`, hex, noms). Champs couleur vides = défauts du thème.
+Panneau Customisation regroupé en sous-sections : Général (icône, texte), puis un groupe
+par bouton (Open / Projection / Close), chacun avec sa couleur de fond et de texte.
 
 ```yaml
 type: custom:alex-shutter-card
@@ -286,9 +288,9 @@ par défaut pour un `more-info` sans cible explicite est la première de la cat�
 
 **Personnalisation (color-pickers avec opacité, comme le reste du package) :**
 
-- Racine → panneau **Customisation** : couleur du badge, fond de la carte (vide = thème),
-  couleur du nom de la carte, couleur des noms de catégorie, écartement entre les
-  catégories (px, défaut 12).
+- Racine → panneau **Customisation**, regroupé en sous-sections : **Carte** (écartement
+  entre catégories, couleur du badge, fond de la carte — vide = thème), **En-tête**
+  (couleur du nom de la carte), **Catégories** (couleur des noms de catégorie).
 - Chaque catégorie → son propre panneau **Customisation** : couleur de succès (remplace
   le vert par défaut) et couleur d'échec (remplace le rouge/orange par défaut — le
   détecteur en alerte et l'ouvrant/verrou en défaut partagent la même couleur d'échec,
@@ -324,10 +326,11 @@ icon_color: [74, 222, 128]        # optionnel, teinte du badge
   personnalisables (crayon sur sa ligne dans l'éditeur) — tous optionnels, avec repli sur
   le nom convivial HA / l'icône par défaut du type / la couleur de texte secondaire.
 - Le nombre total d'entités s'affiche à droite de l'en-tête (« N total »).
-- Mêmes options de personnalisation que la Sensor Card (panneau Customisation racine :
-  badge, fond de carte, couleur du nom, couleur des noms d'entité, couleur succès,
-  couleur échec, écartement entre les entités en px) — la couleur succès/échec ici
-  colore la **pastille d'état** de chaque ligne (teinte de fond légère + texte).
+- Mêmes champs de personnalisation que la Sensor Card, regroupés en sous-sections dans
+  le panneau Customisation racine : **Carte** (écartement entre entités, badge, fond),
+  **En-tête** (couleur du nom de la carte), **Entité** (couleur des noms d'entité),
+  **États** (couleur succès, couleur échec) — la couleur succès/échec ici colore la
+  **pastille d'état** de chaque ligne (teinte de fond légère + texte).
 - Type `alarm` : chaque ligne affichera l'état littéral de son entité
   (`alarm_control_panel`), pas de limitation à une seule entité ici (contrairement à la
   catégorie Alarme de la Sensor Card) puisque chaque ligne montre sa propre entité.
@@ -361,12 +364,13 @@ on_color: [244, 169, 53]          # optionnel, couleur de l'interrupteur actif
 - L'en-tête affiche « N/Total » (nombre d'entités actuellement actives).
 - Rétrocompatible : une ancienne config avec `entities:` en simple liste de chaînes
   reste valide, sans personnalisation par entité.
-- Personnalisation (panneau Customisation racine) : badge, icône des lignes (vide =
-  icône du badge), fond de carte, couleur du nom, couleur des noms d'entité, écartement
-  entre les entités (px), **opacité du texte/icône quand l'entité est inactive** (%,
-  défaut 50 — s'applique à l'icône et au nom, pas à l'interrupteur ni au temps écoulé),
-  **couleur interrupteur actif** et **couleur interrupteur inactif** (remplacent
-  respectivement l'orange et le gris par défaut).
+- Personnalisation, regroupée en sous-sections dans le panneau Customisation racine :
+  **Carte** (écartement entre entités, badge, fond), **En-tête** (couleur du nom de la
+  carte), **Entité** (icône des lignes — vide = icône du badge —, couleur des noms
+  d'entité, **opacité du texte/icône quand l'entité est inactive** — %, défaut 50,
+  s'applique à l'icône et au nom, pas à l'interrupteur ni au temps écoulé),
+  **Interrupteur** (**couleur interrupteur actif** et **couleur interrupteur inactif**,
+  remplacent respectivement l'orange et le gris par défaut).
 
 ### Alex Select Label Card
 
@@ -557,10 +561,12 @@ accent_color: [255, 255, 255]     # optionnel, couleur du bouton lecture/volume/
 - La carte est divisée en **deux panneaux visuellement distincts** : le haut (pochette +
   infos du média) et le bas (transport, volume, onglets), chacun avec **son propre fond
   personnalisable** — même principe que le sous-panneau « Groupe » de la Light Card.
-- Personnalisation (panneau Customisation) : **fond de la section infos** (haut, vide =
-  thème), **fond de la section contrôles** (bas, vide = légère teinte automatique dérivée
-  du thème), couleur du titre, couleur de l'artiste/libellé/boutons de transport
-  (primary), couleur d'accent (curseur de volume + onglet actif uniquement).
+- Personnalisation, regroupée en sous-sections dans le panneau Customisation :
+  **Fonds** (**fond de la section infos** — haut, vide = thème — et **fond de la
+  section contrôles** — bas, vide = légère teinte automatique dérivée du thème),
+  **Texte et accent** (couleur du titre, couleur de l'artiste/libellé/boutons de
+  transport — primary —, couleur d'accent — curseur de volume + onglet actif
+  uniquement).
 - Rétrocompatible : une ancienne config avec `entities:` en simple liste de chaînes, ou
   avec l'ancien champ `background` (désormais `top_background`), reste valide.
 
@@ -593,11 +599,12 @@ servers:
   à toi de le renseigner toi-même.
 - Le bouton power appelle `homeassistant.toggle` sur l'entité du serveur (éteint si en
   ligne, allume si hors ligne).
-- Personnalisation (panneau Customisation) : fond de la carte, couleur des noms de
-  serveur/titre (primary), couleur des adresses/compteur (secondary), couleur « en
-  ligne » et couleur « hors ligne » (appliquées au point de statut, au texte de statut,
-  et à l'icône du bouton power) — une simplification par rapport aux 4 teintes distinctes
-  du gabarit d'origine, pour rester sur le même nombre de champs que les autres cartes.
+- Personnalisation, regroupée en sous-sections dans le panneau Customisation :
+  **Carte** (fond de la carte, couleur des noms de serveur/titre — primary —, couleur
+  des adresses/compteur — secondary), **Statut** (couleur « en ligne » et couleur
+  « hors ligne », appliquées au point de statut, au texte de statut, et à l'icône du
+  bouton power) — une simplification par rapport aux 4 teintes distinctes du gabarit
+  d'origine, pour rester sur le même nombre de champs que les autres cartes.
 
 ### Alex Gradient Card
 
@@ -662,8 +669,9 @@ icon: mdi:led-strip-variant
   beaucoup de segments (11+) sans avoir à régler chaque pastille individuellement. Borné
   entre 2 et le nombre réel de segments ; la réinterpolation (linéaire, par point) n'a
   lieu qu'au clic sur « Appliquer le dégradé », jamais pendant l'édition elle-même.
-- Personnalisation (panneau Customisation) : couleur du badge, fond de la carte,
-  couleur du nom, couleur secondaire, couleur du bouton « Appliquer »/interrupteur actif.
+- Personnalisation, regroupée en sous-sections dans le panneau Customisation :
+  **Carte** (couleur du badge, fond de la carte), **Texte et accent** (couleur du nom,
+  couleur secondaire, couleur du bouton « Appliquer »/interrupteur actif).
 
 ### Alex Gradient Scene Card
 
@@ -752,9 +760,10 @@ groups:
   entités change réellement (pas à chaque mise à jour de `hass` ailleurs dans
   la maison) — nécessaire pour que le sélecteur de couleur natif ne se ferme
   pas tout seul en cours de sélection.
-- Personnalisation (panneau Customisation) : écartement entre les lignes (px),
-  couleur du badge (aussi utilisée pour les icônes de chaque groupe), fond de
-  la carte, couleur du nom de la carte, couleur du texte des groupes.
+- Personnalisation, regroupée en sous-sections dans le panneau Customisation :
+  **Carte** (écartement entre les lignes en px, couleur du badge — aussi utilisée pour
+  les icônes de chaque groupe —, fond de la carte), **En-tête** (couleur du nom de la
+  carte), **Groupes** (couleur du texte des groupes).
 
 ## Ajouter une nouvelle carte
 

@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.40.1";
+const ALEX_CARDS_VERSION = "0.41.0";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -1452,14 +1452,42 @@ class ShutterCardEditor extends AlexFormEditor {
         title: "Customisation",
         icon: "mdi:palette",
         schema: [
-          { name: "icon_color", selector: { color_rgb: {} } },
-          { name: "text_color", selector: { color_rgb: {} } },
-          { name: "btn_open_color", selector: { color_rgb: {} } },
-          { name: "txt_open_color", selector: { color_rgb: {} } },
-          { name: "btn_projection_color", selector: { color_rgb: {} } },
-          { name: "txt_projection_color", selector: { color_rgb: {} } },
-          { name: "btn_close_color", selector: { color_rgb: {} } },
-          { name: "txt_close_color", selector: { color_rgb: {} } },
+          {
+            type: "expandable",
+            title: "Général",
+            icon: "mdi:card-outline",
+            schema: [
+              { name: "icon_color", selector: { color_rgb: {} } },
+              { name: "text_color", selector: { color_rgb: {} } },
+            ],
+          },
+          {
+            type: "expandable",
+            title: "Bouton Open",
+            icon: "mdi:arrow-up-bold-outline",
+            schema: [
+              { name: "btn_open_color", selector: { color_rgb: {} } },
+              { name: "txt_open_color", selector: { color_rgb: {} } },
+            ],
+          },
+          {
+            type: "expandable",
+            title: "Bouton Projection",
+            icon: "mdi:arrow-split-horizontal",
+            schema: [
+              { name: "btn_projection_color", selector: { color_rgb: {} } },
+              { name: "txt_projection_color", selector: { color_rgb: {} } },
+            ],
+          },
+          {
+            type: "expandable",
+            title: "Bouton Close",
+            icon: "mdi:arrow-down-bold-outline",
+            schema: [
+              { name: "btn_close_color", selector: { color_rgb: {} } },
+              { name: "txt_close_color", selector: { color_rgb: {} } },
+            ],
+          },
         ],
       },
       INTERACTIONS_FIELD,
@@ -3559,11 +3587,28 @@ class SensorCardEditor extends AlexListEditor {
         "mdi:palette",
         this._mixed(
           [
-            { name: "row_spacing", selector: { number: { min: 0, max: 40, step: 1, mode: "box" } } },
-            { name: "icon_color", selector: { color_rgb: {} } },
-            { name: "background", selector: { color_rgb: {} } },
-            { name: "primary_color", selector: { color_rgb: {} } },
-            { name: "secondary_color", selector: { color_rgb: {} } },
+            {
+              type: "expandable",
+              title: "Carte",
+              icon: "mdi:card-outline",
+              schema: [
+                { name: "row_spacing", selector: { number: { min: 0, max: 40, step: 1, mode: "box" } } },
+                { name: "icon_color", selector: { color_rgb: {} } },
+                { name: "background", selector: { color_rgb: {} } },
+              ],
+            },
+            {
+              type: "expandable",
+              title: "En-tête",
+              icon: "mdi:format-header-1",
+              schema: [{ name: "primary_color", selector: { color_rgb: {} } }],
+            },
+            {
+              type: "expandable",
+              title: "Catégories",
+              icon: "mdi:format-list-bulleted",
+              schema: [{ name: "secondary_color", selector: { color_rgb: {} } }],
+            },
           ],
           {
             row_spacing: cfg.row_spacing != null ? cfg.row_spacing : 12,
@@ -4014,13 +4059,37 @@ class EntityCardEditor extends AlexListEditor {
         "mdi:palette",
         this._mixed(
           [
-            { name: "row_spacing", selector: { number: { min: 0, max: 40, step: 1, mode: "box" } } },
-            { name: "icon_color", selector: { color_rgb: {} } },
-            { name: "background", selector: { color_rgb: {} } },
-            { name: "primary_color", selector: { color_rgb: {} } },
-            { name: "secondary_color", selector: { color_rgb: {} } },
-            { name: "success_color", selector: { color_rgb: {} } },
-            { name: "failed_color", selector: { color_rgb: {} } },
+            {
+              type: "expandable",
+              title: "Carte",
+              icon: "mdi:card-outline",
+              schema: [
+                { name: "row_spacing", selector: { number: { min: 0, max: 40, step: 1, mode: "box" } } },
+                { name: "icon_color", selector: { color_rgb: {} } },
+                { name: "background", selector: { color_rgb: {} } },
+              ],
+            },
+            {
+              type: "expandable",
+              title: "En-tête",
+              icon: "mdi:format-header-1",
+              schema: [{ name: "primary_color", selector: { color_rgb: {} } }],
+            },
+            {
+              type: "expandable",
+              title: "Entité",
+              icon: "mdi:format-list-bulleted",
+              schema: [{ name: "secondary_color", selector: { color_rgb: {} } }],
+            },
+            {
+              type: "expandable",
+              title: "États",
+              icon: "mdi:check-circle-outline",
+              schema: [
+                { name: "success_color", selector: { color_rgb: {} } },
+                { name: "failed_color", selector: { color_rgb: {} } },
+              ],
+            },
           ],
           {
             row_spacing: cfg.row_spacing != null ? cfg.row_spacing : 12,
@@ -4344,18 +4413,44 @@ class ToggleCardEditor extends AlexListEditor {
         "mdi:palette",
         this._mixed(
           [
-            { name: "row_spacing", selector: { number: { min: 0, max: 40, step: 1, mode: "box" } } },
             {
-              name: "inactive_opacity",
-              selector: { number: { min: 0, max: 100, step: 5, mode: "box" } },
+              type: "expandable",
+              title: "Carte",
+              icon: "mdi:card-outline",
+              schema: [
+                { name: "row_spacing", selector: { number: { min: 0, max: 40, step: 1, mode: "box" } } },
+                { name: "icon_color", selector: { color_rgb: {} } },
+                { name: "background", selector: { color_rgb: {} } },
+              ],
             },
-            { name: "entity_icon", selector: { icon: {} } },
-            { name: "icon_color", selector: { color_rgb: {} } },
-            { name: "background", selector: { color_rgb: {} } },
-            { name: "primary_color", selector: { color_rgb: {} } },
-            { name: "secondary_color", selector: { color_rgb: {} } },
-            { name: "on_color", selector: { color_rgb: {} } },
-            { name: "off_color", selector: { color_rgb: {} } },
+            {
+              type: "expandable",
+              title: "En-tête",
+              icon: "mdi:format-header-1",
+              schema: [{ name: "primary_color", selector: { color_rgb: {} } }],
+            },
+            {
+              type: "expandable",
+              title: "Entité",
+              icon: "mdi:format-list-bulleted",
+              schema: [
+                { name: "entity_icon", selector: { icon: {} } },
+                { name: "secondary_color", selector: { color_rgb: {} } },
+                {
+                  name: "inactive_opacity",
+                  selector: { number: { min: 0, max: 100, step: 5, mode: "box" } },
+                },
+              ],
+            },
+            {
+              type: "expandable",
+              title: "Interrupteur",
+              icon: "mdi:toggle-switch-outline",
+              schema: [
+                { name: "on_color", selector: { color_rgb: {} } },
+                { name: "off_color", selector: { color_rgb: {} } },
+              ],
+            },
           ],
           {
             row_spacing: cfg.row_spacing != null ? cfg.row_spacing : 12,
@@ -5990,11 +6085,25 @@ class MediaPlayerCardEditor extends AlexListEditor {
         "mdi:palette",
         this._mixed(
           [
-            { name: "top_background", selector: { color_rgb: {} } },
-            { name: "bottom_background", selector: { color_rgb: {} } },
-            { name: "primary_color", selector: { color_rgb: {} } },
-            { name: "secondary_color", selector: { color_rgb: {} } },
-            { name: "accent_color", selector: { color_rgb: {} } },
+            {
+              type: "expandable",
+              title: "Fonds",
+              icon: "mdi:card-outline",
+              schema: [
+                { name: "top_background", selector: { color_rgb: {} } },
+                { name: "bottom_background", selector: { color_rgb: {} } },
+              ],
+            },
+            {
+              type: "expandable",
+              title: "Texte et accent",
+              icon: "mdi:format-color-text",
+              schema: [
+                { name: "primary_color", selector: { color_rgb: {} } },
+                { name: "secondary_color", selector: { color_rgb: {} } },
+                { name: "accent_color", selector: { color_rgb: {} } },
+              ],
+            },
           ],
           {
             top_background: cfg.top_background,
@@ -6259,11 +6368,25 @@ class ServerCardEditor extends AlexListEditor {
         "mdi:palette",
         this._mixed(
           [
-            { name: "background", selector: { color_rgb: {} } },
-            { name: "primary_color", selector: { color_rgb: {} } },
-            { name: "secondary_color", selector: { color_rgb: {} } },
-            { name: "online_color", selector: { color_rgb: {} } },
-            { name: "offline_color", selector: { color_rgb: {} } },
+            {
+              type: "expandable",
+              title: "Carte",
+              icon: "mdi:card-outline",
+              schema: [
+                { name: "background", selector: { color_rgb: {} } },
+                { name: "primary_color", selector: { color_rgb: {} } },
+                { name: "secondary_color", selector: { color_rgb: {} } },
+              ],
+            },
+            {
+              type: "expandable",
+              title: "Statut",
+              icon: "mdi:check-circle-outline",
+              schema: [
+                { name: "online_color", selector: { color_rgb: {} } },
+                { name: "offline_color", selector: { color_rgb: {} } },
+              ],
+            },
           ],
           {
             background: cfg.background,
@@ -6698,11 +6821,25 @@ class GradientCardEditor extends AlexFormEditor {
         title: "Customisation",
         icon: "mdi:palette",
         schema: [
-          { name: "icon_color", selector: { color_rgb: {} } },
-          { name: "background", selector: { color_rgb: {} } },
-          { name: "primary_color", selector: { color_rgb: {} } },
-          { name: "secondary_color", selector: { color_rgb: {} } },
-          { name: "accent_color", selector: { color_rgb: {} } },
+          {
+            type: "expandable",
+            title: "Carte",
+            icon: "mdi:card-outline",
+            schema: [
+              { name: "icon_color", selector: { color_rgb: {} } },
+              { name: "background", selector: { color_rgb: {} } },
+            ],
+          },
+          {
+            type: "expandable",
+            title: "Texte et accent",
+            icon: "mdi:format-color-text",
+            schema: [
+              { name: "primary_color", selector: { color_rgb: {} } },
+              { name: "secondary_color", selector: { color_rgb: {} } },
+              { name: "accent_color", selector: { color_rgb: {} } },
+            ],
+          },
         ],
       },
     ];
@@ -7592,13 +7729,27 @@ class AlexInputColorCardEditor extends AlexListEditor {
         this._mixed(
           [
             {
-              name: "row_spacing",
-              selector: { number: { min: 0, max: 40, step: 1, mode: "box" } },
+              type: "expandable",
+              title: "Carte",
+              icon: "mdi:card-outline",
+              schema: [
+                { name: "row_spacing", selector: { number: { min: 0, max: 40, step: 1, mode: "box" } } },
+                { name: "icon_color", selector: { color_rgb: {} } },
+                { name: "background", selector: { color_rgb: {} } },
+              ],
             },
-            { name: "icon_color", selector: { color_rgb: {} } },
-            { name: "background", selector: { color_rgb: {} } },
-            { name: "primary_color", selector: { color_rgb: {} } },
-            { name: "secondary_color", selector: { color_rgb: {} } },
+            {
+              type: "expandable",
+              title: "En-tête",
+              icon: "mdi:format-header-1",
+              schema: [{ name: "primary_color", selector: { color_rgb: {} } }],
+            },
+            {
+              type: "expandable",
+              title: "Groupes",
+              icon: "mdi:format-list-bulleted",
+              schema: [{ name: "secondary_color", selector: { color_rgb: {} } }],
+            },
           ],
           {
             row_spacing: c.row_spacing != null ? c.row_spacing : 4,
