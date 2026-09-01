@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.39.0";
+const ALEX_CARDS_VERSION = "0.40.0";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -5026,14 +5026,6 @@ window.customCards.push({
  * un appel, il n'y a pas de tableau a recalculer depuis un instantane).
  * ========================================================================= */
 
-const SWITCH_DEFAULT_COLORS = [
-  [55, 143, 233],
-  [244, 169, 53],
-  [99, 153, 34],
-  [216, 90, 48],
-  [127, 119, 221],
-];
-
 const SWITCH_STYLE_OPTIONS = [
   { value: "separate", label: "Séparé (puces indépendantes)" },
   { value: "switch", label: "Interrupteur (segments groupés)" },
@@ -5088,6 +5080,10 @@ class SwitchCard extends HTMLElement {
       c.entity_name_size,
       c.entity_icon_size,
       c.chip_style,
+      JSON.stringify(c.active_bg || null),
+      JSON.stringify(c.active_text || null),
+      JSON.stringify(c.inactive_bg || null),
+      JSON.stringify(c.inactive_text || null),
       entities.map((e) => `${e.entity}|${e.name}|${e.icon}|${JSON.stringify(e.color || null)}`).join(";"),
       entities
         .map((e) => {
@@ -5117,6 +5113,10 @@ class SwitchCard extends HTMLElement {
     const badgeBox = Math.round(iconSize * 2);
     const badgeRadius = Math.round(badgeBox * 0.3);
     const chipStyle = c.chip_style === "switch" ? "switch" : "separate";
+    const activeBg = colorOr(c.active_bg, "var(--primary-color)");
+    const activeText = colorOr(c.active_text, "var(--text-primary-color)");
+    const inactiveBg = colorOr(c.inactive_bg, "transparent");
+    const inactiveText = colorOr(c.inactive_text, "var(--secondary-text-color)");
 
     const rowsHtml = entities
       .map((entry, i) => {
@@ -5134,8 +5134,8 @@ class SwitchCard extends HTMLElement {
         const chips =
           chipStyle === "switch"
             ? // Segments regroupes dans un seul rail, comme un vrai interrupteur a
-              // plusieurs positions - un accent de theme partage (pas de couleur
-              // par option), pas de bordure individuelle.
+              // plusieurs positions - couleurs actif/inactif partagees (pas de
+              // couleur par option), pas de bordure individuelle.
               `<div style="display:inline-flex;align-items:center;gap:2px;padding:3px;
                           border-radius:${Math.max(8, rowIconRadius + 2)}px;
                           background:rgba(var(--rgb-primary-text-color,0,0,0),0.06);">
@@ -5144,8 +5144,8 @@ class SwitchCard extends HTMLElement {
                     const active = currentValue === value;
                     return `
                       <button class="ac-chip" data-entity="${escapeHtml(entityId)}" data-value="${escapeHtml(value)}"
-                        style="border:none;background:${active ? "var(--primary-color)" : "transparent"};
-                               color:${active ? "var(--text-primary-color)" : "var(--primary-text-color)"};
+                        style="border:none;background:${active ? activeBg : inactiveBg};
+                               color:${active ? activeText : inactiveText};
                                font-size:12px;font-weight:${active ? "600" : "400"};padding:5px 12px;
                                border-radius:${Math.max(6, rowIconRadius)}px;cursor:pointer;font-family:inherit;
                                white-space:nowrap;transition:background .15s,color .15s;">
@@ -5155,15 +5155,11 @@ class SwitchCard extends HTMLElement {
                   .join("")}
               </div>`
             : rowOptions
-                .map((value, oi) => {
+                .map((value) => {
                   const active = currentValue === value;
-                  const defaultActive = SWITCH_DEFAULT_COLORS[oi % SWITCH_DEFAULT_COLORS.length];
-
-                  const chipBg = active ? rgba(defaultActive, 0.18, defaultActive) : "transparent";
-                  const chipBorder = active
-                    ? rgba(defaultActive, 0.45, defaultActive)
-                    : "var(--divider-color)";
-                  const chipText = active ? rgbaCss([...defaultActive, 1]) : "var(--secondary-text-color)";
+                  const chipBg = active ? activeBg : inactiveBg;
+                  const chipBorder = active ? activeBg : "var(--divider-color)";
+                  const chipText = active ? activeText : inactiveText;
 
                   return `
                     <button class="ac-chip" data-entity="${escapeHtml(entityId)}" data-value="${escapeHtml(value)}"
@@ -5322,49 +5318,92 @@ class SwitchCardEditor extends AlexListEditor {
         "mdi:palette",
         this._mixed(
           [
-            { name: "chip_style", selector: { select: { mode: "dropdown", options: SWITCH_STYLE_OPTIONS } } },
-            { name: "row_spacing", selector: { number: { min: 0, max: 40, step: 1, mode: "box" } } },
-            { name: "entity_icon", selector: { icon: {} } },
-            { name: "icon_color", selector: { color_rgb: {} } },
-            { name: "background", selector: { color_rgb: {} } },
-            { name: "primary_color", selector: { color_rgb: {} } },
-            { name: "secondary_color", selector: { color_rgb: {} } },
-            { name: "name_size", selector: { number: { min: 10, max: 32, step: 1, mode: "box" } } },
-            { name: "icon_size", selector: { number: { min: 12, max: 40, step: 1, mode: "box" } } },
             {
-              name: "entity_name_size",
-              selector: { number: { min: 10, max: 28, step: 1, mode: "box" } },
+              type: "expandable",
+              title: "Carte",
+              icon: "mdi:card-outline",
+              schema: [
+                { name: "row_spacing", selector: { number: { min: 0, max: 40, step: 1, mode: "box" } } },
+                { name: "icon_color", selector: { color_rgb: {} } },
+                { name: "background", selector: { color_rgb: {} } },
+              ],
             },
             {
-              name: "entity_icon_size",
-              selector: { number: { min: 10, max: 32, step: 1, mode: "box" } },
+              type: "expandable",
+              title: "En-tête",
+              icon: "mdi:format-header-1",
+              schema: [
+                { name: "primary_color", selector: { color_rgb: {} } },
+                { name: "name_size", selector: { number: { min: 10, max: 32, step: 1, mode: "box" } } },
+                { name: "icon_size", selector: { number: { min: 12, max: 40, step: 1, mode: "box" } } },
+              ],
+            },
+            {
+              type: "expandable",
+              title: "Entité",
+              icon: "mdi:format-list-bulleted",
+              schema: [
+                { name: "entity_icon", selector: { icon: {} } },
+                { name: "secondary_color", selector: { color_rgb: {} } },
+                {
+                  name: "entity_name_size",
+                  selector: { number: { min: 10, max: 28, step: 1, mode: "box" } },
+                },
+                {
+                  name: "entity_icon_size",
+                  selector: { number: { min: 10, max: 32, step: 1, mode: "box" } },
+                },
+              ],
+            },
+            {
+              type: "expandable",
+              title: "Switch",
+              icon: "mdi:toggle-switch-outline",
+              schema: [
+                {
+                  name: "chip_style",
+                  selector: { select: { mode: "dropdown", options: SWITCH_STYLE_OPTIONS } },
+                },
+                { name: "active_text", selector: { color_rgb: {} } },
+                { name: "active_bg", selector: { color_rgb: {} } },
+                { name: "inactive_text", selector: { color_rgb: {} } },
+                { name: "inactive_bg", selector: { color_rgb: {} } },
+              ],
             },
           ],
           {
-            chip_style: cfg.chip_style === "switch" ? "switch" : "separate",
             row_spacing: cfg.row_spacing != null ? cfg.row_spacing : 12,
-            entity_icon: cfg.entity_icon,
             icon_color: cfg.icon_color,
             background: cfg.background,
             primary_color: cfg.primary_color,
-            secondary_color: cfg.secondary_color,
             name_size: cfg.name_size != null ? cfg.name_size : 17,
             icon_size: cfg.icon_size != null ? cfg.icon_size : 20,
+            entity_icon: cfg.entity_icon,
+            secondary_color: cfg.secondary_color,
             entity_name_size: cfg.entity_name_size != null ? cfg.entity_name_size : 14,
             entity_icon_size: cfg.entity_icon_size != null ? cfg.entity_icon_size : 16,
+            chip_style: cfg.chip_style === "switch" ? "switch" : "separate",
+            active_text: cfg.active_text,
+            active_bg: cfg.active_bg,
+            inactive_text: cfg.inactive_text,
+            inactive_bg: cfg.inactive_bg,
           },
           {
-            chip_style: "Style de sélecteur",
             row_spacing: "Écartement entre les entités (px)",
-            entity_icon: "Icône des lignes (vide = icône du badge)",
             icon_color: "Couleur du badge",
             background: "Fond de la carte",
             primary_color: "Couleur du nom de la carte",
-            secondary_color: "Couleur des noms d'entité",
             name_size: "Taille du nom de la carte (px)",
             icon_size: "Taille de l'icône du badge (px)",
+            entity_icon: "Icône des lignes (vide = icône du badge)",
+            secondary_color: "Couleur des noms d'entité",
             entity_name_size: "Taille des noms d'entité (px)",
             entity_icon_size: "Taille des icônes d'entité (px)",
+            chip_style: "Style de sélecteur",
+            active_text: "Couleur du texte actif",
+            active_bg: "Fond actif",
+            inactive_text: "Couleur du texte inactif",
+            inactive_bg: "Fond inactif",
           },
           (v) => this._update((c) => Object.assign(c, v))
         )

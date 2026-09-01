@@ -453,21 +453,26 @@ entities:
   configuré côté `input_select`, dans Réglages > Aides ou en YAML) — chaque entité
   peut donc avoir son propre jeu de valeurs, sans rien déclarer côté carte. Le nom
   affiché sur la puce est la valeur brute de l'option.
-- **`chip_style`** (dans Customisation) : deux rendus possibles pour les puces d'une
-  ligne.
-  - `separate` (défaut) : puces indépendantes avec bordure, espacées, chacune sa
-    propre couleur (palette par défaut qui cycle selon la position).
+- **`chip_style`** (dans Customisation > Switch) : deux rendus possibles pour les
+  puces d'une ligne.
+  - `separate` (défaut) : puces indépendantes avec bordure, espacées.
   - `switch` : toutes les options d'une ligne regroupées dans un seul rail arrondi,
-    sans bordure individuelle — l'option active prend `var(--primary-color)` (accent
-    du thème, partagé entre toutes les options, pas de couleur par position),
-    vraiment l'aspect d'un interrupteur à plusieurs positions plutôt que des puces
-    séparées.
+    sans bordure individuelle — vraiment l'aspect d'un interrupteur à plusieurs
+    positions plutôt que des puces séparées.
 - **`entities`** : même structure qu'Alex Select Label Card (entité, nom, icône,
   couleur d'icône optionnels par ligne), restreinte au domaine `input_select` dans le
   picker d'ajout et le champ entité du détail.
-- Personnalisation : identique à Alex Select Label Card (badge, icône des lignes,
-  fond, couleurs, écartement, tailles de texte/icônes de l'en-tête et des lignes — le
-  cadre autour de chaque icône suit automatiquement sa taille).
+- Personnalisation regroupée en quatre sous-sections dans le panneau Customisation :
+  - **Carte** : écartement entre les entités (px), couleur du badge, fond de carte.
+  - **En-tête** : couleur du nom de la carte, taille du nom, taille de l'icône du
+    badge.
+  - **Entité** : icône des lignes (vide = icône du badge), couleur des noms
+    d'entité, taille des noms d'entité, taille des icônes d'entité (le cadre autour
+    de chaque icône suit automatiquement sa taille).
+  - **Switch** : style de sélecteur (`separate`/`switch`), couleur du texte actif,
+    fond actif, couleur du texte inactif, fond inactif — un seul jeu de couleurs
+    partagé par toutes les puces/segments de toutes les lignes de la carte (pas de
+    couleur par valeur), appliqué identiquement quel que soit le style choisi.
 
 ### Clock Card
 
