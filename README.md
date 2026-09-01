@@ -408,14 +408,20 @@ entities:
   l'événement `entity_registry_updated` — y compris si le label est modifié ailleurs
   (Réglages > Entités, une automatisation, une autre carte). Bascule optimiste au
   clic (la puce répond avant la confirmation réseau, annulée si l'appel échoue).
+- **Clics rapprochés sur plusieurs labels d'une même ligne** : chaque entité a sa
+  propre file d'attente interne — un 2ᵉ clic pendant qu'un 1er est encore en vol
+  attend que celui-ci retombe (optimiste + confirmation réseau) avant de calculer
+  son propre changement, au lieu de partir d'un instantané périmé. Des clics sur des
+  entités différentes restent traités en parallèle, sans attendre l'un l'autre.
 - Ce sont des commandes internes du frontend HA, pas une API tierce officiellement
   garantie stable entre versions (à la différence des services) — en cas de souci
   après une mise à jour HA, comparer avec l'onglet réseau du navigateur pendant une
   édition de label manuelle depuis Réglages > Entités.
+- Pas d'atténuation visuelle des lignes sans label actif — contrairement à Toggle
+  Card, la ligne reste à pleine opacité qu'un label soit actif ou non.
 - Personnalisation (panneau Customisation racine) : badge, icône des lignes (vide =
   icône du badge), fond de carte, couleur du nom, couleur des noms d'entité,
-  écartement entre les entités (px), opacité icône/nom **si aucun label n'est actif**
-  sur la ligne (%, défaut 50).
+  écartement entre les entités (px).
 
 ### Clock Card
 

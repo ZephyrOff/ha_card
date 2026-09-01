@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.37.0";
+const ALEX_CARDS_VERSION = "0.37.1";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -4511,6 +4511,15 @@ class SelectLabelCard extends HTMLElement {
       (list || []).forEach((e) => {
         map[e.entity_id] = e.labels || [];
       });
+      // Une entité avec une bascule en cours (clic pas encore confirmé par
+      // le backend) garde son état optimiste local : ce fetch a pu démarrer
+      // avant que l'écriture n'atteigne le registre, l'écraser réintroduit
+      // la race qu'on cherche justement à éviter.
+      const inFlight = this._inFlight || {};
+      const prevRegistry = this._registry || {};
+      Object.keys(inFlight).forEach((entityId) => {
+        if (prevRegistry[entityId] !== undefined) map[entityId] = prevRegistry[entityId];
+      });
       this._registry = map;
     } catch (e) {
       this._registry = this._registry || {};
@@ -4519,28 +4528,50 @@ class SelectLabelCard extends HTMLElement {
     this._render();
   }
 
-  async _toggleLabel(entityId, labelId) {
-    const reg = this._registry || {};
-    const current = reg[entityId] || [];
-    const has = current.includes(labelId);
-    const next = has ? current.filter((l) => l !== labelId) : [...current, labelId];
+  // Point d'entrée des clics : chaque entité a sa propre file - un clic sur
+  // une 2e puce de la même ligne attend que le clic précédent soit
+  // entièrement retombé (optimiste + confirmation réseau) avant de calculer
+  // son propre diff, au lieu de partir d'un instantané potentiellement
+  // périmé. Des clics sur des entités différentes restent indépendants.
+  _toggleLabel(entityId, labelId) {
+    this._pending = this._pending || {};
+    const prior = this._pending[entityId] || Promise.resolve();
+    const task = prior
+      .catch(() => {}) // une bascule précédente en échec ne doit pas bloquer la suivante
+      .then(() => this._applyLabelToggle(entityId, labelId));
+    this._pending[entityId] = task;
+    return task;
+  }
 
-    // Bascule optimiste : la puce répond au clic sans attendre l'aller-
-    // retour réseau, comme le reste du package (media-player, etc.).
-    this._registry = { ...reg, [entityId]: next };
-    this._built = false;
-    this._render();
-
+  async _applyLabelToggle(entityId, labelId) {
+    this._inFlight = this._inFlight || {};
+    this._inFlight[entityId] = (this._inFlight[entityId] || 0) + 1;
     try {
-      await this._hass.callWS({
-        type: "config/entity_registry/update",
-        entity_id: entityId,
-        labels: next,
-      });
-    } catch (e) {
-      this._registry = { ...this._registry, [entityId]: current };
+      const reg = this._registry || {};
+      const current = reg[entityId] || [];
+      const has = current.includes(labelId);
+      const next = has ? current.filter((l) => l !== labelId) : [...current, labelId];
+
+      // Bascule optimiste : la puce répond au clic sans attendre l'aller-
+      // retour réseau, comme le reste du package (media-player, etc.).
+      this._registry = { ...reg, [entityId]: next };
       this._built = false;
       this._render();
+
+      try {
+        await this._hass.callWS({
+          type: "config/entity_registry/update",
+          entity_id: entityId,
+          labels: next,
+        });
+      } catch (e) {
+        this._registry = { ...this._registry, [entityId]: current };
+        this._built = false;
+        this._render();
+      }
+    } finally {
+      this._inFlight[entityId] -= 1;
+      if (this._inFlight[entityId] <= 0) delete this._inFlight[entityId];
     }
   }
 
@@ -4561,7 +4592,6 @@ class SelectLabelCard extends HTMLElement {
       JSON.stringify(c.primary_color || null),
       JSON.stringify(c.secondary_color || null),
       c.row_spacing,
-      c.inactive_opacity,
       labels
         .map(
           (l) =>
@@ -4582,7 +4612,6 @@ class SelectLabelCard extends HTMLElement {
     const secondaryColor = colorOr(c.secondary_color, "var(--primary-text-color)");
     const rowIcon = c.entity_icon || c.icon || "mdi:toggle-switch-outline";
     const rowSpacing = c.row_spacing != null ? c.row_spacing : 12;
-    const inactiveOpacity = (c.inactive_opacity != null ? c.inactive_opacity : 50) / 100;
 
     const rowsHtml = entities
       .map((entry, i) => {
@@ -4594,8 +4623,6 @@ class SelectLabelCard extends HTMLElement {
         const entIcon = e.icon || rowIcon;
         const entIconColor = colorOr(e.color, iconColor);
         const entLabels = registry[entityId] || [];
-        const anyActive = labels.some((l) => entLabels.includes(l.label_id));
-        const dim = anyActive ? 1 : inactiveOpacity;
         const border = i < entities.length - 1 ? "border-bottom:1px solid var(--divider-color);" : "";
 
         const chips = labels
@@ -4636,11 +4663,10 @@ class SelectLabelCard extends HTMLElement {
           <div style="display:flex;align-items:center;gap:12px;padding:${rowSpacing}px 2px;${border}">
             <div style="width:32px;height:32px;border-radius:9px;
                         background:rgba(var(--rgb-primary-text-color,0,0,0),0.06);
-                        display:flex;align-items:center;justify-content:center;flex:0 0 auto;
-                        opacity:${dim};transition:opacity .15s;">
+                        display:flex;align-items:center;justify-content:center;flex:0 0 auto;">
               <ha-icon icon="${entIcon}" style="--mdc-icon-size:16px;color:${entIconColor};"></ha-icon>
             </div>
-            <div style="flex:1;min-width:0;opacity:${dim};transition:opacity .15s;">
+            <div style="flex:1;min-width:0;">
               <div style="font-size:14px;font-weight:600;color:${secondaryColor};
                           overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(name)}</div>
             </div>
@@ -4662,7 +4688,6 @@ class SelectLabelCard extends HTMLElement {
           </div>
           <div style="flex:1;min-width:0;font-size:17px;font-weight:700;color:${primaryColor};
                       overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(c.name || "")}</div>
-          <div style="flex:0 0 auto;font-size:12px;color:var(--secondary-text-color);">${entities.length}</div>
         </div>
         <div>${rowsHtml}</div>
       </ha-card>`;
@@ -4850,10 +4875,6 @@ class SelectLabelCardEditor extends AlexListEditor {
         this._mixed(
           [
             { name: "row_spacing", selector: { number: { min: 0, max: 40, step: 1, mode: "box" } } },
-            {
-              name: "inactive_opacity",
-              selector: { number: { min: 0, max: 100, step: 5, mode: "box" } },
-            },
             { name: "entity_icon", selector: { icon: {} } },
             { name: "icon_color", selector: { color_rgb: {} } },
             { name: "background", selector: { color_rgb: {} } },
@@ -4862,7 +4883,6 @@ class SelectLabelCardEditor extends AlexListEditor {
           ],
           {
             row_spacing: cfg.row_spacing != null ? cfg.row_spacing : 12,
-            inactive_opacity: cfg.inactive_opacity != null ? cfg.inactive_opacity : 50,
             entity_icon: cfg.entity_icon,
             icon_color: cfg.icon_color,
             background: cfg.background,
@@ -4871,7 +4891,6 @@ class SelectLabelCardEditor extends AlexListEditor {
           },
           {
             row_spacing: "Écartement entre les entités (px)",
-            inactive_opacity: "Opacité si aucun label actif (%)",
             entity_icon: "Icône des lignes (vide = icône du badge)",
             icon_color: "Couleur du badge",
             background: "Fond de la carte",
