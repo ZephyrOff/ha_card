@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.38.0";
+const ALEX_CARDS_VERSION = "0.38.1";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -4620,6 +4620,10 @@ class SelectLabelCard extends HTMLElement {
     const iconSize = c.icon_size != null ? c.icon_size : 20;
     const entityNameSize = c.entity_name_size != null ? c.entity_name_size : 14;
     const entityIconSize = c.entity_icon_size != null ? c.entity_icon_size : 16;
+    const rowIconBox = Math.round(entityIconSize * 2);
+    const rowIconRadius = Math.round(rowIconBox * 0.28);
+    const badgeBox = Math.round(iconSize * 2);
+    const badgeRadius = Math.round(badgeBox * 0.3);
 
     const rowsHtml = entities
       .map((entry, i) => {
@@ -4669,7 +4673,7 @@ class SelectLabelCard extends HTMLElement {
 
         return `
           <div style="display:flex;align-items:center;gap:12px;padding:${rowSpacing}px 2px;${border}">
-            <div style="width:32px;height:32px;border-radius:9px;
+            <div style="width:${rowIconBox}px;height:${rowIconBox}px;border-radius:${rowIconRadius}px;
                         background:rgba(var(--rgb-primary-text-color,0,0,0),0.06);
                         display:flex;align-items:center;justify-content:center;flex:0 0 auto;">
               <ha-icon icon="${entIcon}" style="--mdc-icon-size:${entityIconSize}px;color:${entIconColor};"></ha-icon>
@@ -4690,7 +4694,7 @@ class SelectLabelCard extends HTMLElement {
                       background:${cardBg};
                       padding:16px 18px;">
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px;">
-          <div style="width:40px;height:40px;border-radius:12px;background:${badgeBg};
+          <div style="width:${badgeBox}px;height:${badgeBox}px;border-radius:${badgeRadius}px;background:${badgeBg};
                       display:flex;align-items:center;justify-content:center;flex:0 0 auto;">
             <ha-icon icon="${c.icon || "mdi:label-multiple-outline"}" style="--mdc-icon-size:${iconSize}px;color:${iconColor};"></ha-icon>
           </div>
@@ -5035,7 +5039,7 @@ class SwitchCard extends HTMLElement {
     return document.createElement("alex-switch-card-editor");
   }
   static getStubConfig() {
-    return { name: "Mode", icon: "mdi:swap-horizontal", options: [], entities: [] };
+    return { name: "Mode", icon: "mdi:swap-horizontal", entities: [] };
   }
 
   setConfig(config) {
@@ -5063,7 +5067,6 @@ class SwitchCard extends HTMLElement {
     if (!this._config || !this._hass) return;
     const c = this._config;
     const hass = this._hass;
-    const options = c.options || [];
     const entities = c.entities || [];
 
     const sig = [
@@ -5079,14 +5082,14 @@ class SwitchCard extends HTMLElement {
       c.icon_size,
       c.entity_name_size,
       c.entity_icon_size,
-      options
-        .map(
-          (o) =>
-            `${o.name}|${o.value}|${JSON.stringify(o.active_color || null)}|${JSON.stringify(o.inactive_color || null)}`
-        )
-        .join(";"),
       entities.map((e) => `${e.entity}|${e.name}|${e.icon}|${JSON.stringify(e.color || null)}`).join(";"),
-      entities.map((e) => (hass.states[e.entity] || {}).state).join(";"),
+      entities
+        .map((e) => {
+          const st = hass.states[e.entity];
+          const opts = (st && st.attributes && st.attributes.options) || [];
+          return `${st ? st.state : ""}:${opts.join(",")}`;
+        })
+        .join(";"),
     ].join("~");
     if (this._built && sig === this._lastSig) return;
     this._lastSig = sig;
@@ -5103,6 +5106,10 @@ class SwitchCard extends HTMLElement {
     const iconSize = c.icon_size != null ? c.icon_size : 20;
     const entityNameSize = c.entity_name_size != null ? c.entity_name_size : 14;
     const entityIconSize = c.entity_icon_size != null ? c.entity_icon_size : 16;
+    const rowIconBox = Math.round(entityIconSize * 2);
+    const rowIconRadius = Math.round(rowIconBox * 0.28);
+    const badgeBox = Math.round(iconSize * 2);
+    const badgeRadius = Math.round(badgeBox * 0.3);
 
     const rowsHtml = entities
       .map((entry, i) => {
@@ -5114,45 +5121,32 @@ class SwitchCard extends HTMLElement {
         const entIcon = e.icon || rowIcon;
         const entIconColor = colorOr(e.color, iconColor);
         const currentValue = stateObj ? stateObj.state : undefined;
+        const rowOptions = (stateObj && stateObj.attributes && stateObj.attributes.options) || [];
         const border = i < entities.length - 1 ? "border-bottom:1px solid var(--divider-color);" : "";
 
-        const chips = options
-          .map((o, oi) => {
-            const active = currentValue === o.value;
+        const chips = rowOptions
+          .map((value, oi) => {
+            const active = currentValue === value;
             const defaultActive = SWITCH_DEFAULT_COLORS[oi % SWITCH_DEFAULT_COLORS.length];
-            const activeRgb = Array.isArray(o.active_color) ? o.active_color : defaultActive;
-            const hasInactiveColor = Array.isArray(o.inactive_color);
 
-            const chipBg = active
-              ? rgba(activeRgb, 0.18, defaultActive)
-              : hasInactiveColor
-              ? rgba(o.inactive_color, 0.14, o.inactive_color)
-              : "transparent";
-            const chipBorder = active
-              ? rgba(activeRgb, 0.45, defaultActive)
-              : hasInactiveColor
-              ? rgba(o.inactive_color, 0.4, o.inactive_color)
-              : "var(--divider-color)";
-            const chipText = active
-              ? colorOr(o.active_color, rgbaCss([...defaultActive, 1]))
-              : hasInactiveColor
-              ? colorOr(o.inactive_color, "var(--secondary-text-color)")
-              : "var(--secondary-text-color)";
+            const chipBg = active ? rgba(defaultActive, 0.18, defaultActive) : "transparent";
+            const chipBorder = active ? rgba(defaultActive, 0.45, defaultActive) : "var(--divider-color)";
+            const chipText = active ? rgbaCss([...defaultActive, 1]) : "var(--secondary-text-color)";
 
             return `
-              <button class="ac-chip" data-entity="${escapeHtml(entityId)}" data-value="${escapeHtml(o.value)}"
+              <button class="ac-chip" data-entity="${escapeHtml(entityId)}" data-value="${escapeHtml(value)}"
                 style="border:1px solid ${chipBorder};background:${chipBg};color:${chipText};
                        font-size:12px;font-weight:${active ? "600" : "400"};padding:5px 10px;
                        border-radius:8px;cursor:pointer;font-family:inherit;white-space:nowrap;
                        transition:background .15s,border-color .15s,color .15s;">
-                ${escapeHtml(o.name || o.value)}
+                ${escapeHtml(value)}
               </button>`;
           })
           .join("");
 
         return `
           <div style="display:flex;align-items:center;gap:12px;padding:${rowSpacing}px 2px;${border}">
-            <div style="width:32px;height:32px;border-radius:9px;
+            <div style="width:${rowIconBox}px;height:${rowIconBox}px;border-radius:${rowIconRadius}px;
                         background:rgba(var(--rgb-primary-text-color,0,0,0),0.06);
                         display:flex;align-items:center;justify-content:center;flex:0 0 auto;">
               <ha-icon icon="${entIcon}" style="--mdc-icon-size:${entityIconSize}px;color:${entIconColor};"></ha-icon>
@@ -5173,7 +5167,7 @@ class SwitchCard extends HTMLElement {
                       background:${cardBg};
                       padding:16px 18px;">
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px;">
-          <div style="width:40px;height:40px;border-radius:12px;background:${badgeBg};
+          <div style="width:${badgeBox}px;height:${badgeBox}px;border-radius:${badgeRadius}px;background:${badgeBg};
                       display:flex;align-items:center;justify-content:center;flex:0 0 auto;">
             <ha-icon icon="${c.icon || "mdi:swap-horizontal"}" style="--mdc-icon-size:${iconSize}px;color:${iconColor};"></ha-icon>
           </div>
@@ -5200,7 +5194,6 @@ class SwitchCardEditor extends AlexListEditor {
   }
 
   _normalize() {
-    if (!Array.isArray(this._config.options)) this._config.options = [];
     if (!Array.isArray(this._config.entities)) this._config.entities = [];
     this._config.entities = this._config.entities.map((e) =>
       typeof e === "string" ? { entity: e } : e
@@ -5210,24 +5203,9 @@ class SwitchCardEditor extends AlexListEditor {
   _validPath() {
     const p = this._path || [];
     if (p.length >= 2) {
-      if (p[0] === "option" && !this._config.options[p[1]]) return [];
       if (p[0] === "entity" && !this._config.entities[p[1]]) return [];
     }
     return p;
-  }
-
-  // Pas de registre HA a interroger pour les options (contrairement aux
-  // labels) : ce sont de simples chaines choisies par l'utilisateur, donc
-  // un champ texte plutot qu'un picker natif.
-  _addOptionRow(onPick) {
-    return this._form(
-      [{ name: "value", selector: { text: {} } }],
-      {},
-      { value: "Ajouter une option" },
-      (v) => {
-        if (v && v.value) onPick(v.value);
-      }
-    );
   }
 
   _addEntityRow(onPick) {
@@ -5247,7 +5225,6 @@ class SwitchCardEditor extends AlexListEditor {
     this.innerHTML = "";
     const p = this._validPath();
     if (p.length === 0) this._renderRoot();
-    else if (p[0] === "option") this._renderOption(p[1]);
     else this._renderEntity(p[1]);
     if (this._hass) {
       this._forms.forEach((f) => (f.hass = this._hass));
@@ -5269,40 +5246,6 @@ class SwitchCardEditor extends AlexListEditor {
         { name: "Nom", icon: "Icône" },
         (v) => this._update((c) => Object.assign(c, v))
       )
-    );
-
-    this.appendChild(this._sectionTitle("Options"));
-    const options = cfg.options || [];
-    options.forEach((o, i) => {
-      this.appendChild(
-        this._row(
-          "mdi:format-list-bulleted",
-          o.name || o.value || "(sans nom)",
-          o.value || "",
-          () => {
-            this._path = ["option", i];
-            this._render();
-          },
-          () => {
-            this._update((c) => c.options.splice(i, 1));
-            this._render();
-          },
-          i > 0 ? () => this._moveItem((c) => c.options, i, -1) : null,
-          i < options.length - 1 ? () => this._moveItem((c) => c.options, i, 1) : null
-        )
-      );
-    });
-    this.appendChild(
-      this._addOptionRow((value) => {
-        let idx;
-        this._update((c) => {
-          c.options = c.options || [];
-          c.options.push({ name: value, value });
-          idx = c.options.length - 1;
-        });
-        this._path = ["option", idx];
-        this._render();
-      })
     );
 
     this.appendChild(this._sectionTitle("Entités"));
@@ -5390,43 +5333,6 @@ class SwitchCardEditor extends AlexListEditor {
           },
           (v) => this._update((c) => Object.assign(c, v))
         )
-      )
-    );
-  }
-
-  _renderOption(i) {
-    const cfg = this._config;
-    const o = cfg.options[i] || {};
-    const merge = (v) => this._update((c) => (c.options[i] = { ...c.options[i], ...v }));
-
-    this.appendChild(
-      this._backHeader(o.name || o.value || "Option", () => {
-        this._path = [];
-        this._render();
-      })
-    );
-
-    this.appendChild(
-      this._mixed(
-        [
-          { name: "name", selector: { text: {} } },
-          { name: "value", selector: { text: {} } },
-          { name: "active_color", selector: { color_rgb: {} } },
-          { name: "inactive_color", selector: { color_rgb: {} } },
-        ],
-        {
-          name: o.name,
-          value: o.value,
-          active_color: o.active_color,
-          inactive_color: o.inactive_color,
-        },
-        {
-          name: "Nom affiché (vide = valeur)",
-          value: "Valeur de l'option (doit correspondre exactement à une option de l'input_select)",
-          active_color: "Couleur si actif",
-          inactive_color: "Couleur si inactif",
-        },
-        merge
       )
     );
   }

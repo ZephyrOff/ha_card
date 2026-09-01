@@ -424,7 +424,9 @@ entities:
   icône du badge), fond de carte, couleur du nom, couleur des noms d'entité,
   écartement entre les entités (px), taille du nom de la carte, taille de l'icône du
   badge, taille des noms d'entité, taille des icônes d'entité (px, chacune séparée —
-  ajuste indépendamment le texte/icône de l'en-tête et ceux des lignes).
+  ajuste indépendamment le texte/icône de l'en-tête et ceux des lignes). Le cadre
+  arrondi autour de chaque icône suit automatiquement sa taille, pas besoin de le
+  régler à part.
 
 ### Alex Switch Card
 
@@ -439,13 +441,6 @@ l'entité (déjà réactif via `hass`) et le service natif `input_select.select_
 type: custom:alex-switch-card
 name: Mode
 icon: mdi:swap-horizontal
-options:
-  - name: Normal
-    value: Normal
-    active_color: [55, 143, 233]
-  - name: Confort
-    value: Confort
-    active_color: [244, 169, 53]
 entities:
   - entity: input_select.light_mode_salon
     name: Salon
@@ -453,19 +448,19 @@ entities:
     name: Chambre
 ```
 
-- **`options`** définit les colonnes de puces, dans l'ordre d'affichage : `name` (nom
-  affiché) et `value` (la valeur exacte envoyée à `input_select.select_option` — doit
-  correspondre mot pour mot à une des options réellement configurées sur les entités
-  `input_select` ciblées, sinon le service échoue silencieusement côté HA).
-  `active_color`/`inactive_color` sont optionnels et par option ; sans eux, une
-  palette par défaut s'applique en cyclant sur l'ordre des options. Toutes les
-  entités de la carte partagent la même liste d'options — pour des `input_select`
-  avec des jeux de valeurs différents, utiliser plusieurs cartes.
+- **Pas de section « Options »** : les puces d'une ligne sont générées directement à
+  partir de l'attribut `options` de l'`input_select` de cette ligne (celui déjà
+  configuré côté `input_select`, dans Réglages > Aides ou en YAML) — chaque entité
+  peut donc avoir son propre jeu de valeurs, sans rien déclarer côté carte. Le nom
+  affiché sur la puce est la valeur brute de l'option ; les couleurs suivent une
+  palette par défaut qui cycle selon la position de l'option dans la liste de
+  l'entité (pas de personnalisation par valeur pour l'instant).
 - **`entities`** : même structure qu'Alex Select Label Card (entité, nom, icône,
   couleur d'icône optionnels par ligne), restreinte au domaine `input_select` dans le
   picker d'ajout et le champ entité du détail.
 - Personnalisation : identique à Alex Select Label Card (badge, icône des lignes,
-  fond, couleurs, écartement, tailles de texte/icônes de l'en-tête et des lignes).
+  fond, couleurs, écartement, tailles de texte/icônes de l'en-tête et des lignes — le
+  cadre autour de chaque icône suit automatiquement sa taille).
 
 ### Clock Card
 
