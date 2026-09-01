@@ -472,7 +472,14 @@ entities:
   - **Switch** : style de sélecteur (`separate`/`switch`), couleur du texte actif,
     fond actif, couleur du texte inactif, fond inactif — un seul jeu de couleurs
     partagé par toutes les puces/segments de toutes les lignes de la carte (pas de
-    couleur par valeur), appliqué identiquement quel que soit le style choisi.
+    couleur par valeur). Les valeurs par défaut diffèrent selon le style choisi :
+    - `separate` : option active en fond plein `var(--primary-color)`, inactive
+      transparente avec bordure — inchangé par rapport à avant.
+    - `switch` : le rail (fond du groupe entier) porte la couleur « inactive »,
+      teintée par défaut sur l'accent du thème ; l'option active flotte dessus comme
+      une pastille contrastée (fond clair + légère ombre), les options inactives
+      restent transparentes et laissent voir le rail — capsule entièrement arrondie,
+      pas des boutons carrés collés les uns aux autres.
 
 ### Clock Card
 

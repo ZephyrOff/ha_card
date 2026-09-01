@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.40.0";
+const ALEX_CARDS_VERSION = "0.40.1";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -5113,10 +5113,22 @@ class SwitchCard extends HTMLElement {
     const badgeBox = Math.round(iconSize * 2);
     const badgeRadius = Math.round(badgeBox * 0.3);
     const chipStyle = c.chip_style === "switch" ? "switch" : "separate";
-    const activeBg = colorOr(c.active_bg, "var(--primary-color)");
-    const activeText = colorOr(c.active_text, "var(--text-primary-color)");
-    const inactiveBg = colorOr(c.inactive_bg, "transparent");
-    const inactiveText = colorOr(c.inactive_text, "var(--secondary-text-color)");
+    const activeBg = colorOr(
+      c.active_bg,
+      chipStyle === "switch" ? "var(--card-background-color)" : "var(--primary-color)"
+    );
+    const activeText = colorOr(
+      c.active_text,
+      chipStyle === "switch" ? "var(--primary-color)" : "var(--text-primary-color)"
+    );
+    const inactiveBg = colorOr(
+      c.inactive_bg,
+      chipStyle === "switch" ? "rgba(var(--rgb-primary-color, 3, 169, 244), 0.18)" : "transparent"
+    );
+    const inactiveText = colorOr(
+      c.inactive_text,
+      chipStyle === "switch" ? "var(--text-primary-color)" : "var(--secondary-text-color)"
+    );
 
     const rowsHtml = entities
       .map((entry, i) => {
@@ -5133,22 +5145,25 @@ class SwitchCard extends HTMLElement {
 
         const chips =
           chipStyle === "switch"
-            ? // Segments regroupes dans un seul rail, comme un vrai interrupteur a
-              // plusieurs positions - couleurs actif/inactif partagees (pas de
-              // couleur par option), pas de bordure individuelle.
+            ? // Un seul rail arrondi en capsule (comme un vrai interrupteur a
+              // plusieurs positions) : le rail porte la couleur "inactive" en
+              // fond, l'option active flotte dessus comme une pastille
+              // contrastee (fond clair + ombre legere), les autres options
+              // restent transparentes et laissent voir le rail.
               `<div style="display:inline-flex;align-items:center;gap:2px;padding:3px;
-                          border-radius:${Math.max(8, rowIconRadius + 2)}px;
-                          background:rgba(var(--rgb-primary-text-color,0,0,0),0.06);">
+                          border-radius:999px;
+                          background:${inactiveBg};">
                 ${rowOptions
                   .map((value) => {
                     const active = currentValue === value;
                     return `
                       <button class="ac-chip" data-entity="${escapeHtml(entityId)}" data-value="${escapeHtml(value)}"
-                        style="border:none;background:${active ? activeBg : inactiveBg};
+                        style="border:none;background:${active ? activeBg : "transparent"};
                                color:${active ? activeText : inactiveText};
-                               font-size:12px;font-weight:${active ? "600" : "400"};padding:5px 12px;
-                               border-radius:${Math.max(6, rowIconRadius)}px;cursor:pointer;font-family:inherit;
-                               white-space:nowrap;transition:background .15s,color .15s;">
+                               font-size:12px;font-weight:${active ? "600" : "400"};padding:6px 14px;
+                               border-radius:999px;cursor:pointer;font-family:inherit;white-space:nowrap;
+                               box-shadow:${active ? "0 1px 3px rgba(0,0,0,0.18)" : "none"};
+                               transition:background .15s,color .15s,box-shadow .15s;">
                         ${escapeHtml(value)}
                       </button>`;
                   })
