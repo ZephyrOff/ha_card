@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.41.0";
+const ALEX_CARDS_VERSION = "0.42.0";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -5175,6 +5175,7 @@ class SwitchCard extends HTMLElement {
       c.entity_name_size,
       c.entity_icon_size,
       c.chip_style,
+      c.chip_size,
       JSON.stringify(c.active_bg || null),
       JSON.stringify(c.active_text || null),
       JSON.stringify(c.inactive_bg || null),
@@ -5224,6 +5225,17 @@ class SwitchCard extends HTMLElement {
       c.inactive_text,
       chipStyle === "switch" ? "var(--text-primary-color)" : "var(--secondary-text-color)"
     );
+    // Taille globale du switch : un seul curseur fait varier texte, padding,
+    // rayons et espacement ensemble, plutôt que de regler chaque dimension
+    // separement - a 12px (defaut), on retombe exactement sur les valeurs
+    // fixes d'avant l'ajout de ce reglage.
+    const chipSize = c.chip_size != null ? c.chip_size : 12;
+    const chipPadV = Math.max(2, Math.round(chipSize * 0.42));
+    const chipPadHSeparate = Math.max(4, Math.round(chipSize * 0.83));
+    const chipPadHSwitch = Math.max(6, Math.round(chipSize * 1.17));
+    const chipRadiusSeparate = Math.max(4, Math.round(chipSize * 0.67));
+    const trackPad = Math.max(2, Math.round(chipSize * 0.25));
+    const trackGap = Math.max(1, Math.round(chipSize * 0.17));
 
     const rowsHtml = entities
       .map((entry, i) => {
@@ -5245,7 +5257,7 @@ class SwitchCard extends HTMLElement {
               // fond, l'option active flotte dessus comme une pastille
               // contrastee (fond clair + ombre legere), les autres options
               // restent transparentes et laissent voir le rail.
-              `<div style="display:inline-flex;align-items:center;gap:2px;padding:3px;
+              `<div style="display:inline-flex;align-items:center;gap:${trackGap}px;padding:${trackPad}px;
                           border-radius:999px;
                           background:${inactiveBg};">
                 ${rowOptions
@@ -5255,7 +5267,8 @@ class SwitchCard extends HTMLElement {
                       <button class="ac-chip" data-entity="${escapeHtml(entityId)}" data-value="${escapeHtml(value)}"
                         style="border:none;background:${active ? activeBg : "transparent"};
                                color:${active ? activeText : inactiveText};
-                               font-size:12px;font-weight:${active ? "600" : "400"};padding:6px 14px;
+                               font-size:${chipSize}px;font-weight:${active ? "600" : "400"};
+                               padding:${chipPadV}px ${chipPadHSwitch}px;
                                border-radius:999px;cursor:pointer;font-family:inherit;white-space:nowrap;
                                box-shadow:${active ? "0 1px 3px rgba(0,0,0,0.18)" : "none"};
                                transition:background .15s,color .15s,box-shadow .15s;">
@@ -5274,8 +5287,9 @@ class SwitchCard extends HTMLElement {
                   return `
                     <button class="ac-chip" data-entity="${escapeHtml(entityId)}" data-value="${escapeHtml(value)}"
                       style="border:1px solid ${chipBorder};background:${chipBg};color:${chipText};
-                             font-size:12px;font-weight:${active ? "600" : "400"};padding:5px 10px;
-                             border-radius:8px;cursor:pointer;font-family:inherit;white-space:nowrap;
+                             font-size:${chipSize}px;font-weight:${active ? "600" : "400"};
+                             padding:${chipPadV}px ${chipPadHSeparate}px;
+                             border-radius:${chipRadiusSeparate}px;cursor:pointer;font-family:inherit;white-space:nowrap;
                              transition:background .15s,border-color .15s,color .15s;">
                       ${escapeHtml(value)}
                     </button>`;
@@ -5474,6 +5488,7 @@ class SwitchCardEditor extends AlexListEditor {
                   name: "chip_style",
                   selector: { select: { mode: "dropdown", options: SWITCH_STYLE_OPTIONS } },
                 },
+                { name: "chip_size", selector: { number: { min: 8, max: 24, step: 1, mode: "box" } } },
                 { name: "active_text", selector: { color_rgb: {} } },
                 { name: "active_bg", selector: { color_rgb: {} } },
                 { name: "inactive_text", selector: { color_rgb: {} } },
@@ -5493,6 +5508,7 @@ class SwitchCardEditor extends AlexListEditor {
             entity_name_size: cfg.entity_name_size != null ? cfg.entity_name_size : 14,
             entity_icon_size: cfg.entity_icon_size != null ? cfg.entity_icon_size : 16,
             chip_style: cfg.chip_style === "switch" ? "switch" : "separate",
+            chip_size: cfg.chip_size != null ? cfg.chip_size : 12,
             active_text: cfg.active_text,
             active_bg: cfg.active_bg,
             inactive_text: cfg.inactive_text,
@@ -5510,6 +5526,7 @@ class SwitchCardEditor extends AlexListEditor {
             entity_name_size: "Taille des noms d'entité (px)",
             entity_icon_size: "Taille des icônes d'entité (px)",
             chip_style: "Style de sélecteur",
+            chip_size: "Taille du switch (px)",
             active_text: "Couleur du texte actif",
             active_bg: "Fond actif",
             inactive_text: "Couleur du texte inactif",

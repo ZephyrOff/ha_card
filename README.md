@@ -473,10 +473,14 @@ entities:
   - **Entité** : icône des lignes (vide = icône du badge), couleur des noms
     d'entité, taille des noms d'entité, taille des icônes d'entité (le cadre autour
     de chaque icône suit automatiquement sa taille).
-  - **Switch** : style de sélecteur (`separate`/`switch`), couleur du texte actif,
-    fond actif, couleur du texte inactif, fond inactif — un seul jeu de couleurs
-    partagé par toutes les puces/segments de toutes les lignes de la carte (pas de
-    couleur par valeur). Les valeurs par défaut diffèrent selon le style choisi :
+  - **Switch** : style de sélecteur (`separate`/`switch`), **taille du switch (px,
+    défaut 12)** — un seul curseur fait varier ensemble le texte, le padding, les
+    rayons d'arrondi et l'espacement des puces/du rail, pour réduire ou agrandir le
+    switch dans son ensemble sans dérégler chaque dimension séparément —, couleur du
+    texte actif, fond actif, couleur du texte inactif, fond inactif — un seul jeu de
+    couleurs partagé par toutes les puces/segments de toutes les lignes de la carte
+    (pas de couleur par valeur). Les valeurs par défaut diffèrent selon le style
+    choisi :
     - `separate` : option active en fond plein `var(--primary-color)`, inactive
       transparente avec bordure — inchangé par rapport à avant.
     - `switch` : le rail (fond du groupe entier) porte la couleur « inactive »,
