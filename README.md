@@ -18,6 +18,7 @@ Collection de cartes Lovelace custom pour Home Assistant, distribuée en **plugi
 | `custom:alex-sensor-card`       | oui        | Vue synthétique de capteurs par catégories (ouvrants, verrous…). |
 | `custom:alex-entity-card`       | oui        | Liste détaillée d'entités d'un même type (état, zone, dernier changement). |
 | `custom:alex-toggle-card`       | oui        | Liste d'entités basculables avec interrupteur cliquable par ligne. |
+| `custom:alex-select-label-card` | oui        | Groupe de checkbox par label HA (appartenance multiple, non exclusive). |
 | `custom:alex-clock-card`        | oui        | Horloge et date, alignables, avec la personnalisation du package. |
 | `custom:alex-media-player-card` | oui        | Contrôle média (pochette, lecture, volume) avec bascule entre lecteurs actifs. |
 | `custom:alex-server-card`       | oui        | Liste de serveurs/VM avec statut en ligne et bouton power. |
@@ -365,6 +366,56 @@ on_color: [244, 169, 53]          # optionnel, couleur de l'interrupteur actif
   défaut 50 — s'applique à l'icône et au nom, pas à l'interrupteur ni au temps écoulé),
   **couleur interrupteur actif** et **couleur interrupteur inactif** (remplacent
   respectivement l'orange et le gris par défaut).
+
+### Alex Select Label Card
+
+Groupe de checkbox par label HA : pour chaque entité, une puce cliquable par label
+déclaré. Appartenance **non exclusive** — une entité peut porter plusieurs labels à
+la fois, ou aucun (contrairement à Toggle Card qui est un simple on/off). Pensée pour
+des cas comme des modes d'ambiance (ex. « lumière normale » / « lumière confort »)
+sans avoir à créer un `input_boolean` par combinaison entité × mode.
+
+```yaml
+type: custom:alex-select-label-card
+name: Lumière
+icon: mdi:label-multiple-outline
+labels:
+  - name: Normal
+    label_id: light_mode_normal
+    active_color: [55, 143, 233]
+  - name: Confort
+    label_id: light_mode_confort
+    active_color: [244, 169, 53]
+entities:
+  - entity: light.sam_light_globe
+    name: Globe
+  - entity: light.sam_light_plafond
+    name: Plafond
+```
+
+- **`labels`** définit les colonnes de puces, dans l'ordre d'affichage : `name` (nom
+  affiché sur la puce, éditable indépendamment) et `label_id` (le label HA réellement
+  posé/retiré — sélecteur natif, doit déjà exister dans Réglages > Étiquettes).
+  `active_color`/`inactive_color` sont optionnels et **par label** (pas un jeu partagé
+  comme `on_color`/`off_color` sur Toggle Card) ; sans eux, une palette par défaut
+  s'applique en cyclant sur l'ordre des labels.
+- **`entities`** : même structure que Toggle Card (entité, nom, icône, couleur
+  d'icône optionnels par ligne) — sans restriction de domaine ici, une carte peut
+  mélanger `light`, `switch`, `media_player`, etc.
+- **Aucune dépendance externe** (pas de Spook, pas de `template:` sensor) : la carte
+  lit et écrit le registre d'entités HA directement en websocket
+  (`config/entity_registry/list`/`update`), et reste à jour toute seule via
+  l'événement `entity_registry_updated` — y compris si le label est modifié ailleurs
+  (Réglages > Entités, une automatisation, une autre carte). Bascule optimiste au
+  clic (la puce répond avant la confirmation réseau, annulée si l'appel échoue).
+- Ce sont des commandes internes du frontend HA, pas une API tierce officiellement
+  garantie stable entre versions (à la différence des services) — en cas de souci
+  après une mise à jour HA, comparer avec l'onglet réseau du navigateur pendant une
+  édition de label manuelle depuis Réglages > Entités.
+- Personnalisation (panneau Customisation racine) : badge, icône des lignes (vide =
+  icône du badge), fond de carte, couleur du nom, couleur des noms d'entité,
+  écartement entre les entités (px), opacité icône/nom **si aucun label n'est actif**
+  sur la ligne (%, défaut 50).
 
 ### Clock Card
 

@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.36.1";
+const ALEX_CARDS_VERSION = "0.37.0";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -4423,6 +4423,542 @@ window.customCards.push({
   type: "alex-toggle-card",
   name: "Alex Toggle Card",
   description: "Liste d'entités basculables avec interrupteur cliquable par ligne.",
+  preview: false,
+  documentationURL: "https://github.com/<user>/alex-cards",
+});
+
+/* =========================================================================
+ * === alex-select-label-card ==============================================
+ * Groupe de checkbox par label HA : pour chaque entité configurée, une
+ * puce cliquable par label déclaré. Appartenance non exclusive - une
+ * entité peut porter plusieurs labels a la fois, ou aucun (contrairement
+ * a alex-toggle-card qui est un simple on/off).
+ *
+ * Lit/écrit directement le registre d'entités par websocket
+ * (config/entity_registry/list + config/entity_registry/update), et reste
+ * a jour en direct via l'événement entity_registry_updated - aucune
+ * dépendance a un service tiers (ex. Spook) ni a un sensor template.
+ * Ce sont des commandes internes du frontend HA (pas une API publique
+ * documentée) : a revalider si un changement de version HA casse le
+ * rafraichissement ou l'écriture (onglet réseau du navigateur pendant une
+ * édition de label manuelle dans Réglages > Entités pour comparer).
+ * ========================================================================= */
+
+const SELECT_LABEL_DEFAULT_COLORS = [
+  [55, 143, 233],
+  [244, 169, 53],
+  [99, 153, 34],
+  [216, 90, 48],
+  [127, 119, 221],
+];
+
+class SelectLabelCard extends HTMLElement {
+  static getConfigElement() {
+    return document.createElement("alex-select-label-card-editor");
+  }
+  static getStubConfig() {
+    return { name: "Modes", icon: "mdi:label-multiple-outline", labels: [], entities: [] };
+  }
+
+  setConfig(config) {
+    if (!config) throw new Error("Configuration invalide");
+    this._config = config;
+    this._built = false;
+    this._lastSig = null;
+  }
+
+  set hass(hass) {
+    this._hass = hass;
+    this._ensureRegistrySub();
+    this._render();
+  }
+
+  disconnectedCallback() {
+    if (this._eventUnsub) {
+      this._eventUnsub();
+      this._eventUnsub = null;
+    }
+    this._registrySub = false;
+  }
+
+  getCardSize() {
+    return 1 + ((this._config && this._config.entities) || []).length;
+  }
+
+  // Chargement initial du registre + écoute des changements (labels
+  // ajoutés/retirés par cette carte ou ailleurs, ex. Réglages > Entités)
+  // via l'événement entity_registry_updated.
+  async _ensureRegistrySub() {
+    if (this._registrySub || !this._hass) return;
+    this._registrySub = true;
+    await this._refreshRegistry();
+    try {
+      this._eventUnsub = await this._hass.connection.subscribeEvents(
+        () => this._refreshRegistry(),
+        "entity_registry_updated"
+      );
+    } catch (e) {
+      // Abonnement optionnel : sans lui la carte reste utilisable, mais ne
+      // se met a jour toute seule que via le prochain changement de hass.
+    }
+  }
+
+  async _refreshRegistry() {
+    if (!this._hass) return;
+    try {
+      const list = await this._hass.callWS({ type: "config/entity_registry/list" });
+      const map = {};
+      (list || []).forEach((e) => {
+        map[e.entity_id] = e.labels || [];
+      });
+      this._registry = map;
+    } catch (e) {
+      this._registry = this._registry || {};
+    }
+    this._built = false;
+    this._render();
+  }
+
+  async _toggleLabel(entityId, labelId) {
+    const reg = this._registry || {};
+    const current = reg[entityId] || [];
+    const has = current.includes(labelId);
+    const next = has ? current.filter((l) => l !== labelId) : [...current, labelId];
+
+    // Bascule optimiste : la puce répond au clic sans attendre l'aller-
+    // retour réseau, comme le reste du package (media-player, etc.).
+    this._registry = { ...reg, [entityId]: next };
+    this._built = false;
+    this._render();
+
+    try {
+      await this._hass.callWS({
+        type: "config/entity_registry/update",
+        entity_id: entityId,
+        labels: next,
+      });
+    } catch (e) {
+      this._registry = { ...this._registry, [entityId]: current };
+      this._built = false;
+      this._render();
+    }
+  }
+
+  _render() {
+    if (!this._config || !this._hass) return;
+    const c = this._config;
+    const hass = this._hass;
+    const labels = c.labels || [];
+    const entities = c.entities || [];
+    const registry = this._registry || {};
+
+    const sig = [
+      c.name,
+      c.icon,
+      c.entity_icon,
+      JSON.stringify(c.icon_color || null),
+      JSON.stringify(c.background || null),
+      JSON.stringify(c.primary_color || null),
+      JSON.stringify(c.secondary_color || null),
+      c.row_spacing,
+      c.inactive_opacity,
+      labels
+        .map(
+          (l) =>
+            `${l.name}|${l.label_id}|${JSON.stringify(l.active_color || null)}|${JSON.stringify(l.inactive_color || null)}`
+        )
+        .join(";"),
+      entities.map((e) => `${e.entity}|${e.name}|${e.icon}|${JSON.stringify(e.color || null)}`).join(";"),
+      entities.map((e) => (registry[e.entity] || []).join(",")).join(";"),
+    ].join("~");
+    if (this._built && sig === this._lastSig) return;
+    this._lastSig = sig;
+
+    const iconColor = colorOr(c.icon_color, "#8b7ae6");
+    const badgeRgb = Array.isArray(c.icon_color) ? c.icon_color : [139, 122, 230];
+    const badgeBg = `rgba(${badgeRgb[0]}, ${badgeRgb[1]}, ${badgeRgb[2]}, 0.16)`;
+    const cardBg = colorOr(c.background, "var(--ha-card-background, var(--card-background-color))");
+    const primaryColor = colorOr(c.primary_color, "var(--primary-text-color)");
+    const secondaryColor = colorOr(c.secondary_color, "var(--primary-text-color)");
+    const rowIcon = c.entity_icon || c.icon || "mdi:toggle-switch-outline";
+    const rowSpacing = c.row_spacing != null ? c.row_spacing : 12;
+    const inactiveOpacity = (c.inactive_opacity != null ? c.inactive_opacity : 50) / 100;
+
+    const rowsHtml = entities
+      .map((entry, i) => {
+        const e = typeof entry === "string" ? { entity: entry } : entry || {};
+        const entityId = e.entity;
+        const stateObj = hass.states[entityId];
+        const name =
+          e.name || (stateObj && stateObj.attributes && stateObj.attributes.friendly_name) || entityId;
+        const entIcon = e.icon || rowIcon;
+        const entIconColor = colorOr(e.color, iconColor);
+        const entLabels = registry[entityId] || [];
+        const anyActive = labels.some((l) => entLabels.includes(l.label_id));
+        const dim = anyActive ? 1 : inactiveOpacity;
+        const border = i < entities.length - 1 ? "border-bottom:1px solid var(--divider-color);" : "";
+
+        const chips = labels
+          .map((l, li) => {
+            const active = entLabels.includes(l.label_id);
+            const defaultActive = SELECT_LABEL_DEFAULT_COLORS[li % SELECT_LABEL_DEFAULT_COLORS.length];
+            const activeRgb = Array.isArray(l.active_color) ? l.active_color : defaultActive;
+            const hasInactiveColor = Array.isArray(l.inactive_color);
+
+            const chipBg = active
+              ? rgba(activeRgb, 0.18, defaultActive)
+              : hasInactiveColor
+              ? rgba(l.inactive_color, 0.14, l.inactive_color)
+              : "transparent";
+            const chipBorder = active
+              ? rgba(activeRgb, 0.45, defaultActive)
+              : hasInactiveColor
+              ? rgba(l.inactive_color, 0.4, l.inactive_color)
+              : "var(--divider-color)";
+            const chipText = active
+              ? colorOr(l.active_color, rgbaCss([...defaultActive, 1]))
+              : hasInactiveColor
+              ? colorOr(l.inactive_color, "var(--secondary-text-color)")
+              : "var(--secondary-text-color)";
+
+            return `
+              <button class="ac-chip" data-entity="${escapeHtml(entityId)}" data-label="${escapeHtml(l.label_id)}"
+                style="border:1px solid ${chipBorder};background:${chipBg};color:${chipText};
+                       font-size:12px;font-weight:${active ? "600" : "400"};padding:5px 10px;
+                       border-radius:8px;cursor:pointer;font-family:inherit;white-space:nowrap;
+                       transition:background .15s,border-color .15s,color .15s;">
+                ${escapeHtml(l.name || l.label_id)}
+              </button>`;
+          })
+          .join("");
+
+        return `
+          <div style="display:flex;align-items:center;gap:12px;padding:${rowSpacing}px 2px;${border}">
+            <div style="width:32px;height:32px;border-radius:9px;
+                        background:rgba(var(--rgb-primary-text-color,0,0,0),0.06);
+                        display:flex;align-items:center;justify-content:center;flex:0 0 auto;
+                        opacity:${dim};transition:opacity .15s;">
+              <ha-icon icon="${entIcon}" style="--mdc-icon-size:16px;color:${entIconColor};"></ha-icon>
+            </div>
+            <div style="flex:1;min-width:0;opacity:${dim};transition:opacity .15s;">
+              <div style="font-size:14px;font-weight:600;color:${secondaryColor};
+                          overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(name)}</div>
+            </div>
+            <div style="flex:0 0 auto;display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px;max-width:60%;">
+              ${chips}
+            </div>
+          </div>`;
+      })
+      .join("");
+
+    this.innerHTML = `
+      <ha-card style="border-radius:20px;box-shadow:none;
+                      background:${cardBg};
+                      padding:16px 18px;">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px;">
+          <div style="width:40px;height:40px;border-radius:12px;background:${badgeBg};
+                      display:flex;align-items:center;justify-content:center;flex:0 0 auto;">
+            <ha-icon icon="${c.icon || "mdi:label-multiple-outline"}" style="--mdc-icon-size:20px;color:${iconColor};"></ha-icon>
+          </div>
+          <div style="flex:1;min-width:0;font-size:17px;font-weight:700;color:${primaryColor};
+                      overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(c.name || "")}</div>
+          <div style="flex:0 0 auto;font-size:12px;color:var(--secondary-text-color);">${entities.length}</div>
+        </div>
+        <div>${rowsHtml}</div>
+      </ha-card>`;
+
+    this.querySelectorAll(".ac-chip").forEach((el) => {
+      el.addEventListener("click", () => {
+        this._toggleLabel(el.getAttribute("data-entity"), el.getAttribute("data-label"));
+      });
+    });
+
+    this._built = true;
+  }
+}
+customElements.define("alex-select-label-card", SelectLabelCard);
+
+class SelectLabelCardEditor extends AlexListEditor {
+  static getStubConfig() {
+    return SelectLabelCard.getStubConfig();
+  }
+
+  _normalize() {
+    if (!Array.isArray(this._config.labels)) this._config.labels = [];
+    if (!Array.isArray(this._config.entities)) this._config.entities = [];
+    // Migration (au cas où) : ancien format (tableau de chaines) -> objets.
+    this._config.entities = this._config.entities.map((e) =>
+      typeof e === "string" ? { entity: e } : e
+    );
+  }
+
+  _validPath() {
+    const p = this._path || [];
+    if (p.length >= 2) {
+      if (p[0] === "label" && !this._config.labels[p[1]]) return [];
+      if (p[0] === "entity" && !this._config.entities[p[1]]) return [];
+    }
+    return p;
+  }
+
+  // Charge une fois le registre de labels HA (nom convivial), pour pré-
+  // remplir le nom affiché quand on choisit un label existant dans
+  // l'éditeur. Repli silencieux sur le label_id si l'appel échoue.
+  async _ensureLabelRegistry() {
+    if (this._labelRegistry || !this._hass) return;
+    this._labelRegistry = {};
+    try {
+      const list = await this._hass.callWS({ type: "config/label_registry/list" });
+      (list || []).forEach((l) => {
+        this._labelRegistry[l.label_id] = l.name;
+      });
+    } catch (e) {
+      // this._labelRegistry reste {} : le label_id sert alors de nom.
+    }
+  }
+
+  _addLabelRow(onPick) {
+    return this._form(
+      [{ name: "label_id", selector: { label: {} } }],
+      {},
+      { label_id: "Ajouter un label" },
+      (v) => {
+        if (v && v.label_id) onPick(v.label_id);
+      }
+    );
+  }
+
+  _addEntityRow(onPick) {
+    return this._form(
+      [{ name: "entity", selector: { entity: {} } }],
+      {},
+      { entity: "Ajouter une entité" },
+      (v) => {
+        if (v && v.entity) onPick(v.entity);
+      }
+    );
+  }
+
+  _render() {
+    this._forms = [];
+    this._selectors = [];
+    this.innerHTML = "";
+    this._ensureLabelRegistry();
+    const p = this._validPath();
+    if (p.length === 0) this._renderRoot();
+    else if (p[0] === "label") this._renderLabel(p[1]);
+    else this._renderEntity(p[1]);
+    if (this._hass) {
+      this._forms.forEach((f) => (f.hass = this._hass));
+      this._selectors.forEach((s) => (s.hass = this._hass));
+    }
+  }
+
+  _renderRoot() {
+    const cfg = this._config;
+
+    this.appendChild(this._sectionTitle("En-tête"));
+    this.appendChild(
+      this._form(
+        [
+          { name: "name", selector: { text: {} } },
+          { name: "icon", selector: { icon: {} } },
+        ],
+        { name: cfg.name, icon: cfg.icon },
+        { name: "Nom", icon: "Icône" },
+        (v) => this._update((c) => Object.assign(c, v))
+      )
+    );
+
+    this.appendChild(this._sectionTitle("Labels"));
+    const labels = cfg.labels || [];
+    labels.forEach((l, i) => {
+      this.appendChild(
+        this._row(
+          "mdi:tag-outline",
+          l.name || l.label_id || "(sans nom)",
+          l.label_id || "",
+          () => {
+            this._path = ["label", i];
+            this._render();
+          },
+          () => {
+            this._update((c) => c.labels.splice(i, 1));
+            this._render();
+          },
+          i > 0 ? () => this._moveItem((c) => c.labels, i, -1) : null,
+          i < labels.length - 1 ? () => this._moveItem((c) => c.labels, i, 1) : null
+        )
+      );
+    });
+    this.appendChild(
+      this._addLabelRow((labelId) => {
+        let idx;
+        this._update((c) => {
+          c.labels = c.labels || [];
+          c.labels.push({
+            name: (this._labelRegistry && this._labelRegistry[labelId]) || labelId,
+            label_id: labelId,
+          });
+          idx = c.labels.length - 1;
+        });
+        this._path = ["label", idx];
+        this._render();
+      })
+    );
+
+    this.appendChild(this._sectionTitle("Entités"));
+    const entities = cfg.entities || [];
+    entities.forEach((e, j) => {
+      const st = this._hass && this._hass.states[e.entity];
+      const friendly = e.name || (st && st.attributes && st.attributes.friendly_name);
+      this.appendChild(
+        this._row(
+          e.icon || cfg.entity_icon || cfg.icon || "mdi:toggle-switch-outline",
+          friendly || e.entity || "(sans entité)",
+          friendly ? e.entity : "",
+          () => {
+            this._path = ["entity", j];
+            this._render();
+          },
+          () => {
+            this._update((c) => c.entities.splice(j, 1));
+            this._render();
+          },
+          j > 0 ? () => this._moveItem((c) => c.entities, j, -1) : null,
+          j < entities.length - 1 ? () => this._moveItem((c) => c.entities, j, 1) : null
+        )
+      );
+    });
+    this.appendChild(
+      this._addEntityRow((entityId) => {
+        let idx;
+        this._update((c) => {
+          c.entities = c.entities || [];
+          c.entities.push({ entity: entityId });
+          idx = c.entities.length - 1;
+        });
+        this._path = ["entity", idx];
+        this._render();
+      })
+    );
+
+    this.appendChild(
+      this._panel(
+        "Customisation",
+        "mdi:palette",
+        this._mixed(
+          [
+            { name: "row_spacing", selector: { number: { min: 0, max: 40, step: 1, mode: "box" } } },
+            {
+              name: "inactive_opacity",
+              selector: { number: { min: 0, max: 100, step: 5, mode: "box" } },
+            },
+            { name: "entity_icon", selector: { icon: {} } },
+            { name: "icon_color", selector: { color_rgb: {} } },
+            { name: "background", selector: { color_rgb: {} } },
+            { name: "primary_color", selector: { color_rgb: {} } },
+            { name: "secondary_color", selector: { color_rgb: {} } },
+          ],
+          {
+            row_spacing: cfg.row_spacing != null ? cfg.row_spacing : 12,
+            inactive_opacity: cfg.inactive_opacity != null ? cfg.inactive_opacity : 50,
+            entity_icon: cfg.entity_icon,
+            icon_color: cfg.icon_color,
+            background: cfg.background,
+            primary_color: cfg.primary_color,
+            secondary_color: cfg.secondary_color,
+          },
+          {
+            row_spacing: "Écartement entre les entités (px)",
+            inactive_opacity: "Opacité si aucun label actif (%)",
+            entity_icon: "Icône des lignes (vide = icône du badge)",
+            icon_color: "Couleur du badge",
+            background: "Fond de la carte",
+            primary_color: "Couleur du nom de la carte",
+            secondary_color: "Couleur des noms d'entité",
+          },
+          (v) => this._update((c) => Object.assign(c, v))
+        )
+      )
+    );
+  }
+
+  _renderLabel(i) {
+    const cfg = this._config;
+    const l = cfg.labels[i] || {};
+    const merge = (v) => this._update((c) => (c.labels[i] = { ...c.labels[i], ...v }));
+
+    this.appendChild(
+      this._backHeader(l.name || l.label_id || "Label", () => {
+        this._path = [];
+        this._render();
+      })
+    );
+
+    this.appendChild(
+      this._mixed(
+        [
+          { name: "name", selector: { text: {} } },
+          { name: "label_id", selector: { label: {} } },
+          { name: "active_color", selector: { color_rgb: {} } },
+          { name: "inactive_color", selector: { color_rgb: {} } },
+        ],
+        {
+          name: l.name,
+          label_id: l.label_id,
+          active_color: l.active_color,
+          inactive_color: l.inactive_color,
+        },
+        {
+          name: "Nom affiché (vide = nom du label)",
+          label_id: "Label appliqué",
+          active_color: "Couleur si actif",
+          inactive_color: "Couleur si inactif",
+        },
+        merge
+      )
+    );
+  }
+
+  _renderEntity(i) {
+    const cfg = this._config;
+    const e = cfg.entities[i] || {};
+    const merge = (v) => this._update((c) => (c.entities[i] = { ...c.entities[i], ...v }));
+
+    this.appendChild(
+      this._backHeader(e.name || e.entity || "Entité", () => {
+        this._path = [];
+        this._render();
+      })
+    );
+
+    this.appendChild(
+      this._mixed(
+        [
+          { name: "entity", selector: { entity: {} } },
+          { name: "name", selector: { text: {} } },
+          { name: "icon", selector: { icon: {} } },
+          { name: "color", selector: { color_rgb: {} } },
+        ],
+        { entity: e.entity, name: e.name, icon: e.icon, color: e.color },
+        {
+          entity: "Entité",
+          name: "Nom (vide = nom convivial)",
+          icon: "Icône (vide = icône du badge)",
+          color: "Couleur de l'icône",
+        },
+        merge
+      )
+    );
+  }
+}
+customElements.define("alex-select-label-card-editor", SelectLabelCardEditor);
+
+window.customCards.push({
+  type: "alex-select-label-card",
+  name: "Alex Select Label Card",
+  description: "Groupe de checkbox par label HA — une entité peut appartenir à plusieurs labels à la fois.",
   preview: false,
   documentationURL: "https://github.com/<user>/alex-cards",
 });
