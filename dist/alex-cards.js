@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.37.1";
+const ALEX_CARDS_VERSION = "0.38.0";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -4592,6 +4592,10 @@ class SelectLabelCard extends HTMLElement {
       JSON.stringify(c.primary_color || null),
       JSON.stringify(c.secondary_color || null),
       c.row_spacing,
+      c.name_size,
+      c.icon_size,
+      c.entity_name_size,
+      c.entity_icon_size,
       labels
         .map(
           (l) =>
@@ -4612,6 +4616,10 @@ class SelectLabelCard extends HTMLElement {
     const secondaryColor = colorOr(c.secondary_color, "var(--primary-text-color)");
     const rowIcon = c.entity_icon || c.icon || "mdi:toggle-switch-outline";
     const rowSpacing = c.row_spacing != null ? c.row_spacing : 12;
+    const nameSize = c.name_size != null ? c.name_size : 17;
+    const iconSize = c.icon_size != null ? c.icon_size : 20;
+    const entityNameSize = c.entity_name_size != null ? c.entity_name_size : 14;
+    const entityIconSize = c.entity_icon_size != null ? c.entity_icon_size : 16;
 
     const rowsHtml = entities
       .map((entry, i) => {
@@ -4664,10 +4672,10 @@ class SelectLabelCard extends HTMLElement {
             <div style="width:32px;height:32px;border-radius:9px;
                         background:rgba(var(--rgb-primary-text-color,0,0,0),0.06);
                         display:flex;align-items:center;justify-content:center;flex:0 0 auto;">
-              <ha-icon icon="${entIcon}" style="--mdc-icon-size:16px;color:${entIconColor};"></ha-icon>
+              <ha-icon icon="${entIcon}" style="--mdc-icon-size:${entityIconSize}px;color:${entIconColor};"></ha-icon>
             </div>
             <div style="flex:1;min-width:0;">
-              <div style="font-size:14px;font-weight:600;color:${secondaryColor};
+              <div style="font-size:${entityNameSize}px;font-weight:600;color:${secondaryColor};
                           overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(name)}</div>
             </div>
             <div style="flex:0 0 auto;display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px;max-width:60%;">
@@ -4684,9 +4692,9 @@ class SelectLabelCard extends HTMLElement {
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px;">
           <div style="width:40px;height:40px;border-radius:12px;background:${badgeBg};
                       display:flex;align-items:center;justify-content:center;flex:0 0 auto;">
-            <ha-icon icon="${c.icon || "mdi:label-multiple-outline"}" style="--mdc-icon-size:20px;color:${iconColor};"></ha-icon>
+            <ha-icon icon="${c.icon || "mdi:label-multiple-outline"}" style="--mdc-icon-size:${iconSize}px;color:${iconColor};"></ha-icon>
           </div>
-          <div style="flex:1;min-width:0;font-size:17px;font-weight:700;color:${primaryColor};
+          <div style="flex:1;min-width:0;font-size:${nameSize}px;font-weight:700;color:${primaryColor};
                       overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(c.name || "")}</div>
         </div>
         <div>${rowsHtml}</div>
@@ -4880,6 +4888,16 @@ class SelectLabelCardEditor extends AlexListEditor {
             { name: "background", selector: { color_rgb: {} } },
             { name: "primary_color", selector: { color_rgb: {} } },
             { name: "secondary_color", selector: { color_rgb: {} } },
+            { name: "name_size", selector: { number: { min: 10, max: 32, step: 1, mode: "box" } } },
+            { name: "icon_size", selector: { number: { min: 12, max: 40, step: 1, mode: "box" } } },
+            {
+              name: "entity_name_size",
+              selector: { number: { min: 10, max: 28, step: 1, mode: "box" } },
+            },
+            {
+              name: "entity_icon_size",
+              selector: { number: { min: 10, max: 32, step: 1, mode: "box" } },
+            },
           ],
           {
             row_spacing: cfg.row_spacing != null ? cfg.row_spacing : 12,
@@ -4888,6 +4906,10 @@ class SelectLabelCardEditor extends AlexListEditor {
             background: cfg.background,
             primary_color: cfg.primary_color,
             secondary_color: cfg.secondary_color,
+            name_size: cfg.name_size != null ? cfg.name_size : 17,
+            icon_size: cfg.icon_size != null ? cfg.icon_size : 20,
+            entity_name_size: cfg.entity_name_size != null ? cfg.entity_name_size : 14,
+            entity_icon_size: cfg.entity_icon_size != null ? cfg.entity_icon_size : 16,
           },
           {
             row_spacing: "Écartement entre les entités (px)",
@@ -4896,6 +4918,10 @@ class SelectLabelCardEditor extends AlexListEditor {
             background: "Fond de la carte",
             primary_color: "Couleur du nom de la carte",
             secondary_color: "Couleur des noms d'entité",
+            name_size: "Taille du nom de la carte (px)",
+            icon_size: "Taille de l'icône du badge (px)",
+            entity_name_size: "Taille des noms d'entité (px)",
+            entity_icon_size: "Taille des icônes d'entité (px)",
           },
           (v) => this._update((c) => Object.assign(c, v))
         )
@@ -4978,6 +5004,471 @@ window.customCards.push({
   type: "alex-select-label-card",
   name: "Alex Select Label Card",
   description: "Groupe de checkbox par label HA — une entité peut appartenir à plusieurs labels à la fois.",
+  preview: false,
+  documentationURL: "https://github.com/<user>/alex-cards",
+});
+
+/* =========================================================================
+ * === alex-switch-card =====================================================
+ * Meme gabarit visuel que alex-select-label-card (une ligne par entite,
+ * une puce par option), mais pour piloter un input_select : les colonnes
+ * sont les options possibles (declarees une fois, partagees par toutes
+ * les entites de la carte), et une seule puce est active a la fois par
+ * ligne puisqu'un input_select n'a qu'un seul etat. Bien plus simple que
+ * select-label-card cote donnees : pas de registre a lire/ecrire, juste
+ * l'etat natif de l'entite (deja reactif via `hass.states`) et le service
+ * natif input_select.select_option - donc pas de sensor a part, pas de
+ * websocket dedie, pas de race a gerer (select_option remplace l'etat en
+ * un appel, il n'y a pas de tableau a recalculer depuis un instantane).
+ * ========================================================================= */
+
+const SWITCH_DEFAULT_COLORS = [
+  [55, 143, 233],
+  [244, 169, 53],
+  [99, 153, 34],
+  [216, 90, 48],
+  [127, 119, 221],
+];
+
+class SwitchCard extends HTMLElement {
+  static getConfigElement() {
+    return document.createElement("alex-switch-card-editor");
+  }
+  static getStubConfig() {
+    return { name: "Mode", icon: "mdi:swap-horizontal", options: [], entities: [] };
+  }
+
+  setConfig(config) {
+    if (!config) throw new Error("Configuration invalide");
+    this._config = config;
+    this._built = false;
+    this._lastSig = null;
+  }
+
+  set hass(hass) {
+    this._hass = hass;
+    this._render();
+  }
+
+  getCardSize() {
+    return 1 + ((this._config && this._config.entities) || []).length;
+  }
+
+  _selectOption(entityId, value) {
+    if (!this._hass) return;
+    this._hass.callService("input_select", "select_option", { entity_id: entityId, option: value });
+  }
+
+  _render() {
+    if (!this._config || !this._hass) return;
+    const c = this._config;
+    const hass = this._hass;
+    const options = c.options || [];
+    const entities = c.entities || [];
+
+    const sig = [
+      c.name,
+      c.icon,
+      c.entity_icon,
+      JSON.stringify(c.icon_color || null),
+      JSON.stringify(c.background || null),
+      JSON.stringify(c.primary_color || null),
+      JSON.stringify(c.secondary_color || null),
+      c.row_spacing,
+      c.name_size,
+      c.icon_size,
+      c.entity_name_size,
+      c.entity_icon_size,
+      options
+        .map(
+          (o) =>
+            `${o.name}|${o.value}|${JSON.stringify(o.active_color || null)}|${JSON.stringify(o.inactive_color || null)}`
+        )
+        .join(";"),
+      entities.map((e) => `${e.entity}|${e.name}|${e.icon}|${JSON.stringify(e.color || null)}`).join(";"),
+      entities.map((e) => (hass.states[e.entity] || {}).state).join(";"),
+    ].join("~");
+    if (this._built && sig === this._lastSig) return;
+    this._lastSig = sig;
+
+    const iconColor = colorOr(c.icon_color, "#8b7ae6");
+    const badgeRgb = Array.isArray(c.icon_color) ? c.icon_color : [139, 122, 230];
+    const badgeBg = `rgba(${badgeRgb[0]}, ${badgeRgb[1]}, ${badgeRgb[2]}, 0.16)`;
+    const cardBg = colorOr(c.background, "var(--ha-card-background, var(--card-background-color))");
+    const primaryColor = colorOr(c.primary_color, "var(--primary-text-color)");
+    const secondaryColor = colorOr(c.secondary_color, "var(--primary-text-color)");
+    const rowIcon = c.entity_icon || c.icon || "mdi:swap-horizontal";
+    const rowSpacing = c.row_spacing != null ? c.row_spacing : 12;
+    const nameSize = c.name_size != null ? c.name_size : 17;
+    const iconSize = c.icon_size != null ? c.icon_size : 20;
+    const entityNameSize = c.entity_name_size != null ? c.entity_name_size : 14;
+    const entityIconSize = c.entity_icon_size != null ? c.entity_icon_size : 16;
+
+    const rowsHtml = entities
+      .map((entry, i) => {
+        const e = typeof entry === "string" ? { entity: entry } : entry || {};
+        const entityId = e.entity;
+        const stateObj = hass.states[entityId];
+        const name =
+          e.name || (stateObj && stateObj.attributes && stateObj.attributes.friendly_name) || entityId;
+        const entIcon = e.icon || rowIcon;
+        const entIconColor = colorOr(e.color, iconColor);
+        const currentValue = stateObj ? stateObj.state : undefined;
+        const border = i < entities.length - 1 ? "border-bottom:1px solid var(--divider-color);" : "";
+
+        const chips = options
+          .map((o, oi) => {
+            const active = currentValue === o.value;
+            const defaultActive = SWITCH_DEFAULT_COLORS[oi % SWITCH_DEFAULT_COLORS.length];
+            const activeRgb = Array.isArray(o.active_color) ? o.active_color : defaultActive;
+            const hasInactiveColor = Array.isArray(o.inactive_color);
+
+            const chipBg = active
+              ? rgba(activeRgb, 0.18, defaultActive)
+              : hasInactiveColor
+              ? rgba(o.inactive_color, 0.14, o.inactive_color)
+              : "transparent";
+            const chipBorder = active
+              ? rgba(activeRgb, 0.45, defaultActive)
+              : hasInactiveColor
+              ? rgba(o.inactive_color, 0.4, o.inactive_color)
+              : "var(--divider-color)";
+            const chipText = active
+              ? colorOr(o.active_color, rgbaCss([...defaultActive, 1]))
+              : hasInactiveColor
+              ? colorOr(o.inactive_color, "var(--secondary-text-color)")
+              : "var(--secondary-text-color)";
+
+            return `
+              <button class="ac-chip" data-entity="${escapeHtml(entityId)}" data-value="${escapeHtml(o.value)}"
+                style="border:1px solid ${chipBorder};background:${chipBg};color:${chipText};
+                       font-size:12px;font-weight:${active ? "600" : "400"};padding:5px 10px;
+                       border-radius:8px;cursor:pointer;font-family:inherit;white-space:nowrap;
+                       transition:background .15s,border-color .15s,color .15s;">
+                ${escapeHtml(o.name || o.value)}
+              </button>`;
+          })
+          .join("");
+
+        return `
+          <div style="display:flex;align-items:center;gap:12px;padding:${rowSpacing}px 2px;${border}">
+            <div style="width:32px;height:32px;border-radius:9px;
+                        background:rgba(var(--rgb-primary-text-color,0,0,0),0.06);
+                        display:flex;align-items:center;justify-content:center;flex:0 0 auto;">
+              <ha-icon icon="${entIcon}" style="--mdc-icon-size:${entityIconSize}px;color:${entIconColor};"></ha-icon>
+            </div>
+            <div style="flex:1;min-width:0;">
+              <div style="font-size:${entityNameSize}px;font-weight:600;color:${secondaryColor};
+                          overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(name)}</div>
+            </div>
+            <div style="flex:0 0 auto;display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px;max-width:60%;">
+              ${chips}
+            </div>
+          </div>`;
+      })
+      .join("");
+
+    this.innerHTML = `
+      <ha-card style="border-radius:20px;box-shadow:none;
+                      background:${cardBg};
+                      padding:16px 18px;">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px;">
+          <div style="width:40px;height:40px;border-radius:12px;background:${badgeBg};
+                      display:flex;align-items:center;justify-content:center;flex:0 0 auto;">
+            <ha-icon icon="${c.icon || "mdi:swap-horizontal"}" style="--mdc-icon-size:${iconSize}px;color:${iconColor};"></ha-icon>
+          </div>
+          <div style="flex:1;min-width:0;font-size:${nameSize}px;font-weight:700;color:${primaryColor};
+                      overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(c.name || "")}</div>
+        </div>
+        <div>${rowsHtml}</div>
+      </ha-card>`;
+
+    this.querySelectorAll(".ac-chip").forEach((el) => {
+      el.addEventListener("click", () => {
+        this._selectOption(el.getAttribute("data-entity"), el.getAttribute("data-value"));
+      });
+    });
+
+    this._built = true;
+  }
+}
+customElements.define("alex-switch-card", SwitchCard);
+
+class SwitchCardEditor extends AlexListEditor {
+  static getStubConfig() {
+    return SwitchCard.getStubConfig();
+  }
+
+  _normalize() {
+    if (!Array.isArray(this._config.options)) this._config.options = [];
+    if (!Array.isArray(this._config.entities)) this._config.entities = [];
+    this._config.entities = this._config.entities.map((e) =>
+      typeof e === "string" ? { entity: e } : e
+    );
+  }
+
+  _validPath() {
+    const p = this._path || [];
+    if (p.length >= 2) {
+      if (p[0] === "option" && !this._config.options[p[1]]) return [];
+      if (p[0] === "entity" && !this._config.entities[p[1]]) return [];
+    }
+    return p;
+  }
+
+  // Pas de registre HA a interroger pour les options (contrairement aux
+  // labels) : ce sont de simples chaines choisies par l'utilisateur, donc
+  // un champ texte plutot qu'un picker natif.
+  _addOptionRow(onPick) {
+    return this._form(
+      [{ name: "value", selector: { text: {} } }],
+      {},
+      { value: "Ajouter une option" },
+      (v) => {
+        if (v && v.value) onPick(v.value);
+      }
+    );
+  }
+
+  _addEntityRow(onPick) {
+    return this._form(
+      [{ name: "entity", selector: { entity: { domain: "input_select" } } }],
+      {},
+      { entity: "Ajouter une entité" },
+      (v) => {
+        if (v && v.entity) onPick(v.entity);
+      }
+    );
+  }
+
+  _render() {
+    this._forms = [];
+    this._selectors = [];
+    this.innerHTML = "";
+    const p = this._validPath();
+    if (p.length === 0) this._renderRoot();
+    else if (p[0] === "option") this._renderOption(p[1]);
+    else this._renderEntity(p[1]);
+    if (this._hass) {
+      this._forms.forEach((f) => (f.hass = this._hass));
+      this._selectors.forEach((s) => (s.hass = this._hass));
+    }
+  }
+
+  _renderRoot() {
+    const cfg = this._config;
+
+    this.appendChild(this._sectionTitle("En-tête"));
+    this.appendChild(
+      this._form(
+        [
+          { name: "name", selector: { text: {} } },
+          { name: "icon", selector: { icon: {} } },
+        ],
+        { name: cfg.name, icon: cfg.icon },
+        { name: "Nom", icon: "Icône" },
+        (v) => this._update((c) => Object.assign(c, v))
+      )
+    );
+
+    this.appendChild(this._sectionTitle("Options"));
+    const options = cfg.options || [];
+    options.forEach((o, i) => {
+      this.appendChild(
+        this._row(
+          "mdi:format-list-bulleted",
+          o.name || o.value || "(sans nom)",
+          o.value || "",
+          () => {
+            this._path = ["option", i];
+            this._render();
+          },
+          () => {
+            this._update((c) => c.options.splice(i, 1));
+            this._render();
+          },
+          i > 0 ? () => this._moveItem((c) => c.options, i, -1) : null,
+          i < options.length - 1 ? () => this._moveItem((c) => c.options, i, 1) : null
+        )
+      );
+    });
+    this.appendChild(
+      this._addOptionRow((value) => {
+        let idx;
+        this._update((c) => {
+          c.options = c.options || [];
+          c.options.push({ name: value, value });
+          idx = c.options.length - 1;
+        });
+        this._path = ["option", idx];
+        this._render();
+      })
+    );
+
+    this.appendChild(this._sectionTitle("Entités"));
+    const entities = cfg.entities || [];
+    entities.forEach((e, j) => {
+      const st = this._hass && this._hass.states[e.entity];
+      const friendly = e.name || (st && st.attributes && st.attributes.friendly_name);
+      this.appendChild(
+        this._row(
+          e.icon || cfg.entity_icon || cfg.icon || "mdi:swap-horizontal",
+          friendly || e.entity || "(sans entité)",
+          friendly ? e.entity : "",
+          () => {
+            this._path = ["entity", j];
+            this._render();
+          },
+          () => {
+            this._update((c) => c.entities.splice(j, 1));
+            this._render();
+          },
+          j > 0 ? () => this._moveItem((c) => c.entities, j, -1) : null,
+          j < entities.length - 1 ? () => this._moveItem((c) => c.entities, j, 1) : null
+        )
+      );
+    });
+    this.appendChild(
+      this._addEntityRow((entityId) => {
+        let idx;
+        this._update((c) => {
+          c.entities = c.entities || [];
+          c.entities.push({ entity: entityId });
+          idx = c.entities.length - 1;
+        });
+        this._path = ["entity", idx];
+        this._render();
+      })
+    );
+
+    this.appendChild(
+      this._panel(
+        "Customisation",
+        "mdi:palette",
+        this._mixed(
+          [
+            { name: "row_spacing", selector: { number: { min: 0, max: 40, step: 1, mode: "box" } } },
+            { name: "entity_icon", selector: { icon: {} } },
+            { name: "icon_color", selector: { color_rgb: {} } },
+            { name: "background", selector: { color_rgb: {} } },
+            { name: "primary_color", selector: { color_rgb: {} } },
+            { name: "secondary_color", selector: { color_rgb: {} } },
+            { name: "name_size", selector: { number: { min: 10, max: 32, step: 1, mode: "box" } } },
+            { name: "icon_size", selector: { number: { min: 12, max: 40, step: 1, mode: "box" } } },
+            {
+              name: "entity_name_size",
+              selector: { number: { min: 10, max: 28, step: 1, mode: "box" } },
+            },
+            {
+              name: "entity_icon_size",
+              selector: { number: { min: 10, max: 32, step: 1, mode: "box" } },
+            },
+          ],
+          {
+            row_spacing: cfg.row_spacing != null ? cfg.row_spacing : 12,
+            entity_icon: cfg.entity_icon,
+            icon_color: cfg.icon_color,
+            background: cfg.background,
+            primary_color: cfg.primary_color,
+            secondary_color: cfg.secondary_color,
+            name_size: cfg.name_size != null ? cfg.name_size : 17,
+            icon_size: cfg.icon_size != null ? cfg.icon_size : 20,
+            entity_name_size: cfg.entity_name_size != null ? cfg.entity_name_size : 14,
+            entity_icon_size: cfg.entity_icon_size != null ? cfg.entity_icon_size : 16,
+          },
+          {
+            row_spacing: "Écartement entre les entités (px)",
+            entity_icon: "Icône des lignes (vide = icône du badge)",
+            icon_color: "Couleur du badge",
+            background: "Fond de la carte",
+            primary_color: "Couleur du nom de la carte",
+            secondary_color: "Couleur des noms d'entité",
+            name_size: "Taille du nom de la carte (px)",
+            icon_size: "Taille de l'icône du badge (px)",
+            entity_name_size: "Taille des noms d'entité (px)",
+            entity_icon_size: "Taille des icônes d'entité (px)",
+          },
+          (v) => this._update((c) => Object.assign(c, v))
+        )
+      )
+    );
+  }
+
+  _renderOption(i) {
+    const cfg = this._config;
+    const o = cfg.options[i] || {};
+    const merge = (v) => this._update((c) => (c.options[i] = { ...c.options[i], ...v }));
+
+    this.appendChild(
+      this._backHeader(o.name || o.value || "Option", () => {
+        this._path = [];
+        this._render();
+      })
+    );
+
+    this.appendChild(
+      this._mixed(
+        [
+          { name: "name", selector: { text: {} } },
+          { name: "value", selector: { text: {} } },
+          { name: "active_color", selector: { color_rgb: {} } },
+          { name: "inactive_color", selector: { color_rgb: {} } },
+        ],
+        {
+          name: o.name,
+          value: o.value,
+          active_color: o.active_color,
+          inactive_color: o.inactive_color,
+        },
+        {
+          name: "Nom affiché (vide = valeur)",
+          value: "Valeur de l'option (doit correspondre exactement à une option de l'input_select)",
+          active_color: "Couleur si actif",
+          inactive_color: "Couleur si inactif",
+        },
+        merge
+      )
+    );
+  }
+
+  _renderEntity(i) {
+    const cfg = this._config;
+    const e = cfg.entities[i] || {};
+    const merge = (v) => this._update((c) => (c.entities[i] = { ...c.entities[i], ...v }));
+
+    this.appendChild(
+      this._backHeader(e.name || e.entity || "Entité", () => {
+        this._path = [];
+        this._render();
+      })
+    );
+
+    this.appendChild(
+      this._mixed(
+        [
+          { name: "entity", selector: { entity: { domain: "input_select" } } },
+          { name: "name", selector: { text: {} } },
+          { name: "icon", selector: { icon: {} } },
+          { name: "color", selector: { color_rgb: {} } },
+        ],
+        { entity: e.entity, name: e.name, icon: e.icon, color: e.color },
+        {
+          entity: "Entité",
+          name: "Nom (vide = nom convivial)",
+          icon: "Icône (vide = icône du badge)",
+          color: "Couleur de l'icône",
+        },
+        merge
+      )
+    );
+  }
+}
+customElements.define("alex-switch-card-editor", SwitchCardEditor);
+
+window.customCards.push({
+  type: "alex-switch-card",
+  name: "Alex Switch Card",
+  description: "Bascule un input_select entre ses options, une puce par valeur possible.",
   preview: false,
   documentationURL: "https://github.com/<user>/alex-cards",
 });

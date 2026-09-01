@@ -19,6 +19,7 @@ Collection de cartes Lovelace custom pour Home Assistant, distribuée en **plugi
 | `custom:alex-entity-card`       | oui        | Liste détaillée d'entités d'un même type (état, zone, dernier changement). |
 | `custom:alex-toggle-card`       | oui        | Liste d'entités basculables avec interrupteur cliquable par ligne. |
 | `custom:alex-select-label-card` | oui        | Groupe de checkbox par label HA (appartenance multiple, non exclusive). |
+| `custom:alex-switch-card`       | oui        | Bascule un `input_select` entre ses options, une puce par valeur. |
 | `custom:alex-clock-card`        | oui        | Horloge et date, alignables, avec la personnalisation du package. |
 | `custom:alex-media-player-card` | oui        | Contrôle média (pochette, lecture, volume) avec bascule entre lecteurs actifs. |
 | `custom:alex-server-card`       | oui        | Liste de serveurs/VM avec statut en ligne et bouton power. |
@@ -421,7 +422,50 @@ entities:
   Card, la ligne reste à pleine opacité qu'un label soit actif ou non.
 - Personnalisation (panneau Customisation racine) : badge, icône des lignes (vide =
   icône du badge), fond de carte, couleur du nom, couleur des noms d'entité,
-  écartement entre les entités (px).
+  écartement entre les entités (px), taille du nom de la carte, taille de l'icône du
+  badge, taille des noms d'entité, taille des icônes d'entité (px, chacune séparée —
+  ajuste indépendamment le texte/icône de l'en-tête et ceux des lignes).
+
+### Alex Switch Card
+
+Même gabarit visuel qu'Alex Select Label Card (une ligne par entité, une puce par
+valeur cliquable), mais pour basculer un `input_select` entre ses options plutôt que
+poser des labels HA. Contrairement à Select Label Card, **une seule puce est active à
+la fois par ligne** (un `input_select` n'a qu'un seul état) — pas de registre à
+lire/écrire, pas de websocket dédié, pas de race à gérer : juste l'état natif de
+l'entité (déjà réactif via `hass`) et le service natif `input_select.select_option`.
+
+```yaml
+type: custom:alex-switch-card
+name: Mode
+icon: mdi:swap-horizontal
+options:
+  - name: Normal
+    value: Normal
+    active_color: [55, 143, 233]
+  - name: Confort
+    value: Confort
+    active_color: [244, 169, 53]
+entities:
+  - entity: input_select.light_mode_salon
+    name: Salon
+  - entity: input_select.light_mode_chambre
+    name: Chambre
+```
+
+- **`options`** définit les colonnes de puces, dans l'ordre d'affichage : `name` (nom
+  affiché) et `value` (la valeur exacte envoyée à `input_select.select_option` — doit
+  correspondre mot pour mot à une des options réellement configurées sur les entités
+  `input_select` ciblées, sinon le service échoue silencieusement côté HA).
+  `active_color`/`inactive_color` sont optionnels et par option ; sans eux, une
+  palette par défaut s'applique en cyclant sur l'ordre des options. Toutes les
+  entités de la carte partagent la même liste d'options — pour des `input_select`
+  avec des jeux de valeurs différents, utiliser plusieurs cartes.
+- **`entities`** : même structure qu'Alex Select Label Card (entité, nom, icône,
+  couleur d'icône optionnels par ligne), restreinte au domaine `input_select` dans le
+  picker d'ajout et le champ entité du détail.
+- Personnalisation : identique à Alex Select Label Card (badge, icône des lignes,
+  fond, couleurs, écartement, tailles de texte/icônes de l'en-tête et des lignes).
 
 ### Clock Card
 
