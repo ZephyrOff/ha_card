@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.44.0";
+const ALEX_CARDS_VERSION = "0.45.0";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -5676,6 +5676,24 @@ function tabsResolveCardTag(type) {
   return "hui-" + type + "-card";
 }
 
+// Valeur speciale du selecteur de type -> "Manuel" : pas de type choisi
+// dans la liste, on part d'une config vide editee en JSON brut.
+const TABS_MANUAL_CARD_TYPE = "__manual__";
+
+// Un onglet peut avoir : plusieurs cartes (tabs[i].cards, forme normale),
+// une seule carte a plat si un seul element (pas de vertical-stack inutile),
+// ou l'ancien champ singulier tabs[i].card (retrocompatibilite - toujours
+// rendu correctement meme si l'editeur migre vers `cards` des qu'on visite
+// l'onglet).
+function tabsEffectiveCardConfig(tab) {
+  if (!tab) return null;
+  if (Array.isArray(tab.cards) && tab.cards.length) {
+    return tab.cards.length === 1 ? tab.cards[0] : { type: "vertical-stack", cards: tab.cards };
+  }
+  if (tab.card) return tab.card;
+  return null;
+}
+
 class AlexTabsCard extends HTMLElement {
   static getConfigElement() {
     return document.createElement("alex-tabs-card-editor");
@@ -5772,17 +5790,18 @@ class AlexTabsCard extends HTMLElement {
     try {
       const tab = this._config.tabs[index];
       if (!tab) return null;
+      const effectiveConfig = tabsEffectiveCardConfig(tab);
       const helpers = await alexCardHelpers();
       let el;
-      if (helpers && tab.card) {
-        el = helpers.createCardElement(tab.card);
+      if (helpers && effectiveConfig) {
+        el = helpers.createCardElement(effectiveConfig);
       } else {
         el = document.createElement("hui-error-card");
         if (el.setConfig) {
           el.setConfig({
             type: "error",
-            error: !tab.card
-              ? "Aucune carte configurée pour cet onglet (card:)."
+            error: !effectiveConfig
+              ? "Aucune carte configurée pour cet onglet (cards:)."
               : "window.loadCardHelpers indisponible sur cette version de Home Assistant.",
           });
         }
@@ -5790,6 +5809,8 @@ class AlexTabsCard extends HTMLElement {
       el.hass = this._hass;
       el.style.display = "block";
       this._cardEls[index] = el;
+      this._mountedConfigSig = this._mountedConfigSig || {};
+      this._mountedConfigSig[index] = JSON.stringify(effectiveConfig || null);
       const panel = this.querySelector(".ac-tab-panel");
       if (panel) panel.appendChild(el);
       this._showOnlyActive();
@@ -5803,6 +5824,31 @@ class AlexTabsCard extends HTMLElement {
     Object.entries(this._cardEls).forEach(([idx, el]) => {
       if (!el) return;
       el.style.display = Number(idx) === this._activeIndex ? "block" : "none";
+    });
+  }
+
+  // Reappelle setConfig() sur une carte deja montee si sa config effective
+  // a change depuis le dernier rendu (edition via l'editeur) - sans quoi le
+  // cache de rendu de la barre laisserait un element visible avec une
+  // config perimee.
+  _syncMountedCards(tabs) {
+    this._mountedConfigSig = this._mountedConfigSig || {};
+    Object.keys(this._cardEls).forEach((key) => {
+      const idx = Number(key);
+      const el = this._cardEls[idx];
+      if (!el) return;
+      const effectiveConfig = tabsEffectiveCardConfig(tabs[idx]);
+      const cfgSig = JSON.stringify(effectiveConfig || null);
+      if (this._mountedConfigSig[idx] === cfgSig) return;
+      this._mountedConfigSig[idx] = cfgSig;
+      if (effectiveConfig && el.setConfig) {
+        try {
+          el.setConfig(effectiveConfig);
+        } catch (e) {
+          // Config invalide pendant la frappe côté editeur JSON - on garde
+          // la derniere version valide affichee plutot que de tout casser.
+        }
+      }
     });
   }
 
@@ -5850,6 +5896,13 @@ class AlexTabsCard extends HTMLElement {
     if (!this._config || !this._hass) return;
     const c = this._config;
     const tabs = Array.isArray(c.tabs) ? c.tabs : [];
+
+    // Toujours execute, meme si le cache de la barre (sig plus bas) evite de
+    // reconstruire le DOM autour : une carte deja montee doit refleter tout
+    // changement de sa propre config (edition depuis l'editeur), meme quand
+    // ce changement ne touche ni le nom/l'icone des onglets ni le style de
+    // la barre.
+    this._syncMountedCards(tabs);
 
     if (!tabs.length) {
       this.innerHTML =
@@ -6066,8 +6119,8 @@ class AlexTabsCardEditor extends AlexListEditor {
   }
 
   // AlexListEditor.set hass ne connait que _forms/_selectors - on y ajoute
-  // le suivi des editeurs de carte imbriques (hui-card-element-editor /
-  // hui-card-picker), qui ont besoin de hass eux aussi.
+  // le suivi des editeurs de carte imbriques (renvoyes par getConfigElement()
+  // pour chaque type de carte choisi), qui ont besoin de hass eux aussi.
   set hass(hass) {
     super.hass = hass;
     (this._cardSubEditors || []).forEach((el) => {
@@ -6081,56 +6134,30 @@ class AlexTabsCardEditor extends AlexListEditor {
       if (p[0] === "tab" && !this._config.tabs[p[1]]) return [];
       if (p[0] === "force" && !this._config.force_tab[p[1]]) return [];
     }
+    if (p.length >= 4 && p[0] === "tab" && p[2] === "card") {
+      const tab = this._config.tabs[p[1]];
+      if (!tab || !Array.isArray(tab.cards) || !tab.cards[p[3]]) return p.slice(0, 2);
+    }
     return p;
   }
 
-  // Editeur de carte imbriquee natif HA - le meme hui-card-element-editor
-  // (avec bascule visuel/YAML) et hui-card-picker (galerie de cartes) que
-  // la boite de dialogue "Modifier la carte" de Home Assistant utilise en
-  // interne pour n'importe quelle carte. Pas de carte encore choisie ->
-  // picker ; carte deja presente -> editeur complet de cette carte.
-  _cardSubEditor(tabIndex, onChange) {
-    const wrap = document.createElement("div");
-    wrap.style.cssText = "margin-top:4px;";
-    const card = this._config.tabs[tabIndex] && this._config.tabs[tabIndex].card;
-    this._cardSubEditors = this._cardSubEditors || [];
-    this._pickerOpenFor = this._pickerOpenFor || {};
-
-    if (card) {
-      // Editeur visuel propre au type de carte choisi, via getConfigElement()
-      // - l'API publique et stable que toute carte Lovelace avec un editeur
-      // visuel doit exposer (la meme que nos propres cartes utilisent).
-      // Repli en JSON brut si ce type n'a pas d'editeur visuel disponible.
-      const container = document.createElement("div");
-      wrap.appendChild(container);
-      this._mountCardEditor(container, card, onChange);
-    } else if (this._pickerOpenFor[tabIndex]) {
-      const options = tabsCardTypeOptions();
-      wrap.appendChild(
-        this._form(
-          [
-            {
-              name: "type",
-              selector: { select: { mode: "dropdown", custom_value: true, options } },
-            },
-          ],
-          {},
-          { type: "Type de carte" },
-          (v) => {
-            if (v && v.type) onChange({ type: v.type });
-          }
-        )
-      );
-    } else {
-      wrap.appendChild(
-        this._addButton("Ajouter une carte", () => {
-          this._pickerOpenFor[tabIndex] = true;
-          this._render();
-        })
-      );
-    }
-
-    return wrap;
+  // Formulaire de choix de type reutilisable : cartes natives HA + toutes
+  // les cartes custom: installees (y compris les alex-*), plus une entree
+  // "Manuel" en tete de liste qui demarre d'une config vide editee en JSON
+  // brut plutot que de tenter de resoudre un type precis.
+  _tabsTypePicker(onPick) {
+    const options = [
+      { value: TABS_MANUAL_CARD_TYPE, label: "Manuel (config libre)" },
+      ...tabsCardTypeOptions(),
+    ];
+    return this._form(
+      [{ name: "type", selector: { select: { mode: "dropdown", custom_value: true, options } } }],
+      {},
+      { type: "Type de carte" },
+      (v) => {
+        if (v && v.type) onPick(v.type);
+      }
+    );
   }
 
   async _mountCardEditor(container, cardConfig, onChange) {
@@ -6218,6 +6245,7 @@ class AlexTabsCardEditor extends AlexListEditor {
     this.innerHTML = "";
     const p = this._validPath();
     if (p.length === 0) this._renderRoot();
+    else if (p[0] === "tab" && p.length >= 4 && p[2] === "card") this._renderTabCard(p[1], p[3]);
     else if (p[0] === "tab") this._renderTab(p[1]);
     else this._renderForceRule(p[1]);
     if (this._hass) {
@@ -6246,11 +6274,18 @@ class AlexTabsCardEditor extends AlexListEditor {
     this.appendChild(this._sectionTitle("Onglets"));
     const tabs = cfg.tabs || [];
     tabs.forEach((t, i) => {
+      const cardCount = Array.isArray(t.cards) ? t.cards.length : t.card ? 1 : 0;
+      const subtitle =
+        cardCount === 0
+          ? "aucune carte"
+          : cardCount === 1
+          ? `carte : ${(Array.isArray(t.cards) ? t.cards[0] : t.card).type || "?"}`
+          : `${cardCount} cartes`;
       this.appendChild(
         this._row(
           t.icon || "mdi:tab",
           t.name || "(sans nom)",
-          t.card && t.card.type ? `card: ${t.card.type}` : "card: non défini",
+          subtitle,
           () => {
             this._path = ["tab", i];
             this._render();
@@ -6414,6 +6449,18 @@ class AlexTabsCardEditor extends AlexListEditor {
   _renderTab(i) {
     const cfg = this._config;
     const t = cfg.tabs[i] || {};
+
+    // Retrocompatibilite : migre l'ancien champ singulier `card` vers un
+    // tableau `cards` des la premiere visite de cet onglet dans l'editeur.
+    if (!Array.isArray(t.cards) && t.card) {
+      this._update((c) => {
+        c.tabs[i].cards = [c.tabs[i].card];
+        delete c.tabs[i].card;
+      });
+      this._render();
+      return;
+    }
+
     const merge = (v) => this._update((c) => (c.tabs[i] = { ...c.tabs[i], ...v }));
 
     this.appendChild(
@@ -6435,21 +6482,77 @@ class AlexTabsCardEditor extends AlexListEditor {
       )
     );
 
-    this.appendChild(this._sectionTitle("Carte de l'onglet"));
+    this.appendChild(this._sectionTitle("Cartes de l'onglet"));
+    const cards = Array.isArray(t.cards) ? t.cards : [];
+    if (cards.length > 1) {
+      const hint = document.createElement("div");
+      hint.style.cssText = "font-size:12px;color:var(--secondary-text-color);margin:0 2px 8px;";
+      hint.textContent = "Plusieurs cartes sur cet onglet sont empilées verticalement (vertical-stack).";
+      this.appendChild(hint);
+    }
+    cards.forEach((cardCfg, j) => {
+      this.appendChild(
+        this._row(
+          "mdi:card-outline",
+          cardCfg.type || "(type non défini)",
+          cardCfg.name || cardCfg.entity || "",
+          () => {
+            this._path = ["tab", i, "card", j];
+            this._render();
+          },
+          () => {
+            this._update((c) => c.tabs[i].cards.splice(j, 1));
+            this._render();
+          },
+          j > 0 ? () => this._moveItem((c) => c.tabs[i].cards, j, -1) : null,
+          j < cards.length - 1 ? () => this._moveItem((c) => c.tabs[i].cards, j, 1) : null
+        )
+      );
+    });
+
+    this._addCardOpenFor = this._addCardOpenFor || {};
+    if (this._addCardOpenFor[i]) {
+      this.appendChild(
+        this._tabsTypePicker((type) => {
+          let idx;
+          this._update((c) => {
+            c.tabs[i].cards = c.tabs[i].cards || [];
+            c.tabs[i].cards.push(type === TABS_MANUAL_CARD_TYPE ? {} : { type });
+            idx = c.tabs[i].cards.length - 1;
+          });
+          delete this._addCardOpenFor[i];
+          this._path = ["tab", i, "card", idx];
+          this._render();
+        })
+      );
+    } else {
+      this.appendChild(
+        this._addButton("Ajouter une carte", () => {
+          this._addCardOpenFor[i] = true;
+          this._render();
+        })
+      );
+    }
+  }
+
+  _renderTabCard(i, j) {
+    const cfg = this._config;
+    const cardCfg = cfg.tabs[i].cards[j];
+
     this.appendChild(
-      this._cardSubEditor(i, (cardConfig) => {
-        const hadCard = !!(cfg.tabs[i] && cfg.tabs[i].card);
-        this._update((c) => {
-          c.tabs[i] = { ...c.tabs[i], card: cardConfig };
-        });
-        if (this._pickerOpenFor) delete this._pickerOpenFor[i];
-        // Du picker vers l'editeur complet : il faut reconstruire la vue
-        // pour afficher le bon composant. Une fois l'editeur deja affiche,
-        // on laisse ses propres changements internes vivre sans tout
-        // reconstruire a chaque frappe (ne pas perdre son etat interne).
-        if (!hadCard) this._render();
+      this._backHeader(cardCfg.type || "Carte", () => {
+        this._path = ["tab", i];
+        this._render();
       })
     );
+
+    const container = document.createElement("div");
+    this.appendChild(container);
+    this._mountCardEditor(container, cardCfg, (newCfg) => {
+      this._update((c) => {
+        c.tabs[i].cards[j] = newCfg;
+      });
+    });
   }
 
   _renderForceRule(i) {

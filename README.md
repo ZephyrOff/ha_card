@@ -508,16 +508,16 @@ swipe: true
 tabs:
   - name: Salon
     icon: mdi:sofa-single
-    card:
-      type: custom:alex-select-label-card
-      name: Salon
-      # ... reste de la config, inchangé
+    cards:
+      - type: custom:alex-select-label-card
+        name: Salon
+        # ... reste de la config, inchangé
   - name: Cuisine
     icon: mdi:countertop
-    card:
-      type: custom:alex-select-label-card
-      name: Cuisine
-      # ...
+    cards:
+      - type: custom:alex-select-label-card
+        name: Cuisine
+        # ...
 force_tab:
   - entity: input_boolean.mode_invite
     state: "on"
@@ -526,20 +526,29 @@ force_tab:
 
 - **`tabs`** (au moins un requis) : `name`, `icon` (les deux optionnels, mais au moins
   l'un des deux recommandé pour que l'onglet soit identifiable dans la barre), et
-  `card` — une config de carte Lovelace classique, montée via `window.loadCardHelpers()`
-  (l'API standard utilisée par `stack-in-card`/`conditional-card`/`auto-entities` pour
-  créer dynamiquement n'importe quelle carte à partir de sa config). **Éditable
-  visuellement** dans l'éditeur de la carte : pas encore de carte choisie pour un
-  onglet → un bouton **« + Ajouter une carte »**, qui ouvre au clic un sélecteur de
-  type (cartes natives HA + toutes les cartes `custom:` installées, y compris les
-  autres cartes `alex-*` — valeur libre acceptée si le type voulu n'est pas dans la
-  liste) ; une fois le type choisi → l'éditeur visuel propre à ce type, via
-  `getConfigElement()` (l'API publique et stable que toute carte Lovelace avec un
-  éditeur visuel expose — la même que nos propres cartes utilisent), avec un repli en
-  JSON brut pour les types de carte qui n'ont pas d'éditeur visuel. Construit
-  volontairement sans dépendre des composants internes de galerie/édition de carte de
-  HA (`hui-card-picker`/`hui-card-element-editor`) — leur disponibilité s'est révélée
-  peu fiable selon le contexte d'ouverture de l'éditeur.
+  `cards` — une **liste** de configs de carte Lovelace classiques (pas de limite de
+  nombre), montées via `window.loadCardHelpers()` (l'API standard utilisée par
+  `stack-in-card`/`conditional-card`/`auto-entities` pour créer dynamiquement
+  n'importe quelle carte à partir de sa config). Plusieurs cartes sur un même onglet
+  sont automatiquement empilées verticalement (`vertical-stack`) ; une seule ne l'est
+  pas (pas d'empilement inutile). L'ancien champ singulier `card` (une seule carte par
+  onglet) reste lu correctement pour la rétrocompatibilité, et est migré vers `cards`
+  automatiquement dès que l'onglet est ouvert dans l'éditeur visuel.
+  - **Éditable visuellement** dans l'éditeur : chaque carte de l'onglet apparaît comme
+    une ligne dans une liste (comme les onglets eux-mêmes) — icône, type, flèches
+    monter/descendre pour réordonner, crayon pour ouvrir son éditeur, poubelle pour la
+    retirer. Le bouton **« + Ajouter une carte »** ouvre un sélecteur de type (cartes
+    natives HA + toutes les cartes `custom:` installées, y compris les autres cartes
+    `alex-*` — valeur libre acceptée si le type voulu n'est pas dans la liste), plus
+    une entrée **« Manuel »** en tête de liste pour démarrer d'une config vide éditée
+    en JSON brut plutôt que de choisir un type précis. Une fois le type choisi →
+    l'éditeur visuel propre à ce type, via `getConfigElement()` (l'API publique et
+    stable que toute carte Lovelace avec un éditeur visuel expose — la même que nos
+    propres cartes utilisent), avec repli en JSON brut pour les types de carte qui
+    n'ont pas d'éditeur visuel. Construit volontairement sans dépendre des composants
+    internes de galerie/édition de carte de HA (`hui-card-picker`/
+    `hui-card-element-editor`) — leur disponibilité s'est révélée peu fiable selon le
+    contexte d'ouverture de l'éditeur.
 - **`bar_style`** : trois rendus pour la barre de navigation.
   - `chips` : puces indépendantes avec bordure, espacées (même style que le mode
     `separate` d'Alex Switch Card).
