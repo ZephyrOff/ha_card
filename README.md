@@ -540,15 +540,19 @@ force_tab:
     retirer. Le bouton **« + Ajouter une carte »** ouvre un sélecteur de type (cartes
     natives HA + toutes les cartes `custom:` installées, y compris les autres cartes
     `alex-*` — valeur libre acceptée si le type voulu n'est pas dans la liste), plus
-    une entrée **« Manuel »** en tête de liste pour démarrer d'une config vide éditée
-    en JSON brut plutôt que de choisir un type précis. Une fois le type choisi →
-    l'éditeur visuel propre à ce type, via `getConfigElement()` (l'API publique et
-    stable que toute carte Lovelace avec un éditeur visuel expose — la même que nos
-    propres cartes utilisent), avec repli en JSON brut pour les types de carte qui
-    n'ont pas d'éditeur visuel. Construit volontairement sans dépendre des composants
-    internes de galerie/édition de carte de HA (`hui-card-picker`/
-    `hui-card-element-editor`) — leur disponibilité s'est révélée peu fiable selon le
-    contexte d'ouverture de l'éditeur.
+    une entrée **« Manuel »** en tête de liste pour démarrer d'une config vide. Une
+    fois le type choisi (ou « Manuel ») → l'éditeur natif HA de cette carte
+    (`hui-card-element-editor`, le même composant que la boîte de dialogue « Modifier
+    la carte » utilise en interne) : éditeur visuel si le type en a un, éditeur de
+    code (YAML) sinon, avec le même bouton de bascule « Afficher l'éditeur de
+    code »/« Afficher l'éditeur visuel » que partout ailleurs dans Home Assistant —
+    « Manuel » démarre directement en éditeur de code, YAML libre, et bascule
+    automatiquement vers l'éditeur visuel si le type que tu tapes en a un. Si ce
+    composant ne s'avère pas disponible dans le contexte d'ouverture de cet éditeur
+    (vérifié avant utilisation, avec un délai borné), repli automatique sur
+    `getConfigElement()` (l'API publique et stable que toute carte Lovelace avec un
+    éditeur visuel expose — la même que nos propres cartes utilisent), puis en tout
+    dernier recours un textarea JSON brut si même ce repli échoue.
 - **`bar_style`** : trois rendus pour la barre de navigation.
   - `chips` : puces indépendantes avec bordure, espacées (même style que le mode
     `separate` d'Alex Switch Card).

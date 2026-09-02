@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.45.0";
+const ALEX_CARDS_VERSION = "0.45.1";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -5680,6 +5680,21 @@ function tabsResolveCardTag(type) {
 // dans la liste, on part d'une config vide editee en JSON brut.
 const TABS_MANUAL_CARD_TYPE = "__manual__";
 
+// Meme libelle que le bouton natif de bascule GUI/YAML de HA (via
+// hass.localize, pour rester dans la langue de l'utilisateur), avec un
+// repli en dur si hass ou sa fonction de traduction ne sont pas encore la.
+function tabsGuiModeLabel(hass, guiMode) {
+  const key = guiMode
+    ? "ui.panel.lovelace.editor.edit_card.show_code_editor"
+    : "ui.panel.lovelace.editor.edit_card.show_visual_editor";
+  const fallback = guiMode ? "Afficher l'éditeur de code" : "Afficher l'éditeur visuel";
+  if (hass && typeof hass.localize === "function") {
+    const localized = hass.localize(key);
+    if (localized) return localized;
+  }
+  return fallback;
+}
+
 // Un onglet peut avoir : plusieurs cartes (tabs[i].cards, forme normale),
 // une seule carte a plat si un seul element (pas de vertical-stack inutile),
 // ou l'ancien champ singulier tabs[i].card (retrocompatibilite - toujours
@@ -6164,6 +6179,57 @@ class AlexTabsCardEditor extends AlexListEditor {
     container.textContent = "Chargement de l'éditeur…";
     container.style.cssText = "font-size:12px;color:var(--secondary-text-color);";
 
+    // hui-card-element-editor est le composant natif HA utilisé par la boîte
+    // de dialogue "Modifier la carte" : GUI si le type a un éditeur visuel,
+    // éditeur de code (YAML) sinon, avec bouton de bascule entre les deux.
+    // On vérifie qu'il s'upgrade vraiment (borné à 1,2s) avant de s'y fier -
+    // hui-card-picker s'est révélé indisponible dans ce contexte, donc pas
+    // de garantie que ce composant-ci le soit forcément non plus.
+    const available = await Promise.race([
+      customElements.whenDefined("hui-card-element-editor").then(() => true),
+      new Promise((resolve) => setTimeout(() => resolve(false), 1200)),
+    ]);
+
+    container.textContent = "";
+    container.style.cssText = "";
+
+    if (available) {
+      this._mountNativeCardEditor(container, cardConfig, onChange);
+    } else {
+      await this._mountOwnCardEditor(container, cardConfig, onChange);
+    }
+  }
+
+  _mountNativeCardEditor(container, cardConfig, onChange) {
+    const editor = document.createElement("hui-card-element-editor");
+    editor.value = cardConfig;
+    if (this._hass) editor.hass = this._hass;
+
+    const toggleBtn = document.createElement("mwc-button");
+    toggleBtn.style.cssText = "margin-bottom:6px;";
+    toggleBtn.textContent = tabsGuiModeLabel(this._hass, true);
+    toggleBtn.addEventListener("click", () => {
+      if (editor.toggleMode) editor.toggleMode();
+    });
+    editor.addEventListener("GUImode-changed", (ev) => {
+      ev.stopPropagation();
+      toggleBtn.disabled = !ev.detail.guiModeAvailable;
+      toggleBtn.textContent = tabsGuiModeLabel(this._hass, ev.detail.guiMode);
+    });
+    editor.addEventListener("config-changed", (ev) => {
+      ev.stopPropagation();
+      onChange(ev.detail.config);
+    });
+
+    this._cardSubEditors.push(editor);
+    container.append(toggleBtn, editor);
+  }
+
+  // Repli si hui-card-element-editor n'est pas disponible dans ce contexte :
+  // editeur visuel propre au type via getConfigElement() (API publique et
+  // stable que toute carte Lovelace avec editeur visuel expose), JSON brut
+  // en dernier recours si ce type n'en a pas.
+  async _mountOwnCardEditor(container, cardConfig, onChange) {
     let ElClass = null;
     try {
       const helpers = await alexCardHelpers();
@@ -6190,9 +6256,6 @@ class AlexTabsCardEditor extends AlexListEditor {
         }
       }
     }
-
-    container.textContent = "";
-    container.style.cssText = "";
 
     if (editorEl) {
       if (this._hass) editorEl.hass = this._hass;
