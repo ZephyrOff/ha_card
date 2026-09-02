@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.43.0";
+const ALEX_CARDS_VERSION = "0.43.1";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -6016,6 +6016,16 @@ class AlexTabsCardEditor extends AlexListEditor {
     if (!Array.isArray(this._config.force_tab)) this._config.force_tab = [];
   }
 
+  // AlexListEditor.set hass ne connait que _forms/_selectors - on y ajoute
+  // le suivi des editeurs de carte imbriques (hui-card-element-editor /
+  // hui-card-picker), qui ont besoin de hass eux aussi.
+  set hass(hass) {
+    super.hass = hass;
+    (this._cardSubEditors || []).forEach((el) => {
+      if (el) el.hass = hass;
+    });
+  }
+
   _validPath() {
     const p = this._path || [];
     if (p.length >= 2) {
@@ -6025,9 +6035,57 @@ class AlexTabsCardEditor extends AlexListEditor {
     return p;
   }
 
+  // Editeur de carte imbriquee natif HA - le meme hui-card-element-editor
+  // (avec bascule visuel/YAML) et hui-card-picker (galerie de cartes) que
+  // la boite de dialogue "Modifier la carte" de Home Assistant utilise en
+  // interne pour n'importe quelle carte. Pas de carte encore choisie ->
+  // picker ; carte deja presente -> editeur complet de cette carte.
+  _cardSubEditor(tabIndex, onChange) {
+    const wrap = document.createElement("div");
+    wrap.style.cssText = "margin-top:4px;";
+    const card = this._config.tabs[tabIndex] && this._config.tabs[tabIndex].card;
+    this._cardSubEditors = this._cardSubEditors || [];
+
+    if (card) {
+      const editor = document.createElement("hui-card-element-editor");
+      editor.value = card;
+      if (this._hass) editor.hass = this._hass;
+
+      const toggleBtn = document.createElement("mwc-button");
+      toggleBtn.textContent = "Basculer visuel / YAML";
+      toggleBtn.style.cssText = "margin-bottom:6px;";
+      toggleBtn.addEventListener("click", () => {
+        if (editor.toggleMode) editor.toggleMode();
+      });
+      editor.addEventListener("GUImode-changed", (ev) => {
+        ev.stopPropagation();
+        toggleBtn.disabled = !ev.detail.guiModeAvailable;
+      });
+      editor.addEventListener("config-changed", (ev) => {
+        ev.stopPropagation();
+        onChange(ev.detail.config);
+      });
+
+      this._cardSubEditors.push(editor);
+      wrap.append(toggleBtn, editor);
+    } else {
+      const picker = document.createElement("hui-card-picker");
+      if (this._hass) picker.hass = this._hass;
+      picker.addEventListener("config-changed", (ev) => {
+        ev.stopPropagation();
+        onChange(ev.detail.config);
+      });
+      this._cardSubEditors.push(picker);
+      wrap.appendChild(picker);
+    }
+
+    return wrap;
+  }
+
   _render() {
     this._forms = [];
     this._selectors = [];
+    this._cardSubEditors = [];
     this.innerHTML = "";
     const p = this._validPath();
     if (p.length === 0) this._renderRoot();
@@ -6036,6 +6094,7 @@ class AlexTabsCardEditor extends AlexListEditor {
     if (this._hass) {
       this._forms.forEach((f) => (f.hass = this._hass));
       this._selectors.forEach((s) => (s.hass = this._hass));
+      this._cardSubEditors.forEach((el) => (el.hass = this._hass));
     }
   }
 
@@ -6082,11 +6141,7 @@ class AlexTabsCardEditor extends AlexListEditor {
         let idx;
         this._update((c) => {
           c.tabs = c.tabs || [];
-          c.tabs.push({
-            name: "Nouvel onglet",
-            icon: "mdi:tab",
-            card: { type: "markdown", content: "Configure la carte de cet onglet en YAML." },
-          });
+          c.tabs.push({ name: "Nouvel onglet", icon: "mdi:tab" });
           idx = c.tabs.length - 1;
         });
         this._path = ["tab", idx];
@@ -6251,13 +6306,20 @@ class AlexTabsCardEditor extends AlexListEditor {
       )
     );
 
-    const note = document.createElement("div");
-    note.style.cssText =
-      "font-size:12px;color:var(--secondary-text-color);margin:8px 2px 0;line-height:1.5;";
-    note.textContent =
-      "Le contenu de cet onglet (card:) se configure en YAML — bascule cette carte en " +
-      "mode YAML dans le tableau de bord pour l'éditer.";
-    this.appendChild(note);
+    this.appendChild(this._sectionTitle("Carte de l'onglet"));
+    this.appendChild(
+      this._cardSubEditor(i, (cardConfig) => {
+        const hadCard = !!(cfg.tabs[i] && cfg.tabs[i].card);
+        this._update((c) => {
+          c.tabs[i] = { ...c.tabs[i], card: cardConfig };
+        });
+        // Du picker vers l'editeur complet : il faut reconstruire la vue
+        // pour afficher le bon composant. Une fois l'editeur deja affiche,
+        // on laisse ses propres changements internes vivre sans tout
+        // reconstruire a chaque frappe (ne pas perdre son etat interne).
+        if (!hadCard) this._render();
+      })
+    );
   }
 
   _renderForceRule(i) {

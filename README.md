@@ -528,11 +528,13 @@ force_tab:
   l'un des deux recommandé pour que l'onglet soit identifiable dans la barre), et
   `card` — une config de carte Lovelace classique, montée via `window.loadCardHelpers()`
   (l'API standard utilisée par `stack-in-card`/`conditional-card`/`auto-entities` pour
-  créer dynamiquement n'importe quelle carte à partir de sa config). **Le contenu de
-  `card:` se configure en YAML** — l'éditeur visuel gère le nom/l'icône/l'ordre des
-  onglets, pas le contenu de la carte imbriquée elle-même (v1 ; bascule cette carte en
-  mode YAML dans le tableau de bord pour éditer `card:`, comme sur les cartes à onglets
-  tierces).
+  créer dynamiquement n'importe quelle carte à partir de sa config). **Éditable
+  visuellement** dans l'éditeur de la carte : pas encore de carte choisie pour un
+  onglet → la galerie native HA (`hui-card-picker`, la même que le bouton « Ajouter une
+  carte » d'un tableau de bord) ; une fois choisie → l'éditeur complet de cette carte
+  (`hui-card-element-editor`, avec bascule visuel/YAML), le même composant que la boîte
+  de dialogue native « Modifier la carte » de Home Assistant utilise en interne pour
+  n'importe quelle carte.
 - **`bar_style`** : trois rendus pour la barre de navigation.
   - `chips` : puces indépendantes avec bordure, espacées (même style que le mode
     `separate` d'Alex Switch Card).
