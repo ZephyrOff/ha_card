@@ -584,16 +584,26 @@ force_tab:
   rien n'empêche de naviguer manuellement ailleurs ensuite — la règle ne « recolle » pas
   à chaque mise à jour de `hass`, seulement au moment où l'état change.
 - Personnalisation, regroupée en sous-sections dans le panneau Customisation :
-  **Carte** (fond), **En-tête** (couleur du badge, couleur et taille du nom, taille de
-  l'icône du badge — n'apparaît que si `name` est renseigné), **Navigation** (style de
-  barre, position, retour à la ligne, balayage et son seuil), **Barre d'onglets**
-  (taille des onglets — même curseur unique proportionnel qu'Alex Switch Card —,
-  couleur du texte actif, fond actif, couleur du texte inactif, fond inactif — un seul
-  jeu de couleurs partagé, quel que soit le style de barre choisi).
+  **Carte** (fond, et **carte sans habillage** — voir juste en dessous), **En-tête**
+  (couleur du badge, couleur et taille du nom, taille de l'icône du badge — n'apparaît
+  que si `name` est renseigné), **Navigation** (style de barre, position, alignement,
+  retour à la ligne, balayage et son seuil), **Barre d'onglets** (taille des onglets —
+  même curseur unique proportionnel qu'Alex Switch Card —, couleur du texte actif,
+  fond actif, couleur du texte inactif, fond inactif — un seul jeu de couleurs
+  partagé, quel que soit le style de barre choisi).
+- **`transparent`** (défaut `false`, dans Customisation > Carte) : retire le fond,
+  l'ombre, la bordure arrondie et le padding intérieur de la carte — la barre
+  d'onglets et le contenu occupent alors tout l'espace disponible, sans habillage de
+  carte visible autour. `background` devient sans effet tant que ce réglage est actif.
+  L'en-tête (nom/icône), s'il est renseigné, reste affiché — seul l'habillage de la
+  carte elle-même disparaît.
 - Chaque carte imbriquée n'est montée qu'à la première visite de son onglet (pas de
   préchargement de toutes les cartes au démarrage), puis reste montée (juste masquée)
   en changeant d'onglet — l'état interne (position de scroll, formulaire en cours...)
-  n'est donc pas perdu en allant-venant entre onglets déjà visités.
+  n'est donc pas perdu en allant-venant entre onglets déjà visités. Changer d'onglet
+  ne reconstruit pas non plus le reste de la carte (badge, barre) : seuls les deux
+  boutons concernés changent d'état et l'affichage bascule entre les cartes déjà
+  montées — évite le micro-délai d'un rechargement complet à chaque clic.
 
 ### Clock Card
 

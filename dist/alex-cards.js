@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.46.0";
+const ALEX_CARDS_VERSION = "0.47.0";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -5798,8 +5798,83 @@ class AlexTabsCard extends HTMLElement {
   _setActiveTab(index) {
     if (index === this._activeIndex) return;
     if (!this._config.tabs[index]) return;
+    const prevIndex = this._activeIndex;
     this._activeIndex = index;
+
+    // Chemin rapide : la structure (bandeau, barre, panneau) existe deja et
+    // son contexte de style est en cache -> on se contente de recolorer les
+    // deux boutons concernes et de basculer l'affichage des cartes deja
+    // montees, sans reconstruire tout le DOM (source du micro-lag au clic).
+    if (this._built && this._barRenderCtx) {
+      const prevBtn = this.querySelector(`.ac-tab-btn[data-index="${prevIndex}"]`);
+      const nextBtn = this.querySelector(`.ac-tab-btn[data-index="${index}"]`);
+      const barStyle = this._barRenderCtx.barStyle;
+      if (prevBtn) prevBtn.style.cssText = this._tabButtonStyle(barStyle, false);
+      if (nextBtn) nextBtn.style.cssText = this._tabButtonStyle(barStyle, true);
+      this._showOnlyActive();
+      this._ensureTabMounted(index);
+      // Le seul element du signature qui vient de changer est l'index actif
+      // - on la resynchronise pour que le prochain tick hass ne declenche
+      // pas une reconstruction complete inutile (sig jugee "perimee" a tort).
+      const tabs = Array.isArray(this._config.tabs) ? this._config.tabs : [];
+      this._lastSig = this._computeSig(this._config, tabs);
+      return;
+    }
+
     this._render();
+  }
+
+  // Chaine de style CSS pour un bouton d'onglet, dans le style de barre et
+  // l'etat actif/inactif donnes - lit les couleurs/tailles depuis le
+  // contexte mis en cache par le dernier rendu complet (_barRenderCtx).
+  // Partagee entre le rendu complet (construction du HTML) et le chemin
+  // rapide de _setActiveTab (recoloration directe d'un bouton existant).
+  _tabButtonStyle(barStyle, active) {
+    const ctx = this._barRenderCtx;
+    if (!ctx) return "";
+    const {
+      chipSize,
+      chipPadV,
+      chipPadHSwitch,
+      chipPadHSeparate,
+      chipRadiusSeparate,
+      activeBg,
+      activeText,
+      inactiveBg,
+      inactiveText,
+    } = ctx;
+    const base =
+      `cursor:pointer;font-family:inherit;white-space:nowrap;display:inline-flex;` +
+      `align-items:center;gap:6px;font-size:${chipSize}px;font-weight:${active ? "600" : "400"};`;
+
+    if (barStyle === "switch") {
+      return (
+        base +
+        `border:none;background:${active ? activeBg : "transparent"};` +
+        `color:${active ? activeText : inactiveText};` +
+        `padding:${chipPadV}px ${chipPadHSwitch}px;border-radius:999px;` +
+        `box-shadow:${active ? "0 1px 3px rgba(0,0,0,0.18)" : "none"};` +
+        `transition:background .15s,color .15s,box-shadow .15s;`
+      );
+    }
+    if (barStyle === "tabs") {
+      return (
+        base +
+        `border:none;background:transparent;color:${active ? activeText : inactiveText};` +
+        `padding:${chipPadV}px ${chipPadHSeparate}px;` +
+        `border-bottom:2px solid ${active ? activeText : "transparent"};margin-bottom:-1px;` +
+        `transition:color .15s,border-color .15s;`
+      );
+    }
+    // chips (separees)
+    const bg = active ? activeBg : inactiveBg;
+    const border = active ? activeBg : "var(--divider-color)";
+    return (
+      base +
+      `border:1px solid ${border};background:${bg};color:${active ? activeText : inactiveText};` +
+      `padding:${chipPadV}px ${chipPadHSeparate}px;border-radius:${chipRadiusSeparate}px;` +
+      `transition:background .15s,border-color .15s,color .15s;`
+    );
   }
 
   async _ensureTabMounted(index) {
@@ -5912,6 +5987,36 @@ class AlexTabsCard extends HTMLElement {
     });
   }
 
+  // Signature du "cadre" de la carte (bandeau + style/position de barre +
+  // couleurs/tailles + liste des onglets + onglet actif) - partagee entre
+  // le rendu complet et le chemin rapide de _setActiveTab, pour que les
+  // deux restent synchronises sur ce qui necessite (ou non) une
+  // reconstruction complete du DOM.
+  _computeSig(c, tabs) {
+    return [
+      c.name,
+      c.icon,
+      JSON.stringify(c.icon_color || null),
+      JSON.stringify(c.background || null),
+      JSON.stringify(c.primary_color || null),
+      c.name_size,
+      c.icon_size,
+      c.bar_style,
+      c.bar_position,
+      c.bar_align,
+      c.wrap,
+      c.swipe,
+      c.chip_size,
+      JSON.stringify(c.active_bg || null),
+      JSON.stringify(c.active_text || null),
+      JSON.stringify(c.inactive_bg || null),
+      JSON.stringify(c.inactive_text || null),
+      c.transparent,
+      tabs.map((t) => `${t.name}|${t.icon}`).join(";"),
+      this._activeIndex,
+    ].join("~");
+  }
+
   _render() {
     if (!this._config || !this._hass) return;
     const c = this._config;
@@ -5932,27 +6037,7 @@ class AlexTabsCard extends HTMLElement {
       return;
     }
 
-    const sig = [
-      c.name,
-      c.icon,
-      JSON.stringify(c.icon_color || null),
-      JSON.stringify(c.background || null),
-      JSON.stringify(c.primary_color || null),
-      c.name_size,
-      c.icon_size,
-      c.bar_style,
-      c.bar_position,
-      c.bar_align,
-      c.wrap,
-      c.swipe,
-      c.chip_size,
-      JSON.stringify(c.active_bg || null),
-      JSON.stringify(c.active_text || null),
-      JSON.stringify(c.inactive_bg || null),
-      JSON.stringify(c.inactive_text || null),
-      tabs.map((t) => `${t.name}|${t.icon}`).join(";"),
-      this._activeIndex,
-    ].join("~");
+    const sig = this._computeSig(c, tabs);
     if (this._built && sig === this._lastSig) {
       // Structure inchangee - on s'assure juste que la carte de l'onglet
       // actif est montee (cas de la toute premiere visite d'un onglet).
@@ -5964,7 +6049,18 @@ class AlexTabsCard extends HTMLElement {
     const iconColor = colorOr(c.icon_color, "#8b7ae6");
     const badgeRgb = Array.isArray(c.icon_color) ? c.icon_color : [139, 122, 230];
     const badgeBg = `rgba(${badgeRgb[0]}, ${badgeRgb[1]}, ${badgeRgb[2]}, 0.16)`;
-    const cardBg = colorOr(c.background, "var(--ha-card-background, var(--card-background-color))");
+    const transparent = !!c.transparent;
+    // Mode transparent : aucun fond/ombre/bordure/rayon (border-radius reste
+    // sans effet visuel sans fond ni bordure, mis a 0 quand meme par clarte),
+    // et le padding interieur disparait pour que la barre et le contenu de
+    // l'onglet occupent tout l'espace de la carte plutot que d'en laisser
+    // une marge visible. La couleur "Fond de la carte" custom est alors
+    // sans objet et ignoree.
+    const cardBg = transparent
+      ? "transparent"
+      : colorOr(c.background, "var(--ha-card-background, var(--card-background-color))");
+    const cardPadding = transparent ? "0" : "16px 18px";
+    const cardRadius = transparent ? "0" : "20px";
     const primaryColor = colorOr(c.primary_color, "var(--primary-text-color)");
     const nameSize = c.name_size != null ? c.name_size : 17;
     const iconSize = c.icon_size != null ? c.icon_size : 20;
@@ -6009,6 +6105,22 @@ class AlexTabsCard extends HTMLElement {
     const barAlign =
       c.bar_align === "center" ? "center" : c.bar_align === "right" ? "flex-end" : "flex-start";
 
+    // Mis en cache pour _setActiveTab : lui permet de ne recolorer que les
+    // deux boutons concernés au clic, sans reconstruire tout le DOM (voir
+    // _tabButtonStyle).
+    this._barRenderCtx = {
+      barStyle,
+      chipSize,
+      chipPadV,
+      chipPadHSwitch,
+      chipPadHSeparate,
+      chipRadiusSeparate,
+      activeBg,
+      activeText,
+      inactiveBg,
+      inactiveText,
+    };
+
     const tabIconHtml = (t) =>
       t.icon ? `<ha-icon icon="${t.icon}" style="--mdc-icon-size:${chipSize + 2}px;"></ha-icon>` : "";
     const tabLabelHtml = (t) => (t.name ? `<span>${escapeHtml(t.name)}</span>` : "");
@@ -6016,21 +6128,14 @@ class AlexTabsCard extends HTMLElement {
     let barHtml;
     if (barStyle === "switch") {
       barHtml = `
-        <div style="display:flex;${wrapCss}justify-content:${barAlign};gap:${trackGap}px;padding:${trackPad}px;
+        <div class="ac-tab-bar-row" style="display:flex;${wrapCss}justify-content:${barAlign};gap:${trackGap}px;padding:${trackPad}px;
                     border-radius:${trackRadius}px;background:${inactiveBg};">
           ${tabs
             .map((t, i) => {
               const active = i === this._activeIndex;
               return `
                 <button class="ac-tab-btn" data-index="${i}"
-                  style="border:none;background:${active ? activeBg : "transparent"};
-                         color:${active ? activeText : inactiveText};
-                         font-size:${chipSize}px;font-weight:${active ? "600" : "400"};
-                         padding:${chipPadV}px ${chipPadHSwitch}px;
-                         border-radius:999px;cursor:pointer;font-family:inherit;white-space:nowrap;
-                         display:inline-flex;align-items:center;gap:6px;
-                         box-shadow:${active ? "0 1px 3px rgba(0,0,0,0.18)" : "none"};
-                         transition:background .15s,color .15s,box-shadow .15s;">
+                  style="${this._tabButtonStyle(barStyle, active)}">
                   ${tabIconHtml(t)}${tabLabelHtml(t)}
                 </button>`;
             })
@@ -6038,22 +6143,14 @@ class AlexTabsCard extends HTMLElement {
         </div>`;
     } else if (barStyle === "tabs") {
       barHtml = `
-        <div style="display:flex;${wrapCss}justify-content:${barAlign};gap:${Math.max(4, trackGap * 2)}px;
+        <div class="ac-tab-bar-row" style="display:flex;${wrapCss}justify-content:${barAlign};gap:${Math.max(4, trackGap * 2)}px;
                     border-bottom:1px solid var(--divider-color);">
           ${tabs
             .map((t, i) => {
               const active = i === this._activeIndex;
               return `
                 <button class="ac-tab-btn" data-index="${i}"
-                  style="border:none;background:transparent;
-                         color:${active ? activeText : inactiveText};
-                         font-size:${chipSize}px;font-weight:${active ? "600" : "400"};
-                         padding:${chipPadV}px ${chipPadHSeparate}px;
-                         border-bottom:2px solid ${active ? activeText : "transparent"};
-                         margin-bottom:-1px;
-                         cursor:pointer;font-family:inherit;white-space:nowrap;
-                         display:inline-flex;align-items:center;gap:6px;
-                         transition:color .15s,border-color .15s;">
+                  style="${this._tabButtonStyle(barStyle, active)}">
                   ${tabIconHtml(t)}${tabLabelHtml(t)}
                 </button>`;
             })
@@ -6061,21 +6158,13 @@ class AlexTabsCard extends HTMLElement {
         </div>`;
     } else {
       barHtml = `
-        <div style="display:flex;${wrapCss}justify-content:${barAlign};gap:6px;">
+        <div class="ac-tab-bar-row" style="display:flex;${wrapCss}justify-content:${barAlign};gap:6px;">
           ${tabs
             .map((t, i) => {
               const active = i === this._activeIndex;
-              const bg = active ? activeBg : inactiveBg;
-              const border = active ? activeBg : "var(--divider-color)";
-              const text = active ? activeText : inactiveText;
               return `
                 <button class="ac-tab-btn" data-index="${i}"
-                  style="border:1px solid ${border};background:${bg};color:${text};
-                         font-size:${chipSize}px;font-weight:${active ? "600" : "400"};
-                         padding:${chipPadV}px ${chipPadHSeparate}px;
-                         border-radius:${chipRadiusSeparate}px;cursor:pointer;font-family:inherit;white-space:nowrap;
-                         display:inline-flex;align-items:center;gap:6px;
-                         transition:background .15s,border-color .15s,color .15s;">
+                  style="${this._tabButtonStyle(barStyle, active)}">
                   ${tabIconHtml(t)}${tabLabelHtml(t)}
                 </button>`;
             })
@@ -6100,7 +6189,7 @@ class AlexTabsCard extends HTMLElement {
     };">${barHtml}</div>`;
 
     this.innerHTML = `
-      <ha-card style="border-radius:20px;box-shadow:none;background:${cardBg};padding:16px 18px;">
+      <ha-card style="border-radius:${cardRadius};box-shadow:none;background:${cardBg};padding:${cardPadding};">
         ${headerHtml}
         ${barPosition === "top" ? barBlock : ""}
         <div class="ac-tab-panel" style="min-height:40px;"></div>
@@ -6430,7 +6519,10 @@ class AlexTabsCardEditor extends AlexListEditor {
               type: "expandable",
               title: "Carte",
               icon: "mdi:card-outline",
-              schema: [{ name: "background", selector: { color_rgb: {} } }],
+              schema: [
+                { name: "background", selector: { color_rgb: {} } },
+                { name: "transparent", selector: { boolean: {} } },
+              ],
             },
             {
               type: "expandable",
@@ -6483,6 +6575,7 @@ class AlexTabsCardEditor extends AlexListEditor {
           ],
           {
             background: cfg.background,
+            transparent: cfg.transparent === true,
             icon_color: cfg.icon_color,
             primary_color: cfg.primary_color,
             name_size: cfg.name_size != null ? cfg.name_size : 17,
@@ -6501,6 +6594,8 @@ class AlexTabsCardEditor extends AlexListEditor {
           },
           {
             background: "Fond de la carte",
+            transparent:
+              "Carte sans habillage (fond/ombre/bordure/marge retirés — le contenu occupe tout l'espace)",
             icon_color: "Couleur du badge",
             primary_color: "Couleur du nom",
             name_size: "Taille du nom (px)",
