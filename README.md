@@ -566,6 +566,9 @@ force_tab:
 - **`bar_position`** : `top` (défaut) ou `bottom`. L'en-tête (nom/icône de la carte,
   optionnel) reste toujours en haut de la carte, indépendamment de la position choisie
   pour la barre d'onglets.
+- **`bar_align`** : `left` (défaut), `center` ou `right` — alignement des boutons
+  d'onglets dans la barre quand ils ne remplissent pas toute la largeur disponible.
+  S'applique aux trois styles de barre.
 - **`wrap`** (défaut `true`) : la barre passe sur plusieurs lignes si tous les onglets
   ne tiennent pas sur une seule — c'est le point qui manquait aux cartes tierces
   testées. À `false`, une seule ligne avec défilement horizontal.

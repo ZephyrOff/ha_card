@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.45.1";
+const ALEX_CARDS_VERSION = "0.46.0";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -5618,6 +5618,11 @@ const TABS_BAR_POSITION_OPTIONS = [
   { value: "top", label: "Haut" },
   { value: "bottom", label: "Bas" },
 ];
+const TABS_BAR_ALIGN_OPTIONS = [
+  { value: "left", label: "Gauche" },
+  { value: "center", label: "Centré" },
+  { value: "right", label: "Droite" },
+];
 
 // Liste de types natifs connus - convention interne HA "hui-<type>-card".
 // Pas besoin d'etre exhaustif : le selecteur accepte aussi une valeur
@@ -5937,6 +5942,7 @@ class AlexTabsCard extends HTMLElement {
       c.icon_size,
       c.bar_style,
       c.bar_position,
+      c.bar_align,
       c.wrap,
       c.swipe,
       c.chip_size,
@@ -6000,6 +6006,8 @@ class AlexTabsCard extends HTMLElement {
     const trackRadius = wrap ? Math.max(14, Math.round(chipSize * 1.4)) : 999;
 
     const wrapCss = wrap ? "flex-wrap:wrap;" : "flex-wrap:nowrap;overflow-x:auto;";
+    const barAlign =
+      c.bar_align === "center" ? "center" : c.bar_align === "right" ? "flex-end" : "flex-start";
 
     const tabIconHtml = (t) =>
       t.icon ? `<ha-icon icon="${t.icon}" style="--mdc-icon-size:${chipSize + 2}px;"></ha-icon>` : "";
@@ -6008,7 +6016,7 @@ class AlexTabsCard extends HTMLElement {
     let barHtml;
     if (barStyle === "switch") {
       barHtml = `
-        <div style="display:flex;${wrapCss}gap:${trackGap}px;padding:${trackPad}px;
+        <div style="display:flex;${wrapCss}justify-content:${barAlign};gap:${trackGap}px;padding:${trackPad}px;
                     border-radius:${trackRadius}px;background:${inactiveBg};">
           ${tabs
             .map((t, i) => {
@@ -6030,7 +6038,7 @@ class AlexTabsCard extends HTMLElement {
         </div>`;
     } else if (barStyle === "tabs") {
       barHtml = `
-        <div style="display:flex;${wrapCss}gap:${Math.max(4, trackGap * 2)}px;
+        <div style="display:flex;${wrapCss}justify-content:${barAlign};gap:${Math.max(4, trackGap * 2)}px;
                     border-bottom:1px solid var(--divider-color);">
           ${tabs
             .map((t, i) => {
@@ -6053,7 +6061,7 @@ class AlexTabsCard extends HTMLElement {
         </div>`;
     } else {
       barHtml = `
-        <div style="display:flex;${wrapCss}gap:6px;">
+        <div style="display:flex;${wrapCss}justify-content:${barAlign};gap:6px;">
           ${tabs
             .map((t, i) => {
               const active = i === this._activeIndex;
@@ -6448,6 +6456,10 @@ class AlexTabsCardEditor extends AlexListEditor {
                   name: "bar_position",
                   selector: { select: { mode: "dropdown", options: TABS_BAR_POSITION_OPTIONS } },
                 },
+                {
+                  name: "bar_align",
+                  selector: { select: { mode: "dropdown", options: TABS_BAR_ALIGN_OPTIONS } },
+                },
                 { name: "wrap", selector: { boolean: {} } },
                 { name: "swipe", selector: { boolean: {} } },
                 {
@@ -6477,6 +6489,7 @@ class AlexTabsCardEditor extends AlexListEditor {
             icon_size: cfg.icon_size != null ? cfg.icon_size : 20,
             bar_style: cfg.bar_style === "chips" || cfg.bar_style === "tabs" ? cfg.bar_style : "switch",
             bar_position: cfg.bar_position === "bottom" ? "bottom" : "top",
+            bar_align: ["center", "right"].includes(cfg.bar_align) ? cfg.bar_align : "left",
             wrap: cfg.wrap !== false,
             swipe: cfg.swipe !== false,
             swipe_threshold: cfg.swipe_threshold != null ? cfg.swipe_threshold : 50,
@@ -6494,6 +6507,7 @@ class AlexTabsCardEditor extends AlexListEditor {
             icon_size: "Taille de l'icône du badge (px)",
             bar_style: "Style de la barre",
             bar_position: "Position de la barre",
+            bar_align: "Alignement des boutons",
             wrap: "Retour à la ligne si trop d'onglets",
             swipe: "Navigation au balayage (swipe)",
             swipe_threshold: "Distance minimum du balayage (px)",
