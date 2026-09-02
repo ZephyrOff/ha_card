@@ -20,6 +20,7 @@ Collection de cartes Lovelace custom pour Home Assistant, distribuée en **plugi
 | `custom:alex-toggle-card`       | oui        | Liste d'entités basculables avec interrupteur cliquable par ligne. |
 | `custom:alex-select-label-card` | oui        | Groupe de checkbox par label HA (appartenance multiple, non exclusive). |
 | `custom:alex-switch-card`       | oui        | Bascule un `input_select` entre ses options, une puce par valeur. |
+| `custom:alex-tabs-card`         | oui        | Carte à onglets : monte n'importe quelle carte par onglet, navigation par puces/interrupteur/onglets. |
 | `custom:alex-clock-card`        | oui        | Horloge et date, alignables, avec la personnalisation du package. |
 | `custom:alex-media-player-card` | oui        | Contrôle média (pochette, lecture, volume) avec bascule entre lecteurs actifs. |
 | `custom:alex-server-card`       | oui        | Liste de serveurs/VM avec statut en ligne et bouton power. |
@@ -489,7 +490,90 @@ entities:
       restent transparentes et laissent voir le rail — capsule entièrement arrondie,
       pas des boutons carrés collés les uns aux autres.
 
+### Alex Tabs Card
+
+Carte à onglets : chaque onglet monte n'importe quelle carte Lovelace (native ou
+`custom:`, y compris les autres cartes `alex-*`) — construite pour remplacer les
+cartes tierces (`simple-tabs`, `tabbed-card`, `tabdeck-card`) sur deux points qu'elles
+ne couvrent pas : un vrai retour à la ligne de la barre quand il y a trop d'onglets
+pour la largeur disponible, et un style « interrupteur à pilule glissante » identique
+à celui d'Alex Switch Card.
+
+```yaml
+type: custom:alex-tabs-card
+bar_style: switch
+bar_position: top
+wrap: true
+swipe: true
+tabs:
+  - name: Salon
+    icon: mdi:sofa-single
+    card:
+      type: custom:alex-select-label-card
+      name: Salon
+      # ... reste de la config, inchangé
+  - name: Cuisine
+    icon: mdi:countertop
+    card:
+      type: custom:alex-select-label-card
+      name: Cuisine
+      # ...
+force_tab:
+  - entity: input_boolean.mode_invite
+    state: "on"
+    tab: 1
+```
+
+- **`tabs`** (au moins un requis) : `name`, `icon` (les deux optionnels, mais au moins
+  l'un des deux recommandé pour que l'onglet soit identifiable dans la barre), et
+  `card` — une config de carte Lovelace classique, montée via `window.loadCardHelpers()`
+  (l'API standard utilisée par `stack-in-card`/`conditional-card`/`auto-entities` pour
+  créer dynamiquement n'importe quelle carte à partir de sa config). **Le contenu de
+  `card:` se configure en YAML** — l'éditeur visuel gère le nom/l'icône/l'ordre des
+  onglets, pas le contenu de la carte imbriquée elle-même (v1 ; bascule cette carte en
+  mode YAML dans le tableau de bord pour éditer `card:`, comme sur les cartes à onglets
+  tierces).
+- **`bar_style`** : trois rendus pour la barre de navigation.
+  - `chips` : puces indépendantes avec bordure, espacées (même style que le mode
+    `separate` d'Alex Switch Card).
+  - `switch` (défaut) : toutes les options regroupées dans un seul rail, l'onglet actif
+    flotte dessus comme une pastille contrastée (même mécanique que le mode `switch`
+    d'Alex Switch Card) — capsule complète (`border-radius` en pilule) si `wrap: false`
+    garantit une seule ligne, rayon modéré sinon (reste correct visuellement que la
+    barre tienne sur une ou plusieurs lignes).
+  - `tabs` : style onglets soulignés, texte + trait sous l'onglet actif, sans fond ni
+    bordure — le plus proche du rendu natif Home Assistant.
+- **`bar_position`** : `top` (défaut) ou `bottom`. L'en-tête (nom/icône de la carte,
+  optionnel) reste toujours en haut de la carte, indépendamment de la position choisie
+  pour la barre d'onglets.
+- **`wrap`** (défaut `true`) : la barre passe sur plusieurs lignes si tous les onglets
+  ne tiennent pas sur une seule — c'est le point qui manquait aux cartes tierces
+  testées. À `false`, une seule ligne avec défilement horizontal.
+- **`swipe`** (défaut `true`) : balaie à gauche/droite sur le contenu de l'onglet pour
+  naviguer vers le suivant/précédent, sans repasser par la barre. `swipe_threshold`
+  (px, défaut 50) règle la distance minimale du geste. Un élément portant l'attribut
+  `data-no-swipe` dans la carte imbriquée désactive le geste au-dessus de lui (utile
+  pour un slider ou tout contenu à défilement horizontal propre), même principe que
+  `simple-tabs-card`.
+- **`force_tab`** : liste de règles `{ entity, state, tab }` — bascule automatiquement
+  vers l'onglet `tab` (index, 0 = premier onglet) quand `entity` **passe** à l'état
+  `state`. Déclenchement sur front montant uniquement : si l'entité reste dans cet état,
+  rien n'empêche de naviguer manuellement ailleurs ensuite — la règle ne « recolle » pas
+  à chaque mise à jour de `hass`, seulement au moment où l'état change.
+- Personnalisation, regroupée en sous-sections dans le panneau Customisation :
+  **Carte** (fond), **En-tête** (couleur du badge, couleur et taille du nom, taille de
+  l'icône du badge — n'apparaît que si `name` est renseigné), **Navigation** (style de
+  barre, position, retour à la ligne, balayage et son seuil), **Barre d'onglets**
+  (taille des onglets — même curseur unique proportionnel qu'Alex Switch Card —,
+  couleur du texte actif, fond actif, couleur du texte inactif, fond inactif — un seul
+  jeu de couleurs partagé, quel que soit le style de barre choisi).
+- Chaque carte imbriquée n'est montée qu'à la première visite de son onglet (pas de
+  préchargement de toutes les cartes au démarrage), puis reste montée (juste masquée)
+  en changeant d'onglet — l'état interne (position de scroll, formulaire en cours...)
+  n'est donc pas perdu en allant-venant entre onglets déjà visités.
+
 ### Clock Card
+
 
 Horloge et date, sans entité — se met à jour toute seule chaque seconde (indépendamment
 des mises à jour de `hass`). La plus simple structurellement : pas de badge, pas de

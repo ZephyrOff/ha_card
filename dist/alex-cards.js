@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.42.0";
+const ALEX_CARDS_VERSION = "0.43.0";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -5576,6 +5576,735 @@ window.customCards.push({
   type: "alex-switch-card",
   name: "Alex Switch Card",
   description: "Bascule un input_select entre ses options, une puce par valeur possible.",
+  preview: false,
+  documentationURL: "https://github.com/<user>/alex-cards",
+});
+
+/* =========================================================================
+ * === alex-tabs-card =======================================================
+ * Carte a onglets : chaque onglet monte une carte Lovelace independante
+ * (n'importe quel type, y compris les autres cartes alex-*). Barre de
+ * navigation en 3 styles au choix (puces separees / interrupteur-pilule /
+ * onglets soulignes), retour a la ligne natif si trop d'onglets pour la
+ * largeur, navigation au balayage (swipe), et regles de bascule forcee vers
+ * un onglet selon l'etat d'une entite (front montant uniquement, pour ne
+ * pas devenir intrusif si l'entite reste dans cet etat).
+ *
+ * Le contenu `card:` de chaque onglet est un objet de config Lovelace
+ * classique, monte via window.loadCardHelpers() - l'API standard utilisee
+ * par stack-in-card/conditional-card/auto-entities pour creer dynamiquement
+ * n'importe quelle carte (native ou custom) a partir de sa config.
+ * L'editeur visuel gere nom/icone/ordre des onglets et toute la
+ * personnalisation, mais pas le contenu `card:` lui-meme (v1 - a editer en
+ * YAML, comme sur simple-tabs/tabdeck-card).
+ * ========================================================================= */
+
+let ALEX_CARD_HELPERS_PROMISE = null;
+function alexCardHelpers() {
+  if (!ALEX_CARD_HELPERS_PROMISE) {
+    ALEX_CARD_HELPERS_PROMISE = window.loadCardHelpers
+      ? window.loadCardHelpers()
+      : Promise.resolve(null);
+  }
+  return ALEX_CARD_HELPERS_PROMISE;
+}
+
+const TABS_BAR_STYLE_OPTIONS = [
+  { value: "chips", label: "Puces séparées" },
+  { value: "switch", label: "Interrupteur (pilule glissante)" },
+  { value: "tabs", label: "Onglets soulignés" },
+];
+const TABS_BAR_POSITION_OPTIONS = [
+  { value: "top", label: "Haut" },
+  { value: "bottom", label: "Bas" },
+];
+
+class AlexTabsCard extends HTMLElement {
+  static getConfigElement() {
+    return document.createElement("alex-tabs-card-editor");
+  }
+  static getStubConfig() {
+    return {
+      name: "",
+      icon: "mdi:view-carousel",
+      bar_style: "switch",
+      bar_position: "top",
+      wrap: true,
+      swipe: true,
+      tabs: [
+        {
+          name: "Onglet 1",
+          icon: "mdi:numeric-1-circle-outline",
+          card: { type: "markdown", content: "Configure la carte de cet onglet en YAML." },
+        },
+        {
+          name: "Onglet 2",
+          icon: "mdi:numeric-2-circle-outline",
+          card: { type: "markdown", content: "Configure la carte de cet onglet en YAML." },
+        },
+      ],
+      force_tab: [],
+    };
+  }
+
+  setConfig(config) {
+    if (!config) throw new Error("Configuration invalide");
+    this._config = config;
+    this._built = false;
+    this._lastSig = null;
+    const tabs = Array.isArray(config.tabs) ? config.tabs : [];
+    if (this._activeIndex == null || this._activeIndex >= tabs.length) {
+      this._activeIndex = 0;
+    }
+    this._cardEls = this._cardEls || {};
+  }
+
+  set hass(hass) {
+    this._hass = hass;
+    this._checkForceRules();
+    this._render();
+    // Les cartes deja montees restent reactives meme quand elles ne sont
+    // pas affichees (onglet non actif), pour ne pas montrer de donnees
+    // perimees en y revenant.
+    Object.values(this._cardEls).forEach((el) => {
+      if (el) el.hass = hass;
+    });
+  }
+
+  getCardSize() {
+    const active = this._cardEls && this._cardEls[this._activeIndex];
+    if (active && typeof active.getCardSize === "function") {
+      try {
+        const size = active.getCardSize();
+        if (typeof size === "number") return 1 + size;
+      } catch (e) {
+        // ignore, repli sur l'estimation par defaut ci-dessous
+      }
+    }
+    return 4;
+  }
+
+  // Front montant uniquement : si la regle matchait deja au tour precedent,
+  // on ne force pas a nouveau - permet de naviguer manuellement ailleurs
+  // sans etre systematiquement ramene tant que l'entite reste dans cet etat.
+  _checkForceRules() {
+    const rules = (this._config && this._config.force_tab) || [];
+    if (!rules.length || !this._hass) return;
+    this._forceMatch = this._forceMatch || {};
+    rules.forEach((rule, i) => {
+      if (!rule || !rule.entity) return;
+      const st = this._hass.states[rule.entity];
+      const current = st ? st.state : undefined;
+      const matches = current === rule.state;
+      const key = "r" + i;
+      const was = this._forceMatch[key];
+      if (matches && !was) {
+        const idx = Number(rule.tab);
+        if (!Number.isNaN(idx) && this._config.tabs[idx] && idx !== this._activeIndex) {
+          this._setActiveTab(idx);
+        }
+      }
+      this._forceMatch[key] = matches;
+    });
+  }
+
+  _setActiveTab(index) {
+    if (index === this._activeIndex) return;
+    if (!this._config.tabs[index]) return;
+    this._activeIndex = index;
+    this._render();
+  }
+
+  async _ensureTabMounted(index) {
+    if (this._cardEls[index]) return this._cardEls[index];
+    this._mounting = this._mounting || {};
+    if (this._mounting[index]) return;
+    this._mounting[index] = true;
+    try {
+      const tab = this._config.tabs[index];
+      if (!tab) return null;
+      const helpers = await alexCardHelpers();
+      let el;
+      if (helpers && tab.card) {
+        el = helpers.createCardElement(tab.card);
+      } else {
+        el = document.createElement("hui-error-card");
+        if (el.setConfig) {
+          el.setConfig({
+            type: "error",
+            error: !tab.card
+              ? "Aucune carte configurée pour cet onglet (card:)."
+              : "window.loadCardHelpers indisponible sur cette version de Home Assistant.",
+          });
+        }
+      }
+      el.hass = this._hass;
+      el.style.display = "block";
+      this._cardEls[index] = el;
+      const panel = this.querySelector(".ac-tab-panel");
+      if (panel) panel.appendChild(el);
+      this._showOnlyActive();
+      return el;
+    } finally {
+      this._mounting[index] = false;
+    }
+  }
+
+  _showOnlyActive() {
+    Object.entries(this._cardEls).forEach(([idx, el]) => {
+      if (!el) return;
+      el.style.display = Number(idx) === this._activeIndex ? "block" : "none";
+    });
+  }
+
+  // Geste de balayage horizontal sur le panneau de contenu, pour naviguer
+  // entre onglets sans repasser par la barre. touch-action:pan-y laisse le
+  // defilement vertical de page intact ; un element portant [data-no-swipe]
+  // (ex. un slider dans la carte imbriquee) desactive le geste au-dessus de
+  // lui, meme principe que sur simple-tabs-card.
+  _bindSwipe(panel) {
+    if (!this._config.swipe || panel.dataset.swipeBound) return;
+    panel.dataset.swipeBound = "1";
+    panel.style.touchAction = "pan-y";
+    let startX = null;
+    let startY = null;
+    const threshold = this._config.swipe_threshold != null ? this._config.swipe_threshold : 50;
+
+    panel.addEventListener("pointerdown", (e) => {
+      if (e.target && e.target.closest && e.target.closest("[data-no-swipe]")) {
+        startX = null;
+        return;
+      }
+      if (e.pointerType === "mouse" && e.button !== 0) return;
+      startX = e.clientX;
+      startY = e.clientY;
+    });
+    panel.addEventListener("pointerup", (e) => {
+      if (startX == null) return;
+      const dx = e.clientX - startX;
+      const dy = e.clientY - startY;
+      startX = null;
+      if (Math.abs(dx) < threshold || Math.abs(dx) < Math.abs(dy)) return;
+      const tabs = this._config.tabs;
+      if (dx < 0 && this._activeIndex < tabs.length - 1) {
+        this._setActiveTab(this._activeIndex + 1);
+      } else if (dx > 0 && this._activeIndex > 0) {
+        this._setActiveTab(this._activeIndex - 1);
+      }
+    });
+    panel.addEventListener("pointercancel", () => {
+      startX = null;
+    });
+  }
+
+  _render() {
+    if (!this._config || !this._hass) return;
+    const c = this._config;
+    const tabs = Array.isArray(c.tabs) ? c.tabs : [];
+
+    if (!tabs.length) {
+      this.innerHTML =
+        '<ha-card style="border-radius:20px;box-shadow:none;padding:16px 18px;' +
+        'color:var(--secondary-text-color);">Aucun onglet configuré (tabs:).</ha-card>';
+      this._built = true;
+      return;
+    }
+
+    const sig = [
+      c.name,
+      c.icon,
+      JSON.stringify(c.icon_color || null),
+      JSON.stringify(c.background || null),
+      JSON.stringify(c.primary_color || null),
+      c.name_size,
+      c.icon_size,
+      c.bar_style,
+      c.bar_position,
+      c.wrap,
+      c.swipe,
+      c.chip_size,
+      JSON.stringify(c.active_bg || null),
+      JSON.stringify(c.active_text || null),
+      JSON.stringify(c.inactive_bg || null),
+      JSON.stringify(c.inactive_text || null),
+      tabs.map((t) => `${t.name}|${t.icon}`).join(";"),
+      this._activeIndex,
+    ].join("~");
+    if (this._built && sig === this._lastSig) {
+      // Structure inchangee - on s'assure juste que la carte de l'onglet
+      // actif est montee (cas de la toute premiere visite d'un onglet).
+      this._ensureTabMounted(this._activeIndex);
+      return;
+    }
+    this._lastSig = sig;
+
+    const iconColor = colorOr(c.icon_color, "#8b7ae6");
+    const badgeRgb = Array.isArray(c.icon_color) ? c.icon_color : [139, 122, 230];
+    const badgeBg = `rgba(${badgeRgb[0]}, ${badgeRgb[1]}, ${badgeRgb[2]}, 0.16)`;
+    const cardBg = colorOr(c.background, "var(--ha-card-background, var(--card-background-color))");
+    const primaryColor = colorOr(c.primary_color, "var(--primary-text-color)");
+    const nameSize = c.name_size != null ? c.name_size : 17;
+    const iconSize = c.icon_size != null ? c.icon_size : 20;
+    const badgeBox = Math.round(iconSize * 2);
+    const badgeRadius = Math.round(badgeBox * 0.3);
+
+    const barStyle = ["chips", "tabs"].includes(c.bar_style) ? c.bar_style : "switch";
+    const barPosition = c.bar_position === "bottom" ? "bottom" : "top";
+    const wrap = c.wrap !== false;
+
+    const activeBg = colorOr(
+      c.active_bg,
+      barStyle === "switch" ? "var(--card-background-color)" : "var(--primary-color)"
+    );
+    const activeText = colorOr(
+      c.active_text,
+      barStyle === "switch" ? "var(--primary-color)" : "var(--text-primary-color)"
+    );
+    const inactiveBg = colorOr(
+      c.inactive_bg,
+      barStyle === "switch" ? "rgba(var(--rgb-primary-color, 3, 169, 244), 0.18)" : "transparent"
+    );
+    const inactiveText = colorOr(
+      c.inactive_text,
+      barStyle === "switch" ? "var(--text-primary-color)" : "var(--secondary-text-color)"
+    );
+
+    // Meme principe de curseur unique que sur alex-switch-card.
+    const chipSize = c.chip_size != null ? c.chip_size : 13;
+    const chipPadV = Math.max(2, Math.round(chipSize * 0.42));
+    const chipPadHSeparate = Math.max(4, Math.round(chipSize * 0.83));
+    const chipPadHSwitch = Math.max(6, Math.round(chipSize * 1.17));
+    const chipRadiusSeparate = Math.max(4, Math.round(chipSize * 0.67));
+    const trackPad = Math.max(2, Math.round(chipSize * 0.25));
+    const trackGap = Math.max(1, Math.round(chipSize * 0.17));
+    // Rayon du rail (style switch) : capsule complete seulement si une seule
+    // ligne est garantie (wrap desactive) - sinon un rayon modere, qui reste
+    // correct visuellement que la barre tienne sur une ou plusieurs lignes.
+    const trackRadius = wrap ? Math.max(14, Math.round(chipSize * 1.4)) : 999;
+
+    const wrapCss = wrap ? "flex-wrap:wrap;" : "flex-wrap:nowrap;overflow-x:auto;";
+
+    const tabIconHtml = (t) =>
+      t.icon ? `<ha-icon icon="${t.icon}" style="--mdc-icon-size:${chipSize + 2}px;"></ha-icon>` : "";
+    const tabLabelHtml = (t) => (t.name ? `<span>${escapeHtml(t.name)}</span>` : "");
+
+    let barHtml;
+    if (barStyle === "switch") {
+      barHtml = `
+        <div style="display:flex;${wrapCss}gap:${trackGap}px;padding:${trackPad}px;
+                    border-radius:${trackRadius}px;background:${inactiveBg};">
+          ${tabs
+            .map((t, i) => {
+              const active = i === this._activeIndex;
+              return `
+                <button class="ac-tab-btn" data-index="${i}"
+                  style="border:none;background:${active ? activeBg : "transparent"};
+                         color:${active ? activeText : inactiveText};
+                         font-size:${chipSize}px;font-weight:${active ? "600" : "400"};
+                         padding:${chipPadV}px ${chipPadHSwitch}px;
+                         border-radius:999px;cursor:pointer;font-family:inherit;white-space:nowrap;
+                         display:inline-flex;align-items:center;gap:6px;
+                         box-shadow:${active ? "0 1px 3px rgba(0,0,0,0.18)" : "none"};
+                         transition:background .15s,color .15s,box-shadow .15s;">
+                  ${tabIconHtml(t)}${tabLabelHtml(t)}
+                </button>`;
+            })
+            .join("")}
+        </div>`;
+    } else if (barStyle === "tabs") {
+      barHtml = `
+        <div style="display:flex;${wrapCss}gap:${Math.max(4, trackGap * 2)}px;
+                    border-bottom:1px solid var(--divider-color);">
+          ${tabs
+            .map((t, i) => {
+              const active = i === this._activeIndex;
+              return `
+                <button class="ac-tab-btn" data-index="${i}"
+                  style="border:none;background:transparent;
+                         color:${active ? activeText : inactiveText};
+                         font-size:${chipSize}px;font-weight:${active ? "600" : "400"};
+                         padding:${chipPadV}px ${chipPadHSeparate}px;
+                         border-bottom:2px solid ${active ? activeText : "transparent"};
+                         margin-bottom:-1px;
+                         cursor:pointer;font-family:inherit;white-space:nowrap;
+                         display:inline-flex;align-items:center;gap:6px;
+                         transition:color .15s,border-color .15s;">
+                  ${tabIconHtml(t)}${tabLabelHtml(t)}
+                </button>`;
+            })
+            .join("")}
+        </div>`;
+    } else {
+      barHtml = `
+        <div style="display:flex;${wrapCss}gap:6px;">
+          ${tabs
+            .map((t, i) => {
+              const active = i === this._activeIndex;
+              const bg = active ? activeBg : inactiveBg;
+              const border = active ? activeBg : "var(--divider-color)";
+              const text = active ? activeText : inactiveText;
+              return `
+                <button class="ac-tab-btn" data-index="${i}"
+                  style="border:1px solid ${border};background:${bg};color:${text};
+                         font-size:${chipSize}px;font-weight:${active ? "600" : "400"};
+                         padding:${chipPadV}px ${chipPadHSeparate}px;
+                         border-radius:${chipRadiusSeparate}px;cursor:pointer;font-family:inherit;white-space:nowrap;
+                         display:inline-flex;align-items:center;gap:6px;
+                         transition:background .15s,border-color .15s,color .15s;">
+                  ${tabIconHtml(t)}${tabLabelHtml(t)}
+                </button>`;
+            })
+            .join("")}
+        </div>`;
+    }
+
+    const headerHtml = c.name
+      ? `
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px;">
+          <div style="width:${badgeBox}px;height:${badgeBox}px;border-radius:${badgeRadius}px;background:${badgeBg};
+                      display:flex;align-items:center;justify-content:center;flex:0 0 auto;">
+            <ha-icon icon="${c.icon || "mdi:view-carousel"}" style="--mdc-icon-size:${iconSize}px;color:${iconColor};"></ha-icon>
+          </div>
+          <div style="flex:1;min-width:0;font-size:${nameSize}px;font-weight:700;color:${primaryColor};
+                      overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(c.name)}</div>
+        </div>`
+      : "";
+
+    const barBlock = `<div class="ac-tab-bar" style="margin:${
+      barPosition === "top" ? "0 0 12px" : "12px 0 0"
+    };">${barHtml}</div>`;
+
+    this.innerHTML = `
+      <ha-card style="border-radius:20px;box-shadow:none;background:${cardBg};padding:16px 18px;">
+        ${headerHtml}
+        ${barPosition === "top" ? barBlock : ""}
+        <div class="ac-tab-panel" style="min-height:40px;"></div>
+        ${barPosition === "bottom" ? barBlock : ""}
+      </ha-card>`;
+
+    this.querySelectorAll(".ac-tab-btn").forEach((el) => {
+      el.addEventListener("click", () => {
+        this._setActiveTab(Number(el.getAttribute("data-index")));
+      });
+    });
+
+    // Les elements de carte deja crees lors d'un rendu precedent sont
+    // reattaches tels quels au nouveau panneau plutot que recrees, pour ne
+    // pas perdre leur etat interne (scroll, formulaires en cours...).
+    const panel = this.querySelector(".ac-tab-panel");
+    Object.values(this._cardEls).forEach((el) => {
+      if (el) panel.appendChild(el);
+    });
+    this._showOnlyActive();
+    this._bindSwipe(panel);
+    this._ensureTabMounted(this._activeIndex);
+
+    this._built = true;
+  }
+}
+customElements.define("alex-tabs-card", AlexTabsCard);
+
+class AlexTabsCardEditor extends AlexListEditor {
+  static getStubConfig() {
+    return AlexTabsCard.getStubConfig();
+  }
+
+  _normalize() {
+    if (!Array.isArray(this._config.tabs) || !this._config.tabs.length) {
+      this._config.tabs = AlexTabsCard.getStubConfig().tabs;
+    }
+    if (!Array.isArray(this._config.force_tab)) this._config.force_tab = [];
+  }
+
+  _validPath() {
+    const p = this._path || [];
+    if (p.length >= 2) {
+      if (p[0] === "tab" && !this._config.tabs[p[1]]) return [];
+      if (p[0] === "force" && !this._config.force_tab[p[1]]) return [];
+    }
+    return p;
+  }
+
+  _render() {
+    this._forms = [];
+    this._selectors = [];
+    this.innerHTML = "";
+    const p = this._validPath();
+    if (p.length === 0) this._renderRoot();
+    else if (p[0] === "tab") this._renderTab(p[1]);
+    else this._renderForceRule(p[1]);
+    if (this._hass) {
+      this._forms.forEach((f) => (f.hass = this._hass));
+      this._selectors.forEach((s) => (s.hass = this._hass));
+    }
+  }
+
+  _renderRoot() {
+    const cfg = this._config;
+
+    this.appendChild(this._sectionTitle("En-tête (optionnel)"));
+    this.appendChild(
+      this._form(
+        [
+          { name: "name", selector: { text: {} } },
+          { name: "icon", selector: { icon: {} } },
+        ],
+        { name: cfg.name, icon: cfg.icon },
+        { name: "Nom (vide = pas d'en-tête affiché)", icon: "Icône" },
+        (v) => this._update((c) => Object.assign(c, v))
+      )
+    );
+
+    this.appendChild(this._sectionTitle("Onglets"));
+    const tabs = cfg.tabs || [];
+    tabs.forEach((t, i) => {
+      this.appendChild(
+        this._row(
+          t.icon || "mdi:tab",
+          t.name || "(sans nom)",
+          t.card && t.card.type ? `card: ${t.card.type}` : "card: non défini",
+          () => {
+            this._path = ["tab", i];
+            this._render();
+          },
+          () => {
+            if (tabs.length <= 1) return; // au moins un onglet requis
+            this._update((c) => c.tabs.splice(i, 1));
+            this._render();
+          },
+          i > 0 ? () => this._moveItem((c) => c.tabs, i, -1) : null,
+          i < tabs.length - 1 ? () => this._moveItem((c) => c.tabs, i, 1) : null
+        )
+      );
+    });
+    this.appendChild(
+      this._addButton("Ajouter un onglet", () => {
+        let idx;
+        this._update((c) => {
+          c.tabs = c.tabs || [];
+          c.tabs.push({
+            name: "Nouvel onglet",
+            icon: "mdi:tab",
+            card: { type: "markdown", content: "Configure la carte de cet onglet en YAML." },
+          });
+          idx = c.tabs.length - 1;
+        });
+        this._path = ["tab", idx];
+        this._render();
+      })
+    );
+
+    this.appendChild(this._sectionTitle("Bascule forcée"));
+    const rules = cfg.force_tab || [];
+    rules.forEach((r, i) => {
+      const tIdx = Number(r.tab);
+      const tabName = (cfg.tabs[tIdx] && cfg.tabs[tIdx].name) || `Onglet ${tIdx + 1 || "?"}`;
+      this.appendChild(
+        this._row(
+          "mdi:swap-horizontal-bold",
+          r.entity || "(entité non définie)",
+          `= "${r.state || ""}" → ${tabName}`,
+          () => {
+            this._path = ["force", i];
+            this._render();
+          },
+          () => {
+            this._update((c) => c.force_tab.splice(i, 1));
+            this._render();
+          },
+          i > 0 ? () => this._moveItem((c) => c.force_tab, i, -1) : null,
+          i < rules.length - 1 ? () => this._moveItem((c) => c.force_tab, i, 1) : null
+        )
+      );
+    });
+    this.appendChild(
+      this._addButton("Ajouter une règle", () => {
+        let idx;
+        this._update((c) => {
+          c.force_tab = c.force_tab || [];
+          c.force_tab.push({ entity: "", state: "on", tab: 0 });
+          idx = c.force_tab.length - 1;
+        });
+        this._path = ["force", idx];
+        this._render();
+      })
+    );
+
+    this.appendChild(
+      this._panel(
+        "Customisation",
+        "mdi:palette",
+        this._mixed(
+          [
+            {
+              type: "expandable",
+              title: "Carte",
+              icon: "mdi:card-outline",
+              schema: [{ name: "background", selector: { color_rgb: {} } }],
+            },
+            {
+              type: "expandable",
+              title: "En-tête",
+              icon: "mdi:format-header-1",
+              schema: [
+                { name: "icon_color", selector: { color_rgb: {} } },
+                { name: "primary_color", selector: { color_rgb: {} } },
+                { name: "name_size", selector: { number: { min: 10, max: 32, step: 1, mode: "box" } } },
+                { name: "icon_size", selector: { number: { min: 12, max: 40, step: 1, mode: "box" } } },
+              ],
+            },
+            {
+              type: "expandable",
+              title: "Navigation",
+              icon: "mdi:gesture-swipe-horizontal",
+              schema: [
+                {
+                  name: "bar_style",
+                  selector: { select: { mode: "dropdown", options: TABS_BAR_STYLE_OPTIONS } },
+                },
+                {
+                  name: "bar_position",
+                  selector: { select: { mode: "dropdown", options: TABS_BAR_POSITION_OPTIONS } },
+                },
+                { name: "wrap", selector: { boolean: {} } },
+                { name: "swipe", selector: { boolean: {} } },
+                {
+                  name: "swipe_threshold",
+                  selector: { number: { min: 10, max: 200, step: 5, mode: "box" } },
+                },
+              ],
+            },
+            {
+              type: "expandable",
+              title: "Barre d'onglets",
+              icon: "mdi:toggle-switch-outline",
+              schema: [
+                { name: "chip_size", selector: { number: { min: 8, max: 24, step: 1, mode: "box" } } },
+                { name: "active_text", selector: { color_rgb: {} } },
+                { name: "active_bg", selector: { color_rgb: {} } },
+                { name: "inactive_text", selector: { color_rgb: {} } },
+                { name: "inactive_bg", selector: { color_rgb: {} } },
+              ],
+            },
+          ],
+          {
+            background: cfg.background,
+            icon_color: cfg.icon_color,
+            primary_color: cfg.primary_color,
+            name_size: cfg.name_size != null ? cfg.name_size : 17,
+            icon_size: cfg.icon_size != null ? cfg.icon_size : 20,
+            bar_style: cfg.bar_style === "chips" || cfg.bar_style === "tabs" ? cfg.bar_style : "switch",
+            bar_position: cfg.bar_position === "bottom" ? "bottom" : "top",
+            wrap: cfg.wrap !== false,
+            swipe: cfg.swipe !== false,
+            swipe_threshold: cfg.swipe_threshold != null ? cfg.swipe_threshold : 50,
+            chip_size: cfg.chip_size != null ? cfg.chip_size : 13,
+            active_text: cfg.active_text,
+            active_bg: cfg.active_bg,
+            inactive_text: cfg.inactive_text,
+            inactive_bg: cfg.inactive_bg,
+          },
+          {
+            background: "Fond de la carte",
+            icon_color: "Couleur du badge",
+            primary_color: "Couleur du nom",
+            name_size: "Taille du nom (px)",
+            icon_size: "Taille de l'icône du badge (px)",
+            bar_style: "Style de la barre",
+            bar_position: "Position de la barre",
+            wrap: "Retour à la ligne si trop d'onglets",
+            swipe: "Navigation au balayage (swipe)",
+            swipe_threshold: "Distance minimum du balayage (px)",
+            chip_size: "Taille des onglets (px)",
+            active_text: "Couleur du texte actif",
+            active_bg: "Fond actif",
+            inactive_text: "Couleur du texte inactif",
+            inactive_bg: "Fond inactif",
+          },
+          (v) => this._update((c) => Object.assign(c, v))
+        )
+      )
+    );
+  }
+
+  _renderTab(i) {
+    const cfg = this._config;
+    const t = cfg.tabs[i] || {};
+    const merge = (v) => this._update((c) => (c.tabs[i] = { ...c.tabs[i], ...v }));
+
+    this.appendChild(
+      this._backHeader(t.name || "Onglet", () => {
+        this._path = [];
+        this._render();
+      })
+    );
+
+    this.appendChild(
+      this._form(
+        [
+          { name: "name", selector: { text: {} } },
+          { name: "icon", selector: { icon: {} } },
+        ],
+        { name: t.name, icon: t.icon },
+        { name: "Nom", icon: "Icône" },
+        merge
+      )
+    );
+
+    const note = document.createElement("div");
+    note.style.cssText =
+      "font-size:12px;color:var(--secondary-text-color);margin:8px 2px 0;line-height:1.5;";
+    note.textContent =
+      "Le contenu de cet onglet (card:) se configure en YAML — bascule cette carte en " +
+      "mode YAML dans le tableau de bord pour l'éditer.";
+    this.appendChild(note);
+  }
+
+  _renderForceRule(i) {
+    const cfg = this._config;
+    const r = cfg.force_tab[i] || {};
+    const merge = (v) => this._update((c) => (c.force_tab[i] = { ...c.force_tab[i], ...v }));
+    const tabOptions = (cfg.tabs || []).map((t, idx) => ({
+      value: String(idx),
+      label: t.name || `Onglet ${idx + 1}`,
+    }));
+
+    this.appendChild(
+      this._backHeader(r.entity || "Règle", () => {
+        this._path = [];
+        this._render();
+      })
+    );
+
+    this.appendChild(
+      this._form(
+        [
+          { name: "entity", selector: { entity: {} } },
+          { name: "state", selector: { text: {} } },
+          { name: "tab", selector: { select: { mode: "dropdown", options: tabOptions } } },
+        ],
+        { entity: r.entity, state: r.state, tab: r.tab != null ? String(r.tab) : "0" },
+        {
+          entity: "Entité surveillée",
+          state: "État qui déclenche la bascule",
+          tab: "Onglet cible",
+        },
+        (v) => {
+          const patch = { ...v };
+          if (patch.tab != null) patch.tab = Number(patch.tab);
+          merge(patch);
+        }
+      )
+    );
+  }
+}
+customElements.define("alex-tabs-card-editor", AlexTabsCardEditor);
+
+window.customCards.push({
+  type: "alex-tabs-card",
+  name: "Alex Tabs Card",
+  description:
+    "Carte à onglets — monte n'importe quelle carte par onglet, navigation par puces/interrupteur/onglets, balayage, bascule forcée par entité.",
   preview: false,
   documentationURL: "https://github.com/<user>/alex-cards",
 });
