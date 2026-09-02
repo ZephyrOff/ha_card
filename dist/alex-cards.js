@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.43.2";
+const ALEX_CARDS_VERSION = "0.44.0";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -5619,6 +5619,63 @@ const TABS_BAR_POSITION_OPTIONS = [
   { value: "bottom", label: "Bas" },
 ];
 
+// Liste de types natifs connus - convention interne HA "hui-<type>-card".
+// Pas besoin d'etre exhaustif : le selecteur accepte aussi une valeur
+// personnalisee (custom_value) pour un type absent de cette liste.
+const TABS_NATIVE_CARD_TYPES = [
+  "entities",
+  "glance",
+  "grid",
+  "horizontal-stack",
+  "vertical-stack",
+  "button",
+  "light",
+  "thermostat",
+  "humidifier",
+  "media-control",
+  "picture",
+  "picture-elements",
+  "picture-entity",
+  "picture-glance",
+  "gauge",
+  "sensor",
+  "history-graph",
+  "statistics-graph",
+  "markdown",
+  "iframe",
+  "map",
+  "weather-forecast",
+  "area",
+  "alarm-panel",
+  "tile",
+  "conditional",
+  "plant-status",
+  "logbook",
+  "todo-list",
+  "calendar",
+  "shopping-list",
+  "energy-usage-graph",
+];
+
+function tabsCardTypeOptions() {
+  const native = TABS_NATIVE_CARD_TYPES.map((t) => ({ value: t, label: t }));
+  const custom = (window.customCards || []).map((c) => ({
+    value: "custom:" + c.type,
+    label: c.name || c.type,
+  }));
+  return [...native, ...custom].sort((a, b) => a.label.localeCompare(b.label));
+}
+
+// "custom:xxx" -> tag "xxx" (le custom element s'enregistre tel quel) ;
+// type natif "xxx" -> tag "hui-xxx-card" (convention interne HA, stable
+// depuis tres longtemps, utilisee couramment par la communaute custom-card
+// pour instancier des cartes natives a la main).
+function tabsResolveCardTag(type) {
+  if (!type) return null;
+  if (type.startsWith("custom:")) return type.slice("custom:".length);
+  return "hui-" + type + "-card";
+}
+
 class AlexTabsCard extends HTMLElement {
   static getConfigElement() {
     return document.createElement("alex-tabs-card-editor");
@@ -5632,16 +5689,8 @@ class AlexTabsCard extends HTMLElement {
       wrap: true,
       swipe: true,
       tabs: [
-        {
-          name: "Onglet 1",
-          icon: "mdi:numeric-1-circle-outline",
-          card: { type: "markdown", content: "Configure la carte de cet onglet en YAML." },
-        },
-        {
-          name: "Onglet 2",
-          icon: "mdi:numeric-2-circle-outline",
-          card: { type: "markdown", content: "Configure la carte de cet onglet en YAML." },
-        },
+        { name: "Onglet 1", icon: "mdi:numeric-1-circle-outline" },
+        { name: "Onglet 2", icon: "mdi:numeric-2-circle-outline" },
       ],
       force_tab: [],
     };
@@ -6048,42 +6097,30 @@ class AlexTabsCardEditor extends AlexListEditor {
     this._pickerOpenFor = this._pickerOpenFor || {};
 
     if (card) {
-      const editor = document.createElement("hui-card-element-editor");
-      editor.value = card;
-      if (this._hass) editor.hass = this._hass;
-
-      const toggleBtn = document.createElement("mwc-button");
-      toggleBtn.textContent = "Basculer visuel / YAML";
-      toggleBtn.style.cssText = "margin-bottom:6px;";
-      toggleBtn.addEventListener("click", () => {
-        if (editor.toggleMode) editor.toggleMode();
-      });
-      editor.addEventListener("GUImode-changed", (ev) => {
-        ev.stopPropagation();
-        toggleBtn.disabled = !ev.detail.guiModeAvailable;
-      });
-      editor.addEventListener("config-changed", (ev) => {
-        ev.stopPropagation();
-        onChange(ev.detail.config);
-      });
-
-      this._cardSubEditors.push(editor);
-      wrap.append(toggleBtn, editor);
+      // Editeur visuel propre au type de carte choisi, via getConfigElement()
+      // - l'API publique et stable que toute carte Lovelace avec un editeur
+      // visuel doit exposer (la meme que nos propres cartes utilisent).
+      // Repli en JSON brut si ce type n'a pas d'editeur visuel disponible.
+      const container = document.createElement("div");
+      wrap.appendChild(container);
+      this._mountCardEditor(container, card, onChange);
     } else if (this._pickerOpenFor[tabIndex]) {
-      // Vraie galerie native HA (hui-card-picker) - le meme composant que
-      // le bouton "+ Ajouter une carte" d'un tableau de bord ouvre. Le
-      // config renvoye par son evenement config-changed est deja une
-      // config de carte complete et valide (type + champs par defaut du
-      // type choisi), montee ensuite via loadCardHelpers() comme n'importe
-      // quelle carte de tableau de bord - son propre <ha-card> inclus.
-      const picker = document.createElement("hui-card-picker");
-      if (this._hass) picker.hass = this._hass;
-      picker.addEventListener("config-changed", (ev) => {
-        ev.stopPropagation();
-        onChange(ev.detail.config);
-      });
-      this._cardSubEditors.push(picker);
-      wrap.appendChild(picker);
+      const options = tabsCardTypeOptions();
+      wrap.appendChild(
+        this._form(
+          [
+            {
+              name: "type",
+              selector: { select: { mode: "dropdown", custom_value: true, options } },
+            },
+          ],
+          {},
+          { type: "Type de carte" },
+          (v) => {
+            if (v && v.type) onChange({ type: v.type });
+          }
+        )
+      );
     } else {
       wrap.appendChild(
         this._addButton("Ajouter une carte", () => {
@@ -6093,6 +6130,84 @@ class AlexTabsCardEditor extends AlexListEditor {
       );
     }
 
+    return wrap;
+  }
+
+  async _mountCardEditor(container, cardConfig, onChange) {
+    container.textContent = "Chargement de l'éditeur…";
+    container.style.cssText = "font-size:12px;color:var(--secondary-text-color);";
+
+    let ElClass = null;
+    try {
+      const helpers = await alexCardHelpers();
+      const probe = helpers
+        ? helpers.createCardElement(cardConfig)
+        : document.createElement(tabsResolveCardTag(cardConfig.type) || "div");
+      ElClass = probe.constructor;
+    } catch (e) {
+      ElClass = null;
+    }
+
+    let editorEl = null;
+    if (ElClass && typeof ElClass.getConfigElement === "function") {
+      try {
+        editorEl = await ElClass.getConfigElement();
+      } catch (e) {
+        editorEl = null;
+      }
+      if (editorEl) {
+        try {
+          editorEl.setConfig(cardConfig);
+        } catch (e) {
+          editorEl = null; // config invalide pour ce type -> repli JSON
+        }
+      }
+    }
+
+    container.textContent = "";
+    container.style.cssText = "";
+
+    if (editorEl) {
+      if (this._hass) editorEl.hass = this._hass;
+      editorEl.addEventListener("config-changed", (ev) => {
+        ev.stopPropagation();
+        onChange(ev.detail.config);
+      });
+      this._cardSubEditors.push(editorEl);
+      container.appendChild(editorEl);
+    } else {
+      container.appendChild(this._jsonCardEditor(cardConfig, onChange));
+    }
+  }
+
+  // Repli sans dependance a une API interne HA : simple textarea JSON,
+  // fonctionne toujours, meme pour un type de carte sans editeur visuel.
+  _jsonCardEditor(cardConfig, onChange) {
+    const wrap = document.createElement("div");
+    const hint = document.createElement("div");
+    hint.style.cssText = "font-size:12px;color:var(--secondary-text-color);margin:0 2px 6px;";
+    hint.textContent = "Pas d'éditeur visuel pour ce type de carte — config en JSON brut.";
+    const ta = document.createElement("textarea");
+    ta.value = JSON.stringify(cardConfig, null, 2);
+    ta.rows = 10;
+    ta.spellcheck = false;
+    ta.style.cssText =
+      "width:100%;box-sizing:border-box;font-family:monospace;font-size:12px;" +
+      "padding:8px;border:1px solid var(--divider-color);border-radius:8px;" +
+      "background:var(--card-background-color,var(--ha-card-background));" +
+      "color:var(--primary-text-color);";
+    const err = document.createElement("div");
+    err.style.cssText = "font-size:12px;color:var(--error-color,#db4437);margin-top:4px;min-height:16px;";
+    ta.addEventListener("change", () => {
+      try {
+        const parsed = JSON.parse(ta.value);
+        err.textContent = "";
+        onChange(parsed);
+      } catch (e) {
+        err.textContent = "JSON invalide : " + e.message;
+      }
+    });
+    wrap.append(hint, ta, err);
     return wrap;
   }
 

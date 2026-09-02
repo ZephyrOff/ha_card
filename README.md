@@ -530,15 +530,16 @@ force_tab:
   (l'API standard utilisée par `stack-in-card`/`conditional-card`/`auto-entities` pour
   créer dynamiquement n'importe quelle carte à partir de sa config). **Éditable
   visuellement** dans l'éditeur de la carte : pas encore de carte choisie pour un
-  onglet → un bouton **« + Ajouter une carte »**, qui ouvre au clic la galerie native HA
-  (`hui-card-picker`, le même composant que le bouton « Ajouter une carte » d'un tableau
-  de bord) ; une fois choisie → l'éditeur complet de cette carte
-  (`hui-card-element-editor`, avec bascule visuel/YAML), le même composant que la boîte
-  de dialogue native « Modifier la carte » de Home Assistant utilise en interne pour
-  n'importe quelle carte. La config renvoyée par la galerie est une config de carte
-  complète et valide dès le départ (type + champs par défaut du type choisi), montée
-  ensuite exactement comme n'importe quelle carte de tableau de bord — son propre
-  `ha-card` compris.
+  onglet → un bouton **« + Ajouter une carte »**, qui ouvre au clic un sélecteur de
+  type (cartes natives HA + toutes les cartes `custom:` installées, y compris les
+  autres cartes `alex-*` — valeur libre acceptée si le type voulu n'est pas dans la
+  liste) ; une fois le type choisi → l'éditeur visuel propre à ce type, via
+  `getConfigElement()` (l'API publique et stable que toute carte Lovelace avec un
+  éditeur visuel expose — la même que nos propres cartes utilisent), avec un repli en
+  JSON brut pour les types de carte qui n'ont pas d'éditeur visuel. Construit
+  volontairement sans dépendre des composants internes de galerie/édition de carte de
+  HA (`hui-card-picker`/`hui-card-element-editor`) — leur disponibilité s'est révélée
+  peu fiable selon le contexte d'ouverture de l'éditeur.
 - **`bar_style`** : trois rendus pour la barre de navigation.
   - `chips` : puces indépendantes avec bordure, espacées (même style que le mode
     `separate` d'Alex Switch Card).
