@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.43.1";
+const ALEX_CARDS_VERSION = "0.43.2";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -6045,6 +6045,7 @@ class AlexTabsCardEditor extends AlexListEditor {
     wrap.style.cssText = "margin-top:4px;";
     const card = this._config.tabs[tabIndex] && this._config.tabs[tabIndex].card;
     this._cardSubEditors = this._cardSubEditors || [];
+    this._pickerOpenFor = this._pickerOpenFor || {};
 
     if (card) {
       const editor = document.createElement("hui-card-element-editor");
@@ -6068,7 +6069,13 @@ class AlexTabsCardEditor extends AlexListEditor {
 
       this._cardSubEditors.push(editor);
       wrap.append(toggleBtn, editor);
-    } else {
+    } else if (this._pickerOpenFor[tabIndex]) {
+      // Vraie galerie native HA (hui-card-picker) - le meme composant que
+      // le bouton "+ Ajouter une carte" d'un tableau de bord ouvre. Le
+      // config renvoye par son evenement config-changed est deja une
+      // config de carte complete et valide (type + champs par defaut du
+      // type choisi), montee ensuite via loadCardHelpers() comme n'importe
+      // quelle carte de tableau de bord - son propre <ha-card> inclus.
       const picker = document.createElement("hui-card-picker");
       if (this._hass) picker.hass = this._hass;
       picker.addEventListener("config-changed", (ev) => {
@@ -6077,6 +6084,13 @@ class AlexTabsCardEditor extends AlexListEditor {
       });
       this._cardSubEditors.push(picker);
       wrap.appendChild(picker);
+    } else {
+      wrap.appendChild(
+        this._addButton("Ajouter une carte", () => {
+          this._pickerOpenFor[tabIndex] = true;
+          this._render();
+        })
+      );
     }
 
     return wrap;
@@ -6313,6 +6327,7 @@ class AlexTabsCardEditor extends AlexListEditor {
         this._update((c) => {
           c.tabs[i] = { ...c.tabs[i], card: cardConfig };
         });
+        if (this._pickerOpenFor) delete this._pickerOpenFor[i];
         // Du picker vers l'editeur complet : il faut reconstruire la vue
         // pour afficher le bon composant. Une fois l'editeur deja affiche,
         // on laisse ses propres changements internes vivre sans tout

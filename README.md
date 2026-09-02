@@ -530,11 +530,15 @@ force_tab:
   (l'API standard utilisée par `stack-in-card`/`conditional-card`/`auto-entities` pour
   créer dynamiquement n'importe quelle carte à partir de sa config). **Éditable
   visuellement** dans l'éditeur de la carte : pas encore de carte choisie pour un
-  onglet → la galerie native HA (`hui-card-picker`, la même que le bouton « Ajouter une
-  carte » d'un tableau de bord) ; une fois choisie → l'éditeur complet de cette carte
+  onglet → un bouton **« + Ajouter une carte »**, qui ouvre au clic la galerie native HA
+  (`hui-card-picker`, le même composant que le bouton « Ajouter une carte » d'un tableau
+  de bord) ; une fois choisie → l'éditeur complet de cette carte
   (`hui-card-element-editor`, avec bascule visuel/YAML), le même composant que la boîte
   de dialogue native « Modifier la carte » de Home Assistant utilise en interne pour
-  n'importe quelle carte.
+  n'importe quelle carte. La config renvoyée par la galerie est une config de carte
+  complète et valide dès le départ (type + champs par défaut du type choisi), montée
+  ensuite exactement comme n'importe quelle carte de tableau de bord — son propre
+  `ha-card` compris.
 - **`bar_style`** : trois rendus pour la barre de navigation.
   - `chips` : puces indépendantes avec bordure, espacées (même style que le mode
     `separate` d'Alex Switch Card).
