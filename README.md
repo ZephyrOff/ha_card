@@ -25,6 +25,7 @@ Collection de cartes Lovelace custom pour Home Assistant, distribuée en **plugi
 | `custom:alex-media-player-card` | oui        | Contrôle média (pochette, lecture, volume) avec bascule entre lecteurs actifs. |
 | `custom:alex-server-card`       | oui        | Liste de serveurs/VM avec statut en ligne et bouton power. |
 | `custom:alex-gradient-card`     | oui        | Réglage des segments de couleur des lampes Gradient Philips Hue (Zigbee2MQTT). |
+| `custom:alex-gradient-popup-card` | oui      | Liste de bandeaux LED — roue chromatique à points multiples pour composer le dégradé de chacun, façon éditeur Philips Hue. |
 | `custom:alex-gradient-scene-card` | oui      | Liste et applique les scènes enregistrées via l'intégration Alex Gradient Studio. |
 | `custom:alex-input-color`       | oui        | Réglage compact de luminosité/couleur RGB/température de blanc par groupes. |
 
@@ -793,6 +794,67 @@ icon: mdi:led-strip-variant
 - Personnalisation, regroupée en sous-sections dans le panneau Customisation :
   **Carte** (couleur du badge, fond de la carte), **Texte et accent** (couleur du nom,
   couleur secondaire, couleur du bouton « Appliquer »/interrupteur actif).
+
+### Alex Gradient Popup Card
+
+Liste de bandeaux LED configurés — cliquer sur un bandeau ouvre une fenêtre avec une
+roue chromatique où poser plusieurs points déplaçables pour composer son dégradé,
+inspirée de l'éditeur de dégradé de l'app Philips Hue. Complète Alex Gradient Card
+plutôt que la remplace : même mécanisme d'application (résolution du nom convivial
+Z2M, nombre de segments effectif, appel `mqtt.publish` vers `zigbee2mqtt/<nom>/set`),
+juste une autre façon de composer les couleurs en amont.
+
+```yaml
+type: custom:alex-gradient-popup-card
+name: Bandeaux LED
+icon: mdi:gradient-vertical
+strips:
+  - entity: light.chambre_bled
+    name: Chambre
+    device_type: aqara
+  - entity: light.salon_gradient
+    name: Salon
+    device_type: hue
+    segments: 7
+```
+
+- **Le mécanisme de la roue** : elle n'encode que la couleur (angle = teinte,
+  distance au centre = saturation) — pas la position physique sur le bandeau. Chaque
+  point est une couleur indépendante ; c'est son **ordre dans la liste sous la roue**
+  (pas sa position sur la roue) qui détermine où il tombe sur le bandeau. Mode
+  linéaire uniquement pour l'instant : les points se répartissent dans l'ordre sur le
+  bandeau, l'interpolation entre eux est automatique (autres modes façon
+  Mirrored/Scattered de Hue envisageables plus tard). 2 à 8 points par bandeau.
+- **Luminosité partagée** : un seul curseur pour tout le dégradé, hors de la roue —
+  comme chez Hue, qui ne l'encode jamais dans la roue elle-même. Préremplie avec la
+  luminosité actuelle de la lumière à l'ouverture de la fenêtre.
+- **Aperçu en direct** (case à cocher dans la fenêtre, désactivée par défaut) :
+  applique le dégradé au bandeau réel à chaque déplacement d'un point ou changement de
+  luminosité (débit limité à un appel toutes les ~180 ms pendant qu'on glisse un
+  point, pour ne pas noyer Zigbee2MQTT). Le bouton **Appliquer** reste disponible dans
+  tous les cas, direct activé ou non — un envoi final explicite, garanti après
+  n'importe quelle série de changements.
+- **Rien n'est mémorisé d'une ouverture à l'autre** : chaque ouverture de la fenêtre
+  repart d'un dégradé par défaut à 3 points (même principe « éphémère » que les points
+  d'édition d'Alex Gradient Card — l'état n'a de sens qu'au moment d'appliquer). Si
+  retrouver le dernier dégradé utilisé par bandeau devient gênant à l'usage, on peut
+  ajouter une mémorisation locale au navigateur.
+- **`strips`** (au moins un recommandé) : mêmes champs qu'Alex Gradient Card, par
+  bandeau — `entity`, `device_type` (`hue` ou `aqara`), `friendly_name` (vide = déduit
+  de l'entité), `segments` (ignoré pour l'Aqara si une longueur est détectée),
+  `length_entity` (Aqara, vide = déduite du nom de l'entité), `name`, `icon`.
+- Personnalisation, regroupée en sous-sections dans le panneau Customisation :
+  **Carte** (écartement entre bandeaux, couleur du badge, fond de la carte),
+  **En-tête** (couleur du nom de la carte), **Bandeaux** (couleur des noms de
+  bandeau).
+- **À vérifier en conditions réelles** : le dégradé et la luminosité partent dans le
+  même envoi MQTT (`{ gradient: [...], brightness: ... }` ou l'équivalent
+  `segment_colors` pour l'Aqara) — en partant du principe que Z2M accepte `brightness`
+  dans la même charge utile `/set`, convention habituelle chez Z2M mais non confirmée
+  pour ces deux appareils précis. La fenêtre elle-même repose sur `ha-dialog`, un
+  composant HA nettement plus répandu et stable que ceux qui ont posé problème pour
+  l'éditeur de carte imbriquée d'Alex Tabs Card, mais jamais utilisé ailleurs dans ce
+  bundle — à tester en priorité.
 
 ### Alex Gradient Scene Card
 

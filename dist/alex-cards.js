@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.47.0";
+const ALEX_CARDS_VERSION = "0.48.0";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -8077,6 +8077,643 @@ window.customCards.push({
   type: "alex-gradient-card",
   name: "Alex Gradient Card",
   description: "Réglage des segments de couleur des lampes Gradient Philips Hue via Zigbee2MQTT.",
+  preview: false,
+  documentationURL: "https://github.com/<user>/alex-cards",
+});
+
+
+/* =========================================================================
+ * === alex-gradient-popup-card =============================================
+ * Liste de bandeaux LED configures ; cliquer sur un bandeau ouvre une
+ * fenetre (ha-dialog) avec une roue chromatique ou poser plusieurs points
+ * deplacables pour composer le degrade, inspiree de l'editeur de degrade
+ * de l'app Philips Hue - la roue n'encode QUE la couleur (angle = teinte,
+ * distance au centre = saturation), l'ordre sur le bandeau est gere par
+ * une liste separee sous la roue, et la luminosite est un curseur partage
+ * a part (comme chez Hue, qui ne l'encode jamais dans la roue elle-meme).
+ *
+ * Reutilise a l'identique le mecanisme deja en place sur alex-gradient-card
+ * (resolution du nom convivial Z2M, nombre de segments effectif via
+ * number.*_length pour l'Aqara, rappel MQTT zigbee2mqtt/<nom>/set) - seule
+ * la maniere de composer les couleurs change, pas la facon de les envoyer
+ * a l'appareil.
+ *
+ * Mode "Lineaire" uniquement pour l'instant (les points se repartissent
+ * dans l'ordre, interpolation lisse automatique) - d'autres modes
+ * (Mirrored/Scattered a la Hue) pourront s'ajouter plus tard.
+ * ========================================================================= */
+
+// HSL -> hex. La roue ne manipule que teinte (0-360) et saturation (0-1) ;
+// la luminosite (0-1) vient du curseur partage, appliquee au moment de
+// convertir vers une couleur finale (jamais stockee sur le point lui-meme).
+function gradientPopupHslToHex(h, s, l) {
+  h = ((h % 360) + 360) % 360;
+  s = Math.max(0, Math.min(1, s));
+  l = Math.max(0, Math.min(1, l));
+  const cVal = (1 - Math.abs(2 * l - 1)) * s;
+  const x = cVal * (1 - Math.abs(((h / 60) % 2) - 1));
+  const m = l - cVal / 2;
+  let r, g, b;
+  if (h < 60) [r, g, b] = [cVal, x, 0];
+  else if (h < 120) [r, g, b] = [x, cVal, 0];
+  else if (h < 180) [r, g, b] = [0, cVal, x];
+  else if (h < 240) [r, g, b] = [0, x, cVal];
+  else if (h < 300) [r, g, b] = [x, 0, cVal];
+  else [r, g, b] = [cVal, 0, x];
+  const toHex = (v) =>
+    Math.max(0, Math.min(255, Math.round((v + m) * 255)))
+      .toString(16)
+      .padStart(2, "0");
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+}
+
+// Reechantillonnage lineaire d'un tableau de couleurs hex vers un nombre
+// cible - copie volontaire du meme algorithme que alex-gradient-card
+// (bloc autonome, philosophie du bundle : pas de module partage entre
+// cartes meme quand la logique est identique).
+function gradientPopupResample(hexColors, targetCount) {
+  if (targetCount <= 0) return [];
+  if (!hexColors.length) return new Array(targetCount).fill("#ffffff");
+  if (hexColors.length === 1) return new Array(targetCount).fill(hexColors[0]);
+
+  const hexToRgb = (h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+  const rgbToHex = (r, g, b) =>
+    "#" + [r, g, b].map((v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, "0")).join("");
+
+  const out = [];
+  for (let i = 0; i < targetCount; i++) {
+    const pos = targetCount > 1 ? i / (targetCount - 1) : 0;
+    const srcPos = pos * (hexColors.length - 1);
+    const lo = Math.floor(srcPos);
+    const hi = Math.min(hexColors.length - 1, lo + 1);
+    const t = srcPos - lo;
+    const [r1, g1, b1] = hexToRgb(hexColors[lo]);
+    const [r2, g2, b2] = hexToRgb(hexColors[hi]);
+    out.push(rgbToHex(r1 + (r2 - r1) * t, g1 + (g2 - g1) * t, b1 + (b2 - b1) * t));
+  }
+  return out;
+}
+
+class GradientPopupCard extends HTMLElement {
+  static getConfigElement() {
+    return document.createElement("alex-gradient-popup-card-editor");
+  }
+  static getStubConfig() {
+    return { name: "Bandeaux LED", icon: "mdi:gradient-vertical", strips: [] };
+  }
+
+  setConfig(config) {
+    if (!config) throw new Error("Configuration invalide");
+    this._config = config;
+    this._built = false;
+    this._lastSig = null;
+  }
+
+  set hass(hass) {
+    this._hass = hass;
+    this._render();
+    if (this._dialogEl) this._dialogEl.hass = hass;
+  }
+
+  disconnectedCallback() {
+    this._closeDialog();
+  }
+
+  getCardSize() {
+    return 1 + ((this._config && this._config.strips) || []).length;
+  }
+
+  // Meme logique que alex-gradient-card, dupliquee ici pour un bandeau de
+  // la liste plutot que pour la config racine d'une carte a bandeau unique.
+  _friendlyNameFor(strip) {
+    if (strip.friendly_name) return strip.friendly_name;
+    const st = strip.entity && this._hass && this._hass.states[strip.entity];
+    const attrName = st && st.attributes && st.attributes.friendly_name;
+    if (attrName) return attrName;
+    return strip.entity ? strip.entity.split(".")[1] || "" : "";
+  }
+
+  _defaultLengthEntityFor(strip) {
+    if (!strip.entity) return null;
+    const objectId = strip.entity.split(".")[1];
+    return objectId ? `number.${objectId}_length` : null;
+  }
+
+  _effectiveSegmentsFor(strip) {
+    if (strip.device_type === "aqara" && this._hass) {
+      const lengthEntityId = strip.length_entity || this._defaultLengthEntityFor(strip);
+      const st = lengthEntityId ? this._hass.states[lengthEntityId] : null;
+      if (st && st.state != null && !Number.isNaN(Number(st.state))) {
+        const n = Math.round(Number(st.state) * 5);
+        if (n > 0) return Math.min(50, n);
+      }
+    }
+    return Math.max(2, Math.min(50, strip.segments || 5));
+  }
+
+  // Points (teinte/saturation, roue) + luminosite partagee (%) -> un appel
+  // MQTT unique, meme mecanisme que le bouton "Appliquer le degrade" de
+  // alex-gradient-card. A verifier en conditions reelles : on part du
+  // principe que Z2M accepte `brightness` dans le meme payload `/set` que
+  // `gradient`/`segment_colors`, comme c'est la convention Z2M habituelle
+  // pour combiner plusieurs proprietes en une seule commande - mais rien
+  // ne garantit que ce soit vrai pour ces deux types d'appareils precis.
+  _applyToStrip(strip, points, brightnessPct) {
+    const friendlyName = this._friendlyNameFor(strip);
+    if (!friendlyName || !this._hass) return;
+    const segmentsCount = this._effectiveSegmentsFor(strip);
+    const hexPoints = points.map((p) => gradientPopupHslToHex(p.hue, p.sat, 0.5));
+    const colors = gradientPopupResample(hexPoints, segmentsCount);
+    const brightness254 = Math.round(Math.max(0, Math.min(100, brightnessPct)) * 2.54);
+    const payload =
+      strip.device_type === "aqara"
+        ? {
+            segment_colors: colors.map((hex, i) => ({ segment: i + 1, color: hexToRgbObj(hex) })),
+            brightness: brightness254,
+          }
+        : { gradient: colors, brightness: brightness254 };
+    this._hass.callService("mqtt", "publish", {
+      topic: `zigbee2mqtt/${friendlyName}/set`,
+      payload: JSON.stringify(payload),
+    });
+  }
+
+  _closeDialog() {
+    if (this._dialogEl) {
+      this._dialogEl.open = false;
+      this._dialogEl.remove();
+      this._dialogEl = null;
+    }
+  }
+
+  // Construit et ouvre la fenetre d'edition pour un bandeau. Etat de la
+  // roue tenu ici, jamais persiste (memes principe "ephemere" que les
+  // points d'edition de alex-gradient-card) : chaque ouverture repart
+  // d'un degrade par defaut a 3 points.
+  _openDialog(index) {
+    const strip = this._config.strips[index];
+    if (!strip || !this._hass) return;
+    this._closeDialog();
+
+    const stateObj = strip.entity ? this._hass.states[strip.entity] : null;
+    const startBrightness =
+      stateObj && stateObj.attributes && stateObj.attributes.brightness != null
+        ? Math.round(stateObj.attributes.brightness / 2.54)
+        : 70;
+
+    const state = {
+      points: [
+        { hue: 210, sat: 0.75 },
+        { hue: 30, sat: 0.8 },
+        { hue: 330, sat: 0.6 },
+      ],
+      brightness: startBrightness,
+      live: false,
+      dragIndex: null,
+    };
+    const MAX_POINTS = 8;
+    let liveThrottle = null;
+
+    const dialog = document.createElement("ha-dialog");
+    dialog.heading = strip.name || strip.entity || "Dégradé";
+    dialog.hass = this._hass;
+    dialog.addEventListener("closed", () => {
+      dialog.remove();
+      if (this._dialogEl === dialog) this._dialogEl = null;
+    });
+
+    dialog.innerHTML = `
+      <div style="display:flex;flex-direction:column;align-items:center;gap:16px;
+                  padding:8px 4px 4px;min-width:280px;max-width:360px;">
+        <div class="gp-wheel" style="position:relative;width:min(240px, 68vw);height:min(240px, 68vw);
+                    border-radius:50%;touch-action:none;cursor:crosshair;
+                    background:
+                      radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0) 72%),
+                      conic-gradient(red, yellow, lime, cyan, blue, magenta, red);">
+        </div>
+        <div style="width:100%;">
+          <div style="font-size:12px;color:var(--secondary-text-color);margin-bottom:6px;">Ordre sur le bandeau</div>
+          <div class="gp-swatches" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;"></div>
+        </div>
+        <button class="gp-add" style="align-self:flex-start;border:1px solid var(--divider-color);
+                    background:transparent;color:var(--primary-text-color);border-radius:8px;
+                    padding:6px 12px;cursor:pointer;font-size:13px;">+ Ajouter un point</button>
+        <div style="width:100%;display:flex;align-items:center;gap:10px;">
+          <ha-icon icon="mdi:brightness-6" style="--mdc-icon-size:18px;color:var(--secondary-text-color);"></ha-icon>
+          <input class="gp-brightness" type="range" min="1" max="100" step="1" value="${startBrightness}" style="flex:1;" />
+        </div>
+        <label style="width:100%;display:flex;align-items:center;justify-content:space-between;
+                    font-size:13px;color:var(--primary-text-color);cursor:pointer;">
+          Aperçu en direct sur le bandeau
+          <input class="gp-live" type="checkbox" style="width:18px;height:18px;cursor:pointer;" />
+        </label>
+      </div>`;
+
+    const closeBtn = document.createElement("mwc-button");
+    closeBtn.setAttribute("slot", "primaryAction");
+    closeBtn.setAttribute("dialogAction", "close");
+    closeBtn.textContent = "Fermer";
+    closeBtn.addEventListener("click", () => {
+      dialog.open = false;
+    });
+    const applyBtn = document.createElement("mwc-button");
+    applyBtn.setAttribute("slot", "secondaryAction");
+    applyBtn.textContent = "Appliquer";
+
+    dialog.appendChild(applyBtn);
+    dialog.appendChild(closeBtn);
+
+    const wheelEl = dialog.querySelector(".gp-wheel");
+    const swatchesEl = dialog.querySelector(".gp-swatches");
+    const brightnessEl = dialog.querySelector(".gp-brightness");
+    const liveEl = dialog.querySelector(".gp-live");
+    const addBtn = dialog.querySelector(".gp-add");
+
+    const colorForPoint = (p) => gradientPopupHslToHex(p.hue, p.sat, 0.5);
+
+    const maybeLiveApply = () => {
+      if (!state.live) return;
+      if (liveThrottle) return;
+      liveThrottle = setTimeout(() => {
+        liveThrottle = null;
+      }, 180);
+      this._applyToStrip(strip, state.points, state.brightness);
+    };
+
+    const renderWheel = () => {
+      wheelEl.querySelectorAll(".gp-dot").forEach((d) => d.remove());
+      const R = wheelEl.offsetWidth / 2;
+      state.points.forEach((p, i) => {
+        const rad = (p.hue * Math.PI) / 180;
+        const x = R + p.sat * R * Math.cos(rad);
+        const y = R + p.sat * R * Math.sin(rad);
+        const dot = document.createElement("div");
+        dot.className = "gp-dot";
+        dot.style.cssText = `position:absolute;width:24px;height:24px;border-radius:50%;
+          left:${x - 12}px;top:${y - 12}px;background:${colorForPoint(p)};
+          border:2px solid var(--card-background-color);box-shadow:0 0 0 1.5px var(--divider-color);
+          cursor:grab;`;
+        dot.addEventListener("pointerdown", (e) => {
+          state.dragIndex = i;
+          dot.setPointerCapture(e.pointerId);
+        });
+        wheelEl.appendChild(dot);
+      });
+    };
+
+    const renderSwatches = () => {
+      swatchesEl.innerHTML = "";
+      state.points.forEach((p, i) => {
+        const sw = document.createElement("div");
+        sw.style.cssText = `width:32px;height:32px;border-radius:8px;background:${colorForPoint(p)};
+          border:1px solid var(--divider-color);position:relative;`;
+        if (state.points.length > 2) {
+          const rm = document.createElement("div");
+          rm.textContent = "×";
+          rm.style.cssText = `position:absolute;top:-6px;right:-6px;width:16px;height:16px;
+            border-radius:50%;background:var(--card-background-color);border:1px solid var(--divider-color);
+            display:flex;align-items:center;justify-content:center;font-size:11px;
+            color:var(--primary-text-color);cursor:pointer;line-height:1;`;
+          rm.addEventListener("click", () => {
+            state.points.splice(i, 1);
+            renderAll();
+          });
+          sw.appendChild(rm);
+        }
+        swatchesEl.appendChild(sw);
+        if (i < state.points.length - 1) {
+          const arrow = document.createElement("ha-icon");
+          arrow.setAttribute("icon", "mdi:arrow-right");
+          arrow.style.cssText = "--mdc-icon-size:14px;color:var(--secondary-text-color);";
+          swatchesEl.appendChild(arrow);
+        }
+      });
+      addBtn.disabled = state.points.length >= MAX_POINTS;
+      addBtn.style.opacity = addBtn.disabled ? "0.5" : "1";
+    };
+
+    const renderAll = () => {
+      renderWheel();
+      renderSwatches();
+      maybeLiveApply();
+    };
+
+    wheelEl.addEventListener("pointermove", (e) => {
+      if (state.dragIndex == null) return;
+      const rect = wheelEl.getBoundingClientRect();
+      const R = rect.width / 2;
+      const dx = e.clientX - rect.left - R;
+      const dy = e.clientY - rect.top - R;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      let angle = (Math.atan2(dy, dx) * 180) / Math.PI;
+      if (angle < 0) angle += 360;
+      state.points[state.dragIndex].hue = angle;
+      state.points[state.dragIndex].sat = Math.min(1, dist / R);
+      renderWheel();
+      renderSwatches();
+      maybeLiveApply();
+    });
+    wheelEl.addEventListener("pointerup", () => {
+      state.dragIndex = null;
+    });
+    wheelEl.addEventListener("pointercancel", () => {
+      state.dragIndex = null;
+    });
+
+    addBtn.addEventListener("click", () => {
+      if (state.points.length >= MAX_POINTS) return;
+      state.points.push({ hue: Math.random() * 360, sat: 0.7 });
+      renderAll();
+    });
+
+    brightnessEl.addEventListener("input", () => {
+      state.brightness = Number(brightnessEl.value);
+      maybeLiveApply();
+    });
+
+    liveEl.addEventListener("change", () => {
+      state.live = liveEl.checked;
+      if (state.live) this._applyToStrip(strip, state.points, state.brightness);
+    });
+
+    applyBtn.addEventListener("click", () => {
+      this._applyToStrip(strip, state.points, state.brightness);
+    });
+
+    document.body.appendChild(dialog);
+    this._dialogEl = dialog;
+    dialog.open = true;
+    requestAnimationFrame(renderAll);
+  }
+
+  _render() {
+    if (!this._config || !this._hass) return;
+    const c = this._config;
+    const strips = Array.isArray(c.strips) ? c.strips : [];
+
+    const sig = [
+      c.name,
+      c.icon,
+      JSON.stringify(c.icon_color || null),
+      JSON.stringify(c.background || null),
+      JSON.stringify(c.primary_color || null),
+      JSON.stringify(c.secondary_color || null),
+      c.row_spacing,
+      strips.map((s) => `${s.entity}|${s.name}|${s.icon}|${s.device_type}`).join(";"),
+      strips.map((s) => (this._hass.states[s.entity] || {}).state).join(";"),
+    ].join("~");
+    if (this._built && sig === this._lastSig) return;
+    this._lastSig = sig;
+
+    const iconColor = colorOr(c.icon_color, "#8b7ae6");
+    const badgeRgb = Array.isArray(c.icon_color) ? c.icon_color : [139, 122, 230];
+    const badgeBg = `rgba(${badgeRgb[0]}, ${badgeRgb[1]}, ${badgeRgb[2]}, 0.16)`;
+    const cardBg = colorOr(c.background, "var(--ha-card-background, var(--card-background-color))");
+    const primaryColor = colorOr(c.primary_color, "var(--primary-text-color)");
+    const secondaryColor = colorOr(c.secondary_color, "var(--primary-text-color)");
+    const rowSpacing = c.row_spacing != null ? c.row_spacing : 12;
+
+    const rowsHtml = strips
+      .map((s, i) => {
+        const stateObj = this._hass.states[s.entity];
+        const name = s.name || (stateObj && stateObj.attributes && stateObj.attributes.friendly_name) || s.entity;
+        const isOn = !!stateObj && stateObj.state === "on";
+        const border = i < strips.length - 1 ? "border-bottom:1px solid var(--divider-color);" : "";
+        return `
+          <div class="gp-row" data-index="${i}" style="display:flex;align-items:center;gap:12px;
+                      padding:${rowSpacing}px 2px;${border}cursor:pointer;">
+            <div style="width:32px;height:32px;border-radius:9px;background:rgba(var(--rgb-primary-text-color,0,0,0),0.06);
+                        display:flex;align-items:center;justify-content:center;flex:0 0 auto;">
+              <ha-icon icon="${s.icon || "mdi:led-strip-variant"}" style="--mdc-icon-size:16px;color:${
+          isOn ? iconColor : secondaryColor
+        };"></ha-icon>
+            </div>
+            <div style="flex:1;min-width:0;font-size:14px;font-weight:600;color:${secondaryColor};
+                        overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(name)}</div>
+            <ha-icon icon="mdi:chevron-right" style="--mdc-icon-size:18px;color:${secondaryColor};opacity:0.6;"></ha-icon>
+          </div>`;
+      })
+      .join("");
+
+    this.innerHTML = `
+      <ha-card style="border-radius:20px;box-shadow:none;background:${cardBg};padding:16px 18px;">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px;">
+          <div style="width:40px;height:40px;border-radius:12px;background:${badgeBg};
+                      display:flex;align-items:center;justify-content:center;flex:0 0 auto;">
+            <ha-icon icon="${c.icon || "mdi:gradient-vertical"}" style="--mdc-icon-size:20px;color:${iconColor};"></ha-icon>
+          </div>
+          <div style="flex:1;min-width:0;font-size:17px;font-weight:700;color:${primaryColor};
+                      overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(c.name || "")}</div>
+        </div>
+        <div>${
+          strips.length
+            ? rowsHtml
+            : `<div style="font-size:13px;color:${secondaryColor};padding:8px 0;">Aucun bandeau configuré (strips:).</div>`
+        }</div>
+      </ha-card>`;
+
+    this.querySelectorAll(".gp-row").forEach((el) => {
+      el.addEventListener("click", () => {
+        this._openDialog(Number(el.getAttribute("data-index")));
+      });
+    });
+
+    this._built = true;
+  }
+}
+customElements.define("alex-gradient-popup-card", GradientPopupCard);
+
+class GradientPopupCardEditor extends AlexListEditor {
+  static getStubConfig() {
+    return GradientPopupCard.getStubConfig();
+  }
+
+  _normalize() {
+    if (!Array.isArray(this._config.strips)) this._config.strips = [];
+  }
+
+  _validPath() {
+    const p = this._path || [];
+    if (p.length >= 2 && p[0] === "strip" && !this._config.strips[p[1]]) return [];
+    return p;
+  }
+
+  _render() {
+    this._forms = [];
+    this._selectors = [];
+    this.innerHTML = "";
+    const p = this._validPath();
+    if (p.length === 0) this._renderRoot();
+    else this._renderStrip(p[1]);
+    if (this._hass) {
+      this._forms.forEach((f) => (f.hass = this._hass));
+      this._selectors.forEach((s) => (s.hass = this._hass));
+    }
+  }
+
+  _renderRoot() {
+    const cfg = this._config;
+
+    this.appendChild(this._sectionTitle("En-tête"));
+    this.appendChild(
+      this._form(
+        [
+          { name: "name", selector: { text: {} } },
+          { name: "icon", selector: { icon: {} } },
+        ],
+        { name: cfg.name, icon: cfg.icon },
+        { name: "Nom", icon: "Icône" },
+        (v) => this._update((c) => Object.assign(c, v))
+      )
+    );
+
+    this.appendChild(this._sectionTitle("Bandeaux"));
+    const strips = cfg.strips || [];
+    strips.forEach((s, i) => {
+      this.appendChild(
+        this._row(
+          s.icon || "mdi:led-strip-variant",
+          s.name || s.entity || "(sans entité)",
+          s.entity || "",
+          () => {
+            this._path = ["strip", i];
+            this._render();
+          },
+          () => {
+            this._update((c) => c.strips.splice(i, 1));
+            this._render();
+          },
+          i > 0 ? () => this._moveItem((c) => c.strips, i, -1) : null,
+          i < strips.length - 1 ? () => this._moveItem((c) => c.strips, i, 1) : null
+        )
+      );
+    });
+    this.appendChild(
+      this._addButton("Ajouter un bandeau", () => {
+        let idx;
+        this._update((c) => {
+          c.strips = c.strips || [];
+          c.strips.push({ device_type: "hue", segments: 5 });
+          idx = c.strips.length - 1;
+        });
+        this._path = ["strip", idx];
+        this._render();
+      })
+    );
+
+    this.appendChild(
+      this._panel(
+        "Customisation",
+        "mdi:palette",
+        this._mixed(
+          [
+            {
+              type: "expandable",
+              title: "Carte",
+              icon: "mdi:card-outline",
+              schema: [
+                { name: "row_spacing", selector: { number: { min: 0, max: 40, step: 1, mode: "box" } } },
+                { name: "icon_color", selector: { color_rgb: {} } },
+                { name: "background", selector: { color_rgb: {} } },
+              ],
+            },
+            {
+              type: "expandable",
+              title: "En-tête",
+              icon: "mdi:format-header-1",
+              schema: [{ name: "primary_color", selector: { color_rgb: {} } }],
+            },
+            {
+              type: "expandable",
+              title: "Bandeaux",
+              icon: "mdi:led-strip-variant",
+              schema: [{ name: "secondary_color", selector: { color_rgb: {} } }],
+            },
+          ],
+          {
+            row_spacing: cfg.row_spacing != null ? cfg.row_spacing : 12,
+            icon_color: cfg.icon_color,
+            background: cfg.background,
+            primary_color: cfg.primary_color,
+            secondary_color: cfg.secondary_color,
+          },
+          {
+            row_spacing: "Écartement entre les bandeaux (px)",
+            icon_color: "Couleur du badge",
+            background: "Fond de la carte",
+            primary_color: "Couleur du nom de la carte",
+            secondary_color: "Couleur des noms de bandeau",
+          },
+          (v) => this._update((c) => Object.assign(c, v))
+        )
+      )
+    );
+  }
+
+  _renderStrip(i) {
+    const cfg = this._config;
+    const s = cfg.strips[i] || {};
+    const merge = (v) => this._update((c) => (c.strips[i] = { ...c.strips[i], ...v }));
+
+    this.appendChild(
+      this._backHeader(s.name || s.entity || "Bandeau", () => {
+        this._path = [];
+        this._render();
+      })
+    );
+
+    this.appendChild(
+      this._mixed(
+        [
+          { name: "entity", selector: { entity: { domain: "light" } } },
+          { name: "name", selector: { text: {} } },
+          { name: "icon", selector: { icon: {} } },
+          {
+            name: "device_type",
+            selector: {
+              select: {
+                mode: "dropdown",
+                options: [
+                  { value: "hue", label: "Philips Hue Gradient" },
+                  { value: "aqara", label: "Aqara LED Strip T1 (LGYCDD01LM)" },
+                ],
+              },
+            },
+          },
+          { name: "friendly_name", selector: { text: {} } },
+          { name: "segments", selector: { number: { min: 2, max: 50, step: 1, mode: "box" } } },
+          { name: "length_entity", selector: { entity: { domain: "number" } } },
+        ],
+        {
+          entity: s.entity,
+          name: s.name,
+          icon: s.icon,
+          device_type: s.device_type === "aqara" ? "aqara" : "hue",
+          friendly_name: s.friendly_name,
+          segments: s.segments != null ? s.segments : 5,
+          length_entity: s.length_entity,
+        },
+        {
+          entity: "Entité de la lumière",
+          name: "Nom (vide = nom convivial)",
+          icon: "Icône (vide = icône du badge)",
+          device_type: "Type d'appareil",
+          friendly_name: "Nom convivial Z2M (vide = déduit de l'entité)",
+          segments: "Nombre de segments (Aqara : ignoré si longueur détectée)",
+          length_entity: "Entité longueur (Aqara, vide = déduite du nom de l'entité)",
+        },
+        merge
+      )
+    );
+  }
+}
+customElements.define("alex-gradient-popup-card-editor", GradientPopupCardEditor);
+
+window.customCards.push({
+  type: "alex-gradient-popup-card",
+  name: "Alex Gradient Popup Card",
+  description:
+    "Liste de bandeaux LED — clique sur un bandeau pour composer son dégradé sur une roue chromatique, façon éditeur Philips Hue.",
   preview: false,
   documentationURL: "https://github.com/<user>/alex-cards",
 });
