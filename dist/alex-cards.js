@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.48.2";
+const ALEX_CARDS_VERSION = "0.48.3";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -8309,6 +8309,18 @@ class GradientPopupCard extends HTMLElement {
     });
 
     dialog.innerHTML = `
+      <style>
+        .gp-brightness { -webkit-appearance:none; appearance:none; height:6px; border-radius:3px;
+          background:rgba(var(--rgb-primary-text-color,0,0,0),0.12); outline:none; cursor:pointer; }
+        .gp-brightness::-webkit-slider-thumb { -webkit-appearance:none; appearance:none; width:20px; height:20px;
+          border-radius:50%; background:${accentColor}; cursor:pointer; box-shadow:0 1px 3px rgba(0,0,0,.3);
+          border:2px solid var(--card-background-color); }
+        .gp-brightness::-moz-range-track { height:6px; border-radius:3px;
+          background:rgba(var(--rgb-primary-text-color,0,0,0),0.12); }
+        .gp-brightness::-moz-range-thumb { width:20px; height:20px; border-radius:50%; background:${accentColor};
+          cursor:pointer; box-shadow:0 1px 3px rgba(0,0,0,.3); border:2px solid var(--card-background-color); }
+        .gp-add:hover { background:rgba(var(--rgb-primary-text-color,0,0,0),0.06); }
+      </style>
       <div style="display:flex;flex-direction:column;align-items:center;gap:16px;
                   padding:8px 4px 4px;min-width:280px;max-width:360px;margin:0 auto;">
         ${
@@ -8339,18 +8351,22 @@ class GradientPopupCard extends HTMLElement {
           <div style="font-size:12px;color:var(--secondary-text-color);margin-bottom:6px;text-align:center;">Aperçu du bandeau</div>
           <div class="gp-strip-preview" style="height:28px;border-radius:8px;border:1px solid var(--divider-color);"></div>
         </div>
-        <button class="gp-add" style="border:1px solid var(--divider-color);
-                    background:transparent;color:var(--primary-text-color);border-radius:8px;
-                    padding:6px 12px;cursor:pointer;font-size:13px;">+ Ajouter un point</button>
+        <button class="gp-add" style="border:1px solid ${accentColor};background:transparent;color:${accentColor};
+                    border-radius:999px;padding:7px 16px;cursor:pointer;font-size:13px;font-weight:600;
+                    transition:background .15s;">+ Ajouter un point</button>
         <div style="width:100%;display:flex;align-items:center;gap:10px;">
           <ha-icon icon="mdi:brightness-6" style="--mdc-icon-size:18px;color:var(--secondary-text-color);"></ha-icon>
           <input class="gp-brightness" type="range" min="1" max="100" step="1" value="${startBrightness}" style="flex:1;" />
         </div>
-        <label style="width:100%;display:flex;align-items:center;justify-content:space-between;
-                    font-size:13px;color:var(--primary-text-color);cursor:pointer;">
-          Aperçu en direct sur le bandeau
-          <input class="gp-live" type="checkbox" style="width:18px;height:18px;cursor:pointer;" />
-        </label>
+        <div style="width:100%;display:flex;align-items:center;justify-content:space-between;">
+          <span style="font-size:13px;color:var(--primary-text-color);">Aperçu en direct sur le bandeau</span>
+          <div class="gp-live" style="flex:0 0 auto;width:44px;height:24px;border-radius:12px;
+                  background:rgba(var(--rgb-primary-text-color,0,0,0),0.18);
+                  position:relative;cursor:pointer;transition:background .15s;">
+                <div style="width:18px;height:18px;border-radius:50%;background:#fff;position:absolute;
+                            top:3px;left:3px;transition:left .15s;box-shadow:0 1px 3px rgba(0,0,0,.3);"></div>
+              </div>
+        </div>
       </div>`;
 
     const closeBtn = document.createElement("mwc-button");
@@ -8362,6 +8378,8 @@ class GradientPopupCard extends HTMLElement {
     });
     const applyBtn = document.createElement("mwc-button");
     applyBtn.setAttribute("slot", "secondaryAction");
+    applyBtn.setAttribute("unelevated", "");
+    applyBtn.style.setProperty("--mdc-theme-primary", accentColor);
     applyBtn.textContent = "Appliquer";
 
     dialog.appendChild(applyBtn);
@@ -8380,6 +8398,19 @@ class GradientPopupCard extends HTMLElement {
     const brightnessEl = dialog.querySelector(".gp-brightness");
     const liveEl = dialog.querySelector(".gp-live");
     const addBtn = dialog.querySelector(".gp-add");
+
+    // Interrupteur "aperçu en direct" - meme gabarit que l'interrupteur
+    // allumer/eteindre, pilote a la main (pas un <input type="checkbox">
+    // natif) pour rester coherent avec le reste du bundle.
+    const renderLiveToggle = () => {
+      liveEl.style.background = state.live ? accentColor : "rgba(var(--rgb-primary-text-color,0,0,0),0.18)";
+      liveEl.firstElementChild.style.left = state.live ? "23px" : "3px";
+    };
+    liveEl.addEventListener("click", () => {
+      state.live = !state.live;
+      renderLiveToggle();
+      if (state.live) this._applyToStrip(strip, state.points, state.brightness);
+    });
 
     const colorForPoint = (p) => gradientPopupHsvToHex(p.hue, p.sat, 1);
 
@@ -8491,11 +8522,6 @@ class GradientPopupCard extends HTMLElement {
       state.brightness = Number(brightnessEl.value);
       renderStripPreview();
       maybeLiveApply();
-    });
-
-    liveEl.addEventListener("change", () => {
-      state.live = liveEl.checked;
-      if (state.live) this._applyToStrip(strip, state.points, state.brightness);
     });
 
     applyBtn.addEventListener("click", () => {

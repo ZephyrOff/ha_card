@@ -840,12 +840,17 @@ strips:
 - **Interrupteur allumer/éteindre** en haut du contenu de la fenêtre, au-dessus de la
   roue — reste synchronisé si l'état change pendant que la fenêtre est ouverte (clic
   dessus ou changement ailleurs), pas seulement au moment du clic.
-- **Aperçu en direct** (case à cocher dans la fenêtre, désactivée par défaut) :
+- **Aperçu en direct** (interrupteur dans la fenêtre, désactivé par défaut) :
   applique le dégradé au bandeau réel à chaque déplacement d'un point ou changement de
   luminosité (débit limité à un appel toutes les ~180 ms pendant qu'on glisse un
   point, pour ne pas noyer Zigbee2MQTT). Le bouton **Appliquer** reste disponible dans
   tous les cas, direct activé ou non — un envoi final explicite, garanti après
   n'importe quelle série de changements.
+- Contrôles de la fenêtre stylés à la main (curseur de luminosité avec piste/curseur
+  colorés à l'accent de la carte, interrupteurs pilule pour allumer/éteindre et
+  l'aperçu en direct, bouton « Appliquer » rempli à l'accent, bouton « + Ajouter un
+  point » en pilule) plutôt que les éléments par défaut du navigateur, cohérent avec
+  le reste du bundle.
 - **Rien n'est mémorisé d'une ouverture à l'autre** : chaque ouverture de la fenêtre
   repart d'un dégradé par défaut à 3 points (même principe « éphémère » que les points
   d'édition d'Alex Gradient Card — l'état n'a de sens qu'au moment d'appliquer). Si
