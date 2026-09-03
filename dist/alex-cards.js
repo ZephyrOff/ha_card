@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.48.0";
+const ALEX_CARDS_VERSION = "0.48.1";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -8172,7 +8172,26 @@ class GradientPopupCard extends HTMLElement {
   set hass(hass) {
     this._hass = hass;
     this._render();
-    if (this._dialogEl) this._dialogEl.hass = hass;
+    if (this._dialogEl) {
+      this._dialogEl.hass = hass;
+      this._updateDialogPower();
+    }
+  }
+
+  // Le fond/la position de l'interrupteur dans l'en-tete de la fenetre sont
+  // recalcules a chaque mise a jour de hass (pas seulement au clic dessus),
+  // pour rester juste si le bandeau est allume/eteint par ailleurs pendant
+  // que la fenetre reste ouverte.
+  _updateDialogPower() {
+    if (!this._dialogEl || !this._dialogStrip || !this._dialogStrip.entity) return;
+    const stateObj = this._hass.states[this._dialogStrip.entity];
+    const isOn = !!stateObj && stateObj.state === "on";
+    const accentColor = colorOr(this._config.icon_color, "#8b7ae6");
+    const powerEl = this._dialogEl.querySelector(".gp-power");
+    if (!powerEl) return;
+    powerEl.style.background = isOn ? accentColor : "rgba(var(--rgb-primary-text-color,0,0,0),0.18)";
+    const knob = powerEl.firstElementChild;
+    if (knob) knob.style.left = isOn ? "23px" : "3px";
   }
 
   disconnectedCallback() {
@@ -8244,6 +8263,7 @@ class GradientPopupCard extends HTMLElement {
       this._dialogEl.remove();
       this._dialogEl = null;
     }
+    this._dialogStrip = null;
   }
 
   // Construit et ouvre la fenetre d'edition pour un bandeau. Etat de la
@@ -8260,6 +8280,8 @@ class GradientPopupCard extends HTMLElement {
       stateObj && stateObj.attributes && stateObj.attributes.brightness != null
         ? Math.round(stateObj.attributes.brightness / 2.54)
         : 70;
+    const isOn = !!stateObj && stateObj.state === "on";
+    const accentColor = colorOr(this._config.icon_color, "#8b7ae6");
 
     const state = {
       points: [
@@ -8275,7 +8297,6 @@ class GradientPopupCard extends HTMLElement {
     let liveThrottle = null;
 
     const dialog = document.createElement("ha-dialog");
-    dialog.heading = strip.name || strip.entity || "Dégradé";
     dialog.hass = this._hass;
     dialog.addEventListener("closed", () => {
       dialog.remove();
@@ -8284,18 +8305,18 @@ class GradientPopupCard extends HTMLElement {
 
     dialog.innerHTML = `
       <div style="display:flex;flex-direction:column;align-items:center;gap:16px;
-                  padding:8px 4px 4px;min-width:280px;max-width:360px;">
+                  padding:8px 4px 4px;min-width:280px;max-width:360px;margin:0 auto;">
         <div class="gp-wheel" style="position:relative;width:min(240px, 68vw);height:min(240px, 68vw);
                     border-radius:50%;touch-action:none;cursor:crosshair;
                     background:
                       radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(255,255,255,0) 72%),
-                      conic-gradient(red, yellow, lime, cyan, blue, magenta, red);">
+                      conic-gradient(from 90deg, red, yellow, lime, cyan, blue, magenta, red);">
         </div>
-        <div style="width:100%;">
+        <div style="width:100%;text-align:center;">
           <div style="font-size:12px;color:var(--secondary-text-color);margin-bottom:6px;">Ordre sur le bandeau</div>
-          <div class="gp-swatches" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;"></div>
+          <div class="gp-swatches" style="display:flex;flex-wrap:wrap;justify-content:center;gap:8px;align-items:center;"></div>
         </div>
-        <button class="gp-add" style="align-self:flex-start;border:1px solid var(--divider-color);
+        <button class="gp-add" style="border:1px solid var(--divider-color);
                     background:transparent;color:var(--primary-text-color);border-radius:8px;
                     padding:6px 12px;cursor:pointer;font-size:13px;">+ Ajouter un point</button>
         <div style="width:100%;display:flex;align-items:center;gap:10px;">
@@ -8320,8 +8341,36 @@ class GradientPopupCard extends HTMLElement {
     applyBtn.setAttribute("slot", "secondaryAction");
     applyBtn.textContent = "Appliquer";
 
+    const headingEl = document.createElement("div");
+    headingEl.setAttribute("slot", "heading");
+    headingEl.style.cssText = "display:flex;align-items:center;gap:12px;";
+    headingEl.innerHTML = `
+      <span style="flex:1;font-size:20px;font-weight:500;overflow:hidden;
+                  text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(
+                    strip.name || strip.entity || "Dégradé"
+                  )}</span>
+      ${
+        strip.entity
+          ? `<div class="gp-power" style="flex:0 0 auto;width:44px;height:24px;border-radius:12px;
+                  background:${isOn ? accentColor : "rgba(var(--rgb-primary-text-color,0,0,0),0.18)"};
+                  position:relative;cursor:pointer;transition:background .15s;">
+                <div style="width:18px;height:18px;border-radius:50%;background:#fff;position:absolute;
+                            top:3px;left:${isOn ? "23px" : "3px"};transition:left .15s;
+                            box-shadow:0 1px 3px rgba(0,0,0,.3);"></div>
+              </div>`
+          : ""
+      }`;
+
+    dialog.appendChild(headingEl);
     dialog.appendChild(applyBtn);
     dialog.appendChild(closeBtn);
+
+    const powerEl = dialog.querySelector(".gp-power");
+    if (powerEl) {
+      powerEl.addEventListener("click", () => {
+        this._hass.callService("homeassistant", "toggle", { entity_id: strip.entity });
+      });
+    }
 
     const wheelEl = dialog.querySelector(".gp-wheel");
     const swatchesEl = dialog.querySelector(".gp-swatches");
@@ -8442,6 +8491,7 @@ class GradientPopupCard extends HTMLElement {
 
     document.body.appendChild(dialog);
     this._dialogEl = dialog;
+    this._dialogStrip = strip;
     dialog.open = true;
     requestAnimationFrame(renderAll);
   }

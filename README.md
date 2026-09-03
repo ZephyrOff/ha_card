@@ -828,6 +828,9 @@ strips:
 - **Luminosité partagée** : un seul curseur pour tout le dégradé, hors de la roue —
   comme chez Hue, qui ne l'encode jamais dans la roue elle-même. Préremplie avec la
   luminosité actuelle de la lumière à l'ouverture de la fenêtre.
+- **Interrupteur allumer/éteindre** dans l'en-tête de la fenêtre, à côté du nom du
+  bandeau — reste synchronisé si l'état change pendant que la fenêtre est ouverte
+  (clic dessus ou changement ailleurs), pas seulement au moment du clic.
 - **Aperçu en direct** (case à cocher dans la fenêtre, désactivée par défaut) :
   applique le dégradé au bandeau réel à chaque déplacement d'un point ou changement de
   luminosité (débit limité à un appel toutes les ~180 ms pendant qu'on glisse un
