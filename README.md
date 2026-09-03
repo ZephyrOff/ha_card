@@ -819,18 +819,27 @@ strips:
 ```
 
 - **Le mécanisme de la roue** : elle n'encode que la couleur (angle = teinte,
-  distance au centre = saturation) — pas la position physique sur le bandeau. Chaque
-  point est une couleur indépendante ; c'est son **ordre dans la liste sous la roue**
-  (pas sa position sur la roue) qui détermine où il tombe sur le bandeau. Mode
+  distance au centre = saturation) — pas la position physique sur le bandeau. Le
+  centre de la roue (saturation nulle) donne du blanc, pas du gris — les points
+  utilisent toujours la pleine valeur (HSV), la saturation seule contrôle le mélange
+  vers le blanc, exactement comme le dégradé radial affiché sur la roue elle-même.
+  Chaque point est une couleur indépendante ; c'est son **ordre dans la liste sous la
+  roue** (pas sa position sur la roue) qui détermine où il tombe sur le bandeau. Mode
   linéaire uniquement pour l'instant : les points se répartissent dans l'ordre sur le
   bandeau, l'interpolation entre eux est automatique (autres modes façon
   Mirrored/Scattered de Hue envisageables plus tard). 2 à 8 points par bandeau.
+- **Aperçu du bandeau** : une barre sous la liste de points affiche en direct le
+  dégradé tel qu'il apparaîtra sur le bandeau réel (couleurs + luminosité combinées),
+  mise à jour à chaque déplacement de point ou changement de luminosité.
 - **Luminosité partagée** : un seul curseur pour tout le dégradé, hors de la roue —
   comme chez Hue, qui ne l'encode jamais dans la roue elle-même. Préremplie avec la
-  luminosité actuelle de la lumière à l'ouverture de la fenêtre.
-- **Interrupteur allumer/éteindre** dans l'en-tête de la fenêtre, à côté du nom du
-  bandeau — reste synchronisé si l'état change pendant que la fenêtre est ouverte
-  (clic dessus ou changement ailleurs), pas seulement au moment du clic.
+  luminosité actuelle de la lumière à l'ouverture de la fenêtre. N'assombrit jamais les
+  couleurs envoyées à l'appareil (toujours en pleine valeur) — c'est le champ
+  `brightness` séparé du payload MQTT qui gère l'intensité, pour éviter un double
+  assombrissement.
+- **Interrupteur allumer/éteindre** en haut du contenu de la fenêtre, au-dessus de la
+  roue — reste synchronisé si l'état change pendant que la fenêtre est ouverte (clic
+  dessus ou changement ailleurs), pas seulement au moment du clic.
 - **Aperçu en direct** (case à cocher dans la fenêtre, désactivée par défaut) :
   applique le dégradé au bandeau réel à chaque déplacement d'un point ou changement de
   luminosité (débit limité à un appel toutes les ~180 ms pendant qu'on glisse un
@@ -854,10 +863,12 @@ strips:
   même envoi MQTT (`{ gradient: [...], brightness: ... }` ou l'équivalent
   `segment_colors` pour l'Aqara) — en partant du principe que Z2M accepte `brightness`
   dans la même charge utile `/set`, convention habituelle chez Z2M mais non confirmée
-  pour ces deux appareils précis. La fenêtre elle-même repose sur `ha-dialog`, un
-  composant HA nettement plus répandu et stable que ceux qui ont posé problème pour
-  l'éditeur de carte imbriquée d'Alex Tabs Card, mais jamais utilisé ailleurs dans ce
-  bundle — à tester en priorité.
+  pour ces deux appareils précis. Côté fenêtre, `ha-dialog` s'est révélé fiable pour un
+  titre texte simple (`.heading`) et pour son contenu principal, mais **pas** pour
+  glisser du contenu personnalisé dans son emplacement d'en-tête (`slot="heading"`) —
+  resté invisible en pratique. L'interrupteur allumer/éteindre est donc placé dans le
+  contenu principal plutôt que dans l'en-tête, pour rester sur la partie confirmée
+  fiable du composant.
 
 ### Alex Gradient Scene Card
 

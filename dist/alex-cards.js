@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.48.1";
+const ALEX_CARDS_VERSION = "0.48.2";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -8103,16 +8103,20 @@ window.customCards.push({
  * (Mirrored/Scattered a la Hue) pourront s'ajouter plus tard.
  * ========================================================================= */
 
-// HSL -> hex. La roue ne manipule que teinte (0-360) et saturation (0-1) ;
-// la luminosite (0-1) vient du curseur partage, appliquee au moment de
-// convertir vers une couleur finale (jamais stockee sur le point lui-meme).
-function gradientPopupHslToHex(h, s, l) {
+// HSV -> hex. La roue ne manipule que teinte (0-360) et saturation (0-1) ;
+// contrairement a HSL, une saturation nulle donne du blanc a value=1 (pas
+// du gris) - ca correspond exactement au degrade radial blanc->transparent
+// pose sur la roue (centre blanc, bord pleinement sature). La luminosite
+// partagee (0-1) sert de "value" separement, pour l'apercu du bandeau et
+// l'envoi final - jamais pour les points/la roue eux-memes (toujours en
+// pleine value, pour rester lisibles).
+function gradientPopupHsvToHex(h, s, v) {
   h = ((h % 360) + 360) % 360;
   s = Math.max(0, Math.min(1, s));
-  l = Math.max(0, Math.min(1, l));
-  const cVal = (1 - Math.abs(2 * l - 1)) * s;
+  v = Math.max(0, Math.min(1, v));
+  const cVal = v * s;
   const x = cVal * (1 - Math.abs(((h / 60) % 2) - 1));
-  const m = l - cVal / 2;
+  const m = v - cVal;
   let r, g, b;
   if (h < 60) [r, g, b] = [cVal, x, 0];
   else if (h < 120) [r, g, b] = [x, cVal, 0];
@@ -8120,8 +8124,8 @@ function gradientPopupHslToHex(h, s, l) {
   else if (h < 240) [r, g, b] = [0, x, cVal];
   else if (h < 300) [r, g, b] = [x, 0, cVal];
   else [r, g, b] = [cVal, 0, x];
-  const toHex = (v) =>
-    Math.max(0, Math.min(255, Math.round((v + m) * 255)))
+  const toHex = (v2) =>
+    Math.max(0, Math.min(255, Math.round((v2 + m) * 255)))
       .toString(16)
       .padStart(2, "0");
   return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
@@ -8241,7 +8245,7 @@ class GradientPopupCard extends HTMLElement {
     const friendlyName = this._friendlyNameFor(strip);
     if (!friendlyName || !this._hass) return;
     const segmentsCount = this._effectiveSegmentsFor(strip);
-    const hexPoints = points.map((p) => gradientPopupHslToHex(p.hue, p.sat, 0.5));
+    const hexPoints = points.map((p) => gradientPopupHsvToHex(p.hue, p.sat, 1));
     const colors = gradientPopupResample(hexPoints, segmentsCount);
     const brightness254 = Math.round(Math.max(0, Math.min(100, brightnessPct)) * 2.54);
     const payload =
@@ -8297,6 +8301,7 @@ class GradientPopupCard extends HTMLElement {
     let liveThrottle = null;
 
     const dialog = document.createElement("ha-dialog");
+    dialog.heading = strip.name || strip.entity || "Dégradé";
     dialog.hass = this._hass;
     dialog.addEventListener("closed", () => {
       dialog.remove();
@@ -8306,6 +8311,20 @@ class GradientPopupCard extends HTMLElement {
     dialog.innerHTML = `
       <div style="display:flex;flex-direction:column;align-items:center;gap:16px;
                   padding:8px 4px 4px;min-width:280px;max-width:360px;margin:0 auto;">
+        ${
+          strip.entity
+            ? `<div style="width:100%;display:flex;align-items:center;justify-content:space-between;">
+                <span style="font-size:13px;color:var(--secondary-text-color);">Allumer / éteindre</span>
+                <div class="gp-power" style="flex:0 0 auto;width:44px;height:24px;border-radius:12px;
+                        background:${isOn ? accentColor : "rgba(var(--rgb-primary-text-color,0,0,0),0.18)"};
+                        position:relative;cursor:pointer;transition:background .15s;">
+                      <div style="width:18px;height:18px;border-radius:50%;background:#fff;position:absolute;
+                                  top:3px;left:${isOn ? "23px" : "3px"};transition:left .15s;
+                                  box-shadow:0 1px 3px rgba(0,0,0,.3);"></div>
+                    </div>
+              </div>`
+            : ""
+        }
         <div class="gp-wheel" style="position:relative;width:min(240px, 68vw);height:min(240px, 68vw);
                     border-radius:50%;touch-action:none;cursor:crosshair;
                     background:
@@ -8315,6 +8334,10 @@ class GradientPopupCard extends HTMLElement {
         <div style="width:100%;text-align:center;">
           <div style="font-size:12px;color:var(--secondary-text-color);margin-bottom:6px;">Ordre sur le bandeau</div>
           <div class="gp-swatches" style="display:flex;flex-wrap:wrap;justify-content:center;gap:8px;align-items:center;"></div>
+        </div>
+        <div style="width:100%;">
+          <div style="font-size:12px;color:var(--secondary-text-color);margin-bottom:6px;text-align:center;">Aperçu du bandeau</div>
+          <div class="gp-strip-preview" style="height:28px;border-radius:8px;border:1px solid var(--divider-color);"></div>
         </div>
         <button class="gp-add" style="border:1px solid var(--divider-color);
                     background:transparent;color:var(--primary-text-color);border-radius:8px;
@@ -8341,27 +8364,6 @@ class GradientPopupCard extends HTMLElement {
     applyBtn.setAttribute("slot", "secondaryAction");
     applyBtn.textContent = "Appliquer";
 
-    const headingEl = document.createElement("div");
-    headingEl.setAttribute("slot", "heading");
-    headingEl.style.cssText = "display:flex;align-items:center;gap:12px;";
-    headingEl.innerHTML = `
-      <span style="flex:1;font-size:20px;font-weight:500;overflow:hidden;
-                  text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(
-                    strip.name || strip.entity || "Dégradé"
-                  )}</span>
-      ${
-        strip.entity
-          ? `<div class="gp-power" style="flex:0 0 auto;width:44px;height:24px;border-radius:12px;
-                  background:${isOn ? accentColor : "rgba(var(--rgb-primary-text-color,0,0,0),0.18)"};
-                  position:relative;cursor:pointer;transition:background .15s;">
-                <div style="width:18px;height:18px;border-radius:50%;background:#fff;position:absolute;
-                            top:3px;left:${isOn ? "23px" : "3px"};transition:left .15s;
-                            box-shadow:0 1px 3px rgba(0,0,0,.3);"></div>
-              </div>`
-          : ""
-      }`;
-
-    dialog.appendChild(headingEl);
     dialog.appendChild(applyBtn);
     dialog.appendChild(closeBtn);
 
@@ -8374,11 +8376,12 @@ class GradientPopupCard extends HTMLElement {
 
     const wheelEl = dialog.querySelector(".gp-wheel");
     const swatchesEl = dialog.querySelector(".gp-swatches");
+    const stripPreviewEl = dialog.querySelector(".gp-strip-preview");
     const brightnessEl = dialog.querySelector(".gp-brightness");
     const liveEl = dialog.querySelector(".gp-live");
     const addBtn = dialog.querySelector(".gp-add");
 
-    const colorForPoint = (p) => gradientPopupHslToHex(p.hue, p.sat, 0.5);
+    const colorForPoint = (p) => gradientPopupHsvToHex(p.hue, p.sat, 1);
 
     const maybeLiveApply = () => {
       if (!state.live) return;
@@ -8387,6 +8390,13 @@ class GradientPopupCard extends HTMLElement {
         liveThrottle = null;
       }, 180);
       this._applyToStrip(strip, state.points, state.brightness);
+    };
+
+    const renderStripPreview = () => {
+      const v = Math.max(0.05, state.brightness / 100);
+      const stops = state.points.map((p) => gradientPopupHsvToHex(p.hue, p.sat, v));
+      stripPreviewEl.style.background =
+        stops.length > 1 ? `linear-gradient(to right, ${stops.join(", ")})` : stops[0] || "#000";
     };
 
     const renderWheel = () => {
@@ -8444,6 +8454,7 @@ class GradientPopupCard extends HTMLElement {
     const renderAll = () => {
       renderWheel();
       renderSwatches();
+      renderStripPreview();
       maybeLiveApply();
     };
 
@@ -8460,6 +8471,7 @@ class GradientPopupCard extends HTMLElement {
       state.points[state.dragIndex].sat = Math.min(1, dist / R);
       renderWheel();
       renderSwatches();
+      renderStripPreview();
       maybeLiveApply();
     });
     wheelEl.addEventListener("pointerup", () => {
@@ -8477,6 +8489,7 @@ class GradientPopupCard extends HTMLElement {
 
     brightnessEl.addEventListener("input", () => {
       state.brightness = Number(brightnessEl.value);
+      renderStripPreview();
       maybeLiveApply();
     });
 
