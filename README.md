@@ -127,6 +127,14 @@ tap_action:
 
 Le mini-graphe en fond (`fill: fade`) peut, selon `mini-graph-card`, dessiner un léger contour tout autour de sa zone de remplissage (y compris une ligne en bas) — corrigé en désactivant ce contour (`.fill { stroke: none }`). Ce correctif seul ne suffit pas toujours : un thème avec effet « verre dépoli » (ou tout thème injectant un `ha-card::before` global, ex. Frosted Glass) peut peindre son propre liseré par-dessus la tuile texte, qui devient visible contre le graphe coloré en dessous. Graph Card et Prise Card neutralisent maintenant explicitement ce pseudo-élément (`ha-card::before/::after { content: none }`) sur leur tuile texte, et le mini-graphe déborde légèrement de sa zone (`height: 130%`, `overflow: visible`) pour que son dégradé de fondu se termine hors champ plutôt que d'être coupé net. Multi Graph Card garde le correctif `.fill { stroke: none }` seul (structure différente, sans tuile superposée).
 
+**Correctif** : `color: [r, g, b]` produit maintenant un hex (`#rrggbb`) plutôt qu'un
+`rgba(r, g, b, a)` pour l'`icon_color` envoyé à `mushroom-entity-card`/
+`mushroom-template-card`. Vérifié en pratique : avec un `rgba(...)`, mushroom colore
+bien l'icône elle-même, mais n'arrive pas à en dériver le fond du badge circulaire
+derrière — qui restait transparent, alors qu'un hex fonctionne pour les deux. Même
+correctif appliqué à Alex Light Card pour la couleur fixe d'une tuile
+(`tile.icon_color`, quand `color:` est défini sur une entrée de `lights:`).
+
 ### Shutter Card
 
 Couleurs en CSS libre (accepte `rgba(...)`, hex, noms). Champs couleur vides = défauts du thème.

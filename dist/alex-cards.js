@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.49.4";
+const ALEX_CARDS_VERSION = "0.49.5";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -311,6 +311,25 @@ function rgbaCss(rgb) {
 // vide) vers une valeur CSS, avec repli sur une variable de thème.
 function colorOr(v, fallback) {
   if (Array.isArray(v)) return rgbaCss(v);
+  if (typeof v === "string" && v.trim()) return v;
+  return fallback;
+}
+
+// [r,g,b] -> "#rrggbb".
+function rgbToHex(rgb) {
+  const [r, g, b] = rgb;
+  const toHex = (v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, "0");
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+}
+
+// Comme colorOr, mais renvoie du hex plutot que rgba(...) quand la valeur
+// est un tableau RGB - specifiquement pour les champs icon_color envoyes a
+// une carte mushroom (mushroom-entity-card, mushroom-template-card,
+// mushroom-light-card...). Verifie en pratique : mushroom colore bien
+// l'icone avec un rgba(...), mais n'arrive pas a en deriver le fond du
+// badge derriere (qui reste transparent) - un hex fonctionne pour les deux.
+function colorOrHex(v, fallback) {
+  if (Array.isArray(v)) return rgbToHex(v);
   if (typeof v === "string" && v.trim()) return v;
   return fallback;
 }
@@ -1086,7 +1105,7 @@ class GraphCard extends AlexWrapperCard {
     return { entity: "", name: "", icon: "mdi:chart-line", color: GRAPH_DEFAULT_RGB };
   }
   _innerConfig(c) {
-    const iconColor = colorOr(c.color, rgbaCss(GRAPH_DEFAULT_RGB));
+    const iconColor = colorOrHex(c.color, rgbToHex(GRAPH_DEFAULT_RGB));
     const line = rgba(c.color, 0.5, GRAPH_DEFAULT_RGB);
     return {
       type: "custom:stack-in-card",
@@ -1200,7 +1219,7 @@ class PriseCard extends AlexWrapperCard {
   _innerConfig(c) {
     const sw = c.entity;
     const power = c.power_entity;
-    const iconColor = colorOr(c.color, rgbaCss(PRISE_DEFAULT_RGB));
+    const iconColor = colorOrHex(c.color, rgbToHex(PRISE_DEFAULT_RGB));
     const line = rgba(c.color, 0.5, PRISE_DEFAULT_RGB);
     const icon = c.icon || "mdi:power-plug";
 
@@ -1572,7 +1591,7 @@ class LightCard extends AlexWrapperCard {
     if (l.icon) tile.icon = l.icon;
     // Couleur fixe si définie, sinon on suit la couleur de l'ampoule.
     if (Array.isArray(l.color)) {
-      tile.icon_color = rgbaCss(l.color);
+      tile.icon_color = rgbToHex(l.color);
       tile.use_light_color = false;
     } else {
       tile.use_light_color = true;
