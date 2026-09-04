@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.49.2";
+const ALEX_CARDS_VERSION = "0.49.3";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -5977,7 +5977,11 @@ class AlexInputCard extends HTMLElement {
           const stepMinutes = e.step_minutes != null ? e.step_minutes : 15;
           chips = stepRail(entityId, inputCardFormatDatetime(parsed), "datetime", "datetime", stepMinutes);
         } else if (kind === "button") {
-          const btnIcon = e.button_icon || (domain === "script" ? "mdi:play" : "mdi:gesture-tap-button");
+          const defaultBtnIcon = domain === "script" ? "mdi:play" : "mdi:gesture-tap-button";
+          // Repli sur l'icone par defaut uniquement si ni icone ni texte ne
+          // sont personnalises - un texte personnalise sans icone doit
+          // rester texte seul, pas texte + icone par defaut imposee.
+          const btnIcon = e.button_icon || (e.button_text ? "" : defaultBtnIcon);
           chips = pressButton(entityId, btnIcon, e.button_text);
         } else if (kind === "toggle") {
           const isOn = !!stateObj && stateObj.state === "on";

@@ -521,9 +521,12 @@ de l'entité, détecté automatiquement — rien à configurer pour choisir le r
 - **`input_button` / `script`** → un seul bouton (icône ▶ pour un script, icône
   d'appui pour un `input_button`, par défaut) — `script.turn_on` ou `input_button.press`
   selon le domaine. Icône et texte personnalisables dans le détail de l'entité
-  (**« Icône du bouton »**, **« Texte du bouton »**) — sans texte, le bouton reste une
-  pastille ronde icône seule (comportement d'origine) ; avec un texte, il s'étire en
-  pilule pour l'accueillir à côté de l'icône.
+  (**« Icône du bouton »**, **« Texte du bouton »**). L'icône par défaut du domaine ne
+  s'applique que si ni l'icône ni le texte ne sont personnalisés — un texte
+  personnalisé sans icône choisie reste texte seul (pas de retour à l'icône par
+  défaut). Sans texte, le bouton reste une pastille ronde icône seule (comportement
+  d'origine) ; avec un texte, il s'étire en pilule pour l'accueillir à côté de
+  l'icône (ou seul, si aucune icône n'est définie).
 - **`switch` / `automation` / `input_boolean`** → interrupteur on/off en pilule (même
   mécanique que les interrupteurs déjà utilisés ailleurs dans le bundle — une pastille
   qui glisse, pas une simple puce qui change de texte) — `turn_on`/`turn_off` du
