@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.49.1";
+const ALEX_CARDS_VERSION = "0.49.2";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -5783,7 +5783,7 @@ class AlexInputCard extends HTMLElement {
           (e) =>
             `${e.entity}|${e.name}|${e.icon}|${JSON.stringify(e.color || null)}|${JSON.stringify(
               e.exclude || null
-            )}|${e.step_minutes}`
+            )}|${e.step_minutes}|${e.button_icon}|${e.button_text}`
         )
         .join(";"),
       entities
@@ -5872,14 +5872,22 @@ class AlexInputCard extends HTMLElement {
                  display:flex;align-items:center;justify-content:center;font-family:inherit;">+</button>
       </div>`;
 
-    // Bouton simple (input_button / script) : une seule pastille, pas de
-    // notion de valeur a afficher, juste une action a declencher.
-    const pressButton = (entityId, iconName) => `
+    // Bouton simple (input_button / script) : une seule pastille (icone
+    // seule, comme avant) ou une pilule icone+texte si un texte est
+    // configure - pas de notion de valeur a afficher, juste une action a
+    // declencher.
+    const pressButton = (entityId, iconName, text) => `
       <button class="ac-press" data-entity="${escapeHtml(entityId)}"
-        style="border:none;background:${activeBg};color:${activeText};
-               width:${stepBtnSize}px;height:${stepBtnSize}px;border-radius:999px;cursor:pointer;
-               display:flex;align-items:center;justify-content:center;">
-        <ha-icon icon="${iconName}" style="--mdc-icon-size:${chipSize + 4}px;"></ha-icon>
+        style="border:none;background:${activeBg};color:${activeText};cursor:pointer;
+               display:flex;align-items:center;justify-content:center;gap:6px;font-family:inherit;
+               font-size:${chipSize}px;font-weight:600;white-space:nowrap;border-radius:999px;
+               ${
+                 text
+                   ? `padding:0 ${chipPadHSeparate + 4}px;height:${stepBtnSize}px;`
+                   : `width:${stepBtnSize}px;height:${stepBtnSize}px;`
+               }">
+        ${iconName ? `<ha-icon icon="${iconName}" style="--mdc-icon-size:${chipSize + 4}px;"></ha-icon>` : ""}
+        ${text ? escapeHtml(text) : ""}
       </button>`;
 
     // Interrupteur on/off (switch / automation / input_boolean) : un rail
@@ -5969,7 +5977,8 @@ class AlexInputCard extends HTMLElement {
           const stepMinutes = e.step_minutes != null ? e.step_minutes : 15;
           chips = stepRail(entityId, inputCardFormatDatetime(parsed), "datetime", "datetime", stepMinutes);
         } else if (kind === "button") {
-          chips = pressButton(entityId, domain === "script" ? "mdi:play" : "mdi:gesture-tap-button");
+          const btnIcon = e.button_icon || (domain === "script" ? "mdi:play" : "mdi:gesture-tap-button");
+          chips = pressButton(entityId, btnIcon, e.button_text);
         } else if (kind === "toggle") {
           const isOn = !!stateObj && stateObj.state === "on";
           chips = toggleSwitch(entityId, isOn);
@@ -6113,7 +6122,8 @@ class AlexInputCardEditor extends AlexListEditor {
     note.textContent =
       "input_select/select : puces d'options. input_number/number : chiffre + boutons −/+. " +
       "input_datetime : heure (ou date) + boutons −/+ (pas réglable dans le détail de l'entité). " +
-      "input_button/script : bouton. switch/automation/input_boolean : interrupteur on/off. " +
+      "input_button/script : bouton (icône et texte personnalisables dans le détail). " +
+      "switch/automation/input_boolean : interrupteur on/off. " +
       "Autre domaine : lecture seule.";
     this.appendChild(note);
 
@@ -6269,6 +6279,7 @@ class AlexInputCardEditor extends AlexListEditor {
     const domain = inputCardDomainOf(e.entity);
     const isOptionsDomain = domain === "input_select" || domain === "select";
     const isDatetimeDomain = domain === "input_datetime";
+    const isButtonDomain = domain === "input_button" || domain === "script";
     const stateObj = this._hass && e.entity ? this._hass.states[e.entity] : null;
 
     const fields = [
@@ -6298,6 +6309,16 @@ class AlexInputCardEditor extends AlexListEditor {
       fields.push({ name: "step_minutes", selector: { number: { min: 1, max: 120, step: 1, mode: "box" } } });
       data.step_minutes = e.step_minutes != null ? e.step_minutes : 15;
       labels.step_minutes = "Pas par clic (minutes)";
+    }
+    if (isButtonDomain) {
+      fields.push(
+        { name: "button_icon", selector: { icon: {} } },
+        { name: "button_text", selector: { text: {} } }
+      );
+      data.button_icon = e.button_icon;
+      data.button_text = e.button_text;
+      labels.button_icon = "Icône du bouton (vide = icône par défaut du domaine)";
+      labels.button_text = "Texte du bouton (vide = icône seule)";
     }
 
     this.appendChild(this._mixed(fields, data, labels, merge));

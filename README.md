@@ -519,8 +519,11 @@ de l'entité, détecté automatiquement — rien à configurer pour choisir le r
   l'instant. Appelle `input_datetime.set_datetime` avec uniquement les champs que
   l'entité gère réellement (`date`/`time`).
 - **`input_button` / `script`** → un seul bouton (icône ▶ pour un script, icône
-  d'appui pour un `input_button`) — `script.turn_on` ou `input_button.press` selon le
-  domaine.
+  d'appui pour un `input_button`, par défaut) — `script.turn_on` ou `input_button.press`
+  selon le domaine. Icône et texte personnalisables dans le détail de l'entité
+  (**« Icône du bouton »**, **« Texte du bouton »**) — sans texte, le bouton reste une
+  pastille ronde icône seule (comportement d'origine) ; avec un texte, il s'étire en
+  pilule pour l'accueillir à côté de l'icône.
 - **`switch` / `automation` / `input_boolean`** → interrupteur on/off en pilule (même
   mécanique que les interrupteurs déjà utilisés ailleurs dans le bundle — une pastille
   qui glisse, pas une simple puce qui change de texte) — `turn_on`/`turn_off` du
