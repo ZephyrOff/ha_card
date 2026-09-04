@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.49.0";
+const ALEX_CARDS_VERSION = "0.49.1";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -5606,7 +5606,22 @@ function inputCardKindOf(domain) {
   if (domain === "input_select" || domain === "select") return "options";
   if (domain === "input_number" || domain === "number") return "stepper";
   if (domain === "input_datetime") return "datetime";
+  if (domain === "input_button" || domain === "script") return "button";
+  if (domain === "switch" || domain === "automation" || domain === "input_boolean") return "toggle";
   return "unsupported";
+}
+
+// Icone par defaut si ni l'entite ni la carte n'en precisent une - un
+// indice visuel immediat du type de controle affiche sur la ligne.
+function inputCardDefaultIcon(domain) {
+  if (domain === "input_select" || domain === "select") return "mdi:format-list-bulleted";
+  if (domain === "input_number" || domain === "number") return "mdi:counter";
+  if (domain === "input_datetime") return "mdi:clock-outline";
+  if (domain === "input_button") return "mdi:gesture-tap-button";
+  if (domain === "script") return "mdi:script-text-outline";
+  if (domain === "automation") return "mdi:robot-outline";
+  if (domain === "switch" || domain === "input_boolean") return "mdi:toggle-switch-outline";
+  return null;
 }
 
 // Arrondit au meme nombre de decimales que le pas, pour eviter les
@@ -5706,18 +5721,36 @@ class AlexInputCard extends HTMLElement {
     this._hass.callService(domain, "set_value", { entity_id: entityId, value: next });
   }
 
-  _stepDatetime(entityId, dir) {
+  _stepDatetime(entityId, dir, stepMinutesOverride) {
     if (!this._hass) return;
     const stateObj = this._hass.states[entityId];
     if (!stateObj) return;
     const parsed = inputCardParseDatetime(stateObj);
+    const stepMinutes = stepMinutesOverride != null ? stepMinutesOverride : 15;
     const shifted = parsed.hasTime
-      ? inputCardShiftDatetime(parsed, dir * 15, 0)
+      ? inputCardShiftDatetime(parsed, dir * stepMinutes, 0)
       : inputCardShiftDatetime(parsed, 0, dir * 1);
     const data = { entity_id: entityId };
     if (parsed.hasDate) data.date = `${shifted.year}-${inputCardPad(shifted.month)}-${inputCardPad(shifted.day)}`;
     if (parsed.hasTime) data.time = `${inputCardPad(shifted.hour)}:${inputCardPad(shifted.minute)}:${inputCardPad(shifted.second)}`;
     this._hass.callService("input_datetime", "set_datetime", data);
+  }
+
+  _pressButton(entityId) {
+    if (!this._hass) return;
+    if (inputCardDomainOf(entityId) === "script") {
+      this._hass.callService("script", "turn_on", { entity_id: entityId });
+    } else {
+      this._hass.callService("input_button", "press", { entity_id: entityId });
+    }
+  }
+
+  _toggleEntity(entityId) {
+    if (!this._hass) return;
+    const domain = inputCardDomainOf(entityId);
+    const stateObj = this._hass.states[entityId];
+    const isOn = !!stateObj && stateObj.state === "on";
+    this._hass.callService(domain, isOn ? "turn_off" : "turn_on", { entity_id: entityId });
   }
 
   _render() {
@@ -5745,7 +5778,14 @@ class AlexInputCard extends HTMLElement {
       JSON.stringify(c.active_text || null),
       JSON.stringify(c.inactive_bg || null),
       JSON.stringify(c.inactive_text || null),
-      entities.map((e) => `${e.entity}|${e.name}|${e.icon}|${JSON.stringify(e.color || null)}`).join(";"),
+      entities
+        .map(
+          (e) =>
+            `${e.entity}|${e.name}|${e.icon}|${JSON.stringify(e.color || null)}|${JSON.stringify(
+              e.exclude || null
+            )}|${e.step_minutes}`
+        )
+        .join(";"),
       entities
         .map((e) => {
           const st = hass.states[e.entity];
@@ -5813,10 +5853,11 @@ class AlexInputCard extends HTMLElement {
     // memes couleurs/rayons que le rail du mode "switch" des options, mais
     // toujours ce style (pas de variante "separate" : un −/+ n'a pas de
     // notion de "plusieurs choix independants" a afficher cote a cote).
-    const stepRail = (entityId, valueLabel, onMinus, onPlus) => `
+    const stepRail = (entityId, valueLabel, onMinus, onPlus, stepAttr) => `
       <div style="display:inline-flex;align-items:center;gap:${trackGap}px;padding:${trackPad}px;
                   border-radius:999px;background:${inactiveBg};">
         <button class="ac-step" data-entity="${escapeHtml(entityId)}" data-dir="-1" data-kind="${onMinus}"
+          ${stepAttr != null ? `data-step="${stepAttr}"` : ""}
           style="border:none;background:${activeBg};color:${activeText};
                  width:${stepBtnSize}px;height:${stepBtnSize}px;border-radius:999px;cursor:pointer;
                  font-size:${chipSize + 4}px;font-weight:700;line-height:1;
@@ -5824,11 +5865,40 @@ class AlexInputCard extends HTMLElement {
         <span style="font-size:${chipSize + 1}px;font-weight:600;color:${inactiveText};
                      padding:0 ${chipPadHSeparate}px;white-space:nowrap;">${escapeHtml(valueLabel)}</span>
         <button class="ac-step" data-entity="${escapeHtml(entityId)}" data-dir="1" data-kind="${onPlus}"
+          ${stepAttr != null ? `data-step="${stepAttr}"` : ""}
           style="border:none;background:${activeBg};color:${activeText};
                  width:${stepBtnSize}px;height:${stepBtnSize}px;border-radius:999px;cursor:pointer;
                  font-size:${chipSize + 4}px;font-weight:700;line-height:1;
                  display:flex;align-items:center;justify-content:center;font-family:inherit;">+</button>
       </div>`;
+
+    // Bouton simple (input_button / script) : une seule pastille, pas de
+    // notion de valeur a afficher, juste une action a declencher.
+    const pressButton = (entityId, iconName) => `
+      <button class="ac-press" data-entity="${escapeHtml(entityId)}"
+        style="border:none;background:${activeBg};color:${activeText};
+               width:${stepBtnSize}px;height:${stepBtnSize}px;border-radius:999px;cursor:pointer;
+               display:flex;align-items:center;justify-content:center;">
+        <ha-icon icon="${iconName}" style="--mdc-icon-size:${chipSize + 4}px;"></ha-icon>
+      </button>`;
+
+    // Interrupteur on/off (switch / automation / input_boolean) : un rail
+    // avec une pastille qui glisse, meme mecanique que les interrupteurs
+    // deja utilises ailleurs dans le bundle (alex-gradient-popup-card,
+    // Alex Light Studio), plutot qu'une simple puce qui change de texte.
+    const toggleTrackW = Math.round(stepBtnSize * 1.9);
+    const toggleTrackH = Math.round(stepBtnSize * 0.85);
+    const toggleKnob = toggleTrackH - 6;
+    const toggleSwitch = (entityId, isOn) => `
+      <button class="ac-toggle" data-entity="${escapeHtml(entityId)}"
+        style="border:none;cursor:pointer;padding:0;width:${toggleTrackW}px;height:${toggleTrackH}px;
+               border-radius:999px;background:${isOn ? activeBg : inactiveBg};position:relative;
+               transition:background .15s;">
+        <span style="position:absolute;top:3px;left:${isOn ? toggleTrackW - toggleKnob - 3 : 3}px;
+                     width:${toggleKnob}px;height:${toggleKnob}px;border-radius:50%;
+                     background:${isOn ? activeText : inactiveText};transition:left .15s;
+                     box-shadow:0 1px 3px rgba(0,0,0,0.25);"></span>
+      </button>`;
 
     const rowsHtml = entities
       .map((entry, i) => {
@@ -5837,16 +5907,19 @@ class AlexInputCard extends HTMLElement {
         const stateObj = hass.states[entityId];
         const name =
           e.name || (stateObj && stateObj.attributes && stateObj.attributes.friendly_name) || entityId;
-        const entIcon = e.icon || rowIcon;
+        const domain = inputCardDomainOf(entityId);
+        const entIcon = e.icon || c.entity_icon || inputCardDefaultIcon(domain) || rowIcon;
         const entIconColor = colorOr(e.color, iconColor);
         const border = i < entities.length - 1 ? "border-bottom:1px solid var(--divider-color);" : "";
-        const domain = inputCardDomainOf(entityId);
         const kind = inputCardKindOf(domain);
 
         let chips;
         if (kind === "options") {
           const currentValue = stateObj ? stateObj.state : undefined;
-          const rowOptions = (stateObj && stateObj.attributes && stateObj.attributes.options) || [];
+          const excludeSet = new Set(e.exclude || []);
+          const rowOptions = (
+            (stateObj && stateObj.attributes && stateObj.attributes.options) || []
+          ).filter((o) => !excludeSet.has(o));
           chips =
             chipStyle === "switch"
               ? `<div style="display:inline-flex;align-items:center;gap:${trackGap}px;padding:${trackPad}px;
@@ -5893,7 +5966,13 @@ class AlexInputCard extends HTMLElement {
           chips = stepRail(entityId, label, "number", "number");
         } else if (kind === "datetime") {
           const parsed = inputCardParseDatetime(stateObj || {});
-          chips = stepRail(entityId, inputCardFormatDatetime(parsed), "datetime", "datetime");
+          const stepMinutes = e.step_minutes != null ? e.step_minutes : 15;
+          chips = stepRail(entityId, inputCardFormatDatetime(parsed), "datetime", "datetime", stepMinutes);
+        } else if (kind === "button") {
+          chips = pressButton(entityId, domain === "script" ? "mdi:play" : "mdi:gesture-tap-button");
+        } else if (kind === "toggle") {
+          const isOn = !!stateObj && stateObj.state === "on";
+          chips = toggleSwitch(entityId, isOn);
         } else {
           chips = `<span style="font-size:${chipSize}px;color:${inactiveText};">${
             stateObj ? escapeHtml(stateObj.state) : "—"
@@ -5944,7 +6023,20 @@ class AlexInputCard extends HTMLElement {
         const dir = Number(el.getAttribute("data-dir"));
         const kind = el.getAttribute("data-kind");
         if (kind === "number") this._stepNumber(entityId, dir);
-        else if (kind === "datetime") this._stepDatetime(entityId, dir);
+        else if (kind === "datetime") {
+          const stepAttr = el.getAttribute("data-step");
+          this._stepDatetime(entityId, dir, stepAttr != null ? Number(stepAttr) : undefined);
+        }
+      });
+    });
+    this.querySelectorAll(".ac-press").forEach((el) => {
+      el.addEventListener("click", () => {
+        this._pressButton(el.getAttribute("data-entity"));
+      });
+    });
+    this.querySelectorAll(".ac-toggle").forEach((el) => {
+      el.addEventListener("click", () => {
+        this._toggleEntity(el.getAttribute("data-entity"));
       });
     });
 
@@ -6020,7 +6112,9 @@ class AlexInputCardEditor extends AlexListEditor {
     note.style.cssText = "font-size:12px;color:var(--secondary-text-color);margin:0 2px 8px;line-height:1.5;";
     note.textContent =
       "input_select/select : puces d'options. input_number/number : chiffre + boutons −/+. " +
-      "input_datetime : heure (ou date) + boutons −/+. Autre domaine : lecture seule.";
+      "input_datetime : heure (ou date) + boutons −/+ (pas réglable dans le détail de l'entité). " +
+      "input_button/script : bouton. switch/automation/input_boolean : interrupteur on/off. " +
+      "Autre domaine : lecture seule.";
     this.appendChild(note);
 
     const entities = cfg.entities || [];
@@ -6172,24 +6266,41 @@ class AlexInputCardEditor extends AlexListEditor {
       })
     );
 
-    this.appendChild(
-      this._mixed(
-        [
-          { name: "entity", selector: { entity: {} } },
-          { name: "name", selector: { text: {} } },
-          { name: "icon", selector: { icon: {} } },
-          { name: "color", selector: { color_rgb: {} } },
-        ],
-        { entity: e.entity, name: e.name, icon: e.icon, color: e.color },
-        {
-          entity: "Entité",
-          name: "Nom (vide = nom convivial)",
-          icon: "Icône (vide = icône du badge)",
-          color: "Couleur de l'icône",
-        },
-        merge
-      )
-    );
+    const domain = inputCardDomainOf(e.entity);
+    const isOptionsDomain = domain === "input_select" || domain === "select";
+    const isDatetimeDomain = domain === "input_datetime";
+    const stateObj = this._hass && e.entity ? this._hass.states[e.entity] : null;
+
+    const fields = [
+      { name: "entity", selector: { entity: {} } },
+      { name: "name", selector: { text: {} } },
+      { name: "icon", selector: { icon: {} } },
+      { name: "color", selector: { color_rgb: {} } },
+    ];
+    const data = { entity: e.entity, name: e.name, icon: e.icon, color: e.color };
+    const labels = {
+      entity: "Entité",
+      name: "Nom (vide = nom convivial)",
+      icon: "Icône (vide = icône du badge)",
+      color: "Couleur de l'icône",
+    };
+
+    if (isOptionsDomain) {
+      const options = (stateObj && stateObj.attributes && stateObj.attributes.options) || [];
+      fields.push({
+        name: "exclude",
+        selector: { select: { multiple: true, mode: "list", options: options.map((o) => ({ value: o, label: o })) } },
+      });
+      data.exclude = e.exclude || [];
+      labels.exclude = "Options à masquer";
+    }
+    if (isDatetimeDomain) {
+      fields.push({ name: "step_minutes", selector: { number: { min: 1, max: 120, step: 1, mode: "box" } } });
+      data.step_minutes = e.step_minutes != null ? e.step_minutes : 15;
+      labels.step_minutes = "Pas par clic (minutes)";
+    }
+
+    this.appendChild(this._mixed(fields, data, labels, merge));
   }
 }
 customElements.define("alex-input-card-editor", AlexInputCardEditor);
@@ -6198,7 +6309,7 @@ window.customCards.push({
   type: "alex-input-card",
   name: "Alex Input Card",
   description:
-    "Pilote input_select/select, input_number/number et input_datetime dans une même carte — le contrôle affiché s'adapte au type d'entité.",
+    "Pilote input_select/select, input_number/number, input_datetime, input_button/script et switch/automation/input_boolean dans une même carte — le contrôle affiché s'adapte au type d'entité.",
   preview: false,
   documentationURL: "https://github.com/<user>/alex-cards",
 });

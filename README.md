@@ -20,7 +20,7 @@ Collection de cartes Lovelace custom pour Home Assistant, distribuée en **plugi
 | `custom:alex-toggle-card`       | oui        | Liste d'entités basculables avec interrupteur cliquable par ligne. |
 | `custom:alex-select-label-card` | oui        | Groupe de checkbox par label HA (appartenance multiple, non exclusive). |
 | `custom:alex-switch-card`       | oui        | Bascule un `input_select` entre ses options, une puce par valeur. |
-| `custom:alex-input-card`        | oui        | Comme Switch Card, mais pour plusieurs types d'entrée (`input_select`/`select`, `input_number`/`number`, `input_datetime`) — le contrôle affiché s'adapte au domaine. |
+| `custom:alex-input-card`        | oui        | Comme Switch Card, mais pour plusieurs types d'entrée (`input_select`/`select`, `input_number`/`number`, `input_datetime`, `input_button`/`script`, `switch`/`automation`/`input_boolean`) — le contrôle affiché s'adapte au domaine. |
 | `custom:alex-tabs-card`         | oui        | Carte à onglets : monte n'importe quelle carte par onglet, navigation par puces/interrupteur/onglets. |
 | `custom:alex-clock-card`        | oui        | Horloge et date, alignables, avec la personnalisation du package. |
 | `custom:alex-media-player-card` | oui        | Contrôle média (pochette, lecture, volume) avec bascule entre lecteurs actifs. |
@@ -501,15 +501,30 @@ plutôt que seulement `input_select`. Le contrôle affiché par ligne dépend du
 de l'entité, détecté automatiquement — rien à configurer pour choisir le rendu :
 
 - **`input_select` / `select`** → puces d'options (comportement d'origine de Switch
-  Card, inchangé — mêmes styles `separate`/`switch`, mêmes couleurs/tailles).
+  Card, inchangé — mêmes styles `separate`/`switch`, mêmes couleurs/tailles). Un champ
+  **« Options à masquer »** apparaît dans le détail de l'entité (liste à cocher, basée
+  sur les options réelles de l'entité) pour retirer certaines valeurs de l'affichage
+  sans y toucher côté `input_select` lui-même — utile pour un `input_select` partagé
+  avec d'autres cartes/automatisations où seul un sous-ensemble des options a du sens
+  ici.
 - **`input_number` / `number`** → chiffre courant + boutons `−`/`+`, pas du `step` de
   l'entité (ou 1 par défaut), borné à `min`/`max`, arrondi au même nombre de décimales
   que le pas pour éviter les artefacts de virgule flottante (`0.1 + 0.2 =
   0.30000000000000004`).
 - **`input_datetime`** → affiche l'heure (`HH:MM`) si l'entité en gère une, sinon la
-  date ; boutons `−`/`+` qui avancent/reculent de 15 min (heure) ou 1 jour (date
-  seule). Appelle `input_datetime.set_datetime` avec uniquement les champs que
+  date ; boutons `−`/`+` qui avancent/reculent de 15 min par défaut (heure) ou 1 jour
+  (date seule). Un champ **« Pas par clic (minutes) »** dans le détail de l'entité
+  permet de choisir un autre pas (5 min, 1 min...) — uniquement pour les entités avec
+  heure ; le pas des entités date-seule reste fixé à 1 jour, non configurable pour
+  l'instant. Appelle `input_datetime.set_datetime` avec uniquement les champs que
   l'entité gère réellement (`date`/`time`).
+- **`input_button` / `script`** → un seul bouton (icône ▶ pour un script, icône
+  d'appui pour un `input_button`) — `script.turn_on` ou `input_button.press` selon le
+  domaine.
+- **`switch` / `automation` / `input_boolean`** → interrupteur on/off en pilule (même
+  mécanique que les interrupteurs déjà utilisés ailleurs dans le bundle — une pastille
+  qui glisse, pas une simple puce qui change de texte) — `turn_on`/`turn_off` du
+  domaine natif de l'entité.
 - **Autre domaine** → état affiché en lecture seule, aucun bouton — repli silencieux
   plutôt qu'une ligne cassée.
 
@@ -520,21 +535,33 @@ icon: mdi:tune-variant
 entities:
   - entity: input_select.light_mode_salon
     name: Mode salon
+    exclude: ["confort"]
   - entity: input_number.salon_luminosite
     name: Luminosité salon
   - entity: input_datetime.reveil
     name: Réveil
+    step_minutes: 5
+  - entity: script.bonne_nuit
+    name: Bonne nuit
+  - entity: switch.prise_salon
+    name: Prise salon
 ```
 
 - **`entities`** : mêmes champs qu'Alex Switch Card (entité, nom, icône, couleur
-  d'icône optionnels par ligne) — le picker d'ajout et le champ entité du détail
-  n'ont **pas** de restriction de domaine ici (contrairement à Switch Card, limitée à
-  `input_select`), c'est justement l'objet de cette carte.
-- Le rail `−`/`+` (modes `input_number` et `input_datetime`) reprend toujours le
-  style « switch » en pilule, quel que soit `chip_style` — un `−`/`+` n'a pas de
-  notion de « plusieurs choix indépendants » à afficher côte à côte, donc pas de
-  variante `separate` pour ces deux modes. `chip_style` ne s'applique qu'aux lignes
-  `input_select`/`select`.
+  d'icône optionnels par ligne), plus `exclude` (liste, `input_select`/`select`
+  uniquement) et `step_minutes` (nombre, `input_datetime` uniquement) — le picker
+  d'ajout et le champ entité du détail n'ont **pas** de restriction de domaine ici
+  (contrairement à Switch Card, limitée à `input_select`), c'est justement l'objet de
+  cette carte.
+- **Icône par défaut par domaine** si ni l'entité ni la carte n'en précisent une (ex.
+  `mdi:script-text-outline` pour un script, `mdi:toggle-switch-outline` pour un
+  switch, `mdi:clock-outline` pour un input_datetime) — un indice visuel immédiat du
+  type de contrôle affiché sur la ligne, sans rien à configurer.
+- Le rail `−`/`+` (modes `input_number` et `input_datetime`) et l'interrupteur
+  (`switch`/`automation`/`input_boolean`) reprennent toujours le style « switch » en
+  pilule, quel que soit `chip_style` — ces modes n'ont pas de notion de « plusieurs
+  choix indépendants » à afficher côte à côte, donc pas de variante `separate` pour
+  eux. `chip_style` ne s'applique qu'aux lignes `input_select`/`select`.
 - Personnalisation : identique à Alex Switch Card (mêmes sous-sections Carte /
   En-tête / Entité / **Contrôle** — renommée par rapport à « Switch » pour rester
   cohérente avec le fait que cette carte ne gère plus seulement des switches).
