@@ -168,6 +168,11 @@ lights:
     icon: hue:go
 ```
 
+Le bloc des membres d'un groupe déployé suit désormais l'arrondi de la carte englobante
+sur son bord inférieur quand ce groupe est le **dernier** élément de `lights` — avant ce
+correctif, ses coins restaient toujours carrés (`border-radius: 0px` forcé), ce qui
+laissait un bord carré dépasser visuellement du bas de la carte une fois déplié.
+
 ### Weather Card
 
 Une carte, plusieurs « composants » empilés verticalement et **visuellement unifiés**
@@ -568,6 +573,12 @@ entities:
   pilule, quel que soit `chip_style` — ces modes n'ont pas de notion de « plusieurs
   choix indépendants » à afficher côte à côte, donc pas de variante `separate` pour
   eux. `chip_style` ne s'applique qu'aux lignes `input_select`/`select`.
+- **Interaction sur la ligne** : la zone icône+nom de chaque ligne (à gauche, séparée
+  du contrôle à droite qui garde sa propre interaction — sélection d'option,
+  −/+, bouton, interrupteur) déclenche une **`tap_action`** configurable dans le
+  détail de l'entité (même sélecteur d'action que les cartes natives HA — more-info,
+  bascule, navigation, URL, appel de service...). **more-info** par défaut si rien
+  n'est choisi.
 - Personnalisation : identique à Alex Switch Card (mêmes sous-sections Carte /
   En-tête / Entité / **Contrôle** — renommée par rapport à « Switch » pour rester
   cohérente avec le fait que cette carte ne gère plus seulement des switches).

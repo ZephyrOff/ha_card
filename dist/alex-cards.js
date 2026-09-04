@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.49.3";
+const ALEX_CARDS_VERSION = "0.49.4";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -1595,8 +1595,9 @@ class LightCard extends AlexWrapperCard {
       });
     }
 
-    (c.lights || []).forEach((l) => {
+    (c.lights || []).forEach((l, idx) => {
       const group = l.expand_toggle && Array.isArray(l.members) && l.members.length;
+      const isLastLight = idx === (c.lights || []).length - 1;
 
       const tile = this._lightTile(l);
       if (group) {
@@ -1615,15 +1616,22 @@ class LightCard extends AlexWrapperCard {
           : typeof sb === "string" && sb.trim()
           ? sb
           : "rgba(var(--rgb-primary-text-color, 0, 0, 0), 0.12)";
+        // Coins carres par defaut (le bloc suit directement sa tuile
+        // parente, pas de rupture visuelle en haut) - sauf en bas si ce
+        // groupe est le DERNIER element visible de la carte : sans ca, son
+        // bord inferieur reste carre alors que la carte englobante, elle,
+        // est arrondie - d'ou le petit "bloc carre" qui depasse visuellement
+        // quand ce groupe deplie se trouve etre en dernier.
+        const radiusCss = isLastLight
+          ? "border-radius: 0 0 var(--ha-card-border-radius, 12px) var(--ha-card-border-radius, 12px) !important;"
+          : "border-radius: 0px !important;";
         cards.push({
           type: "conditional",
           conditions: [{ entity: l.expand_toggle, state: "on" }],
           card: {
             type: "custom:vertical-stack-in-card",
             card_mod: {
-              style:
-                `ha-card {\n  background: ${submenuBg};\n` +
-                "  border-radius: 0px !important;\n  box-shadow: none;\n}\n",
+              style: `ha-card {\n  background: ${submenuBg};\n  ${radiusCss}\n  box-shadow: none;\n}\n`,
             },
             cards: l.members.map((m) => this._lightTile(m)),
           },
@@ -5753,6 +5761,49 @@ class AlexInputCard extends HTMLElement {
     this._hass.callService(domain, isOn ? "turn_off" : "turn_on", { entity_id: entityId });
   }
 
+  // Zone icone+nom de chaque ligne (separee du controle a droite, qui garde
+  // sa propre interaction) - tap_action standard HA (meme forme de config
+  // que les autres cartes natives/tierces), more-info par defaut si rien
+  // n'est configure.
+  _handleTapAction(entityId, actionConfig) {
+    if (!this._hass || !entityId) return;
+    const action = (actionConfig && actionConfig.action) || "more-info";
+    if (action === "none") return;
+    if (action === "toggle") {
+      this._toggleEntity(entityId);
+      return;
+    }
+    if (action === "navigate" && actionConfig.navigation_path) {
+      history.pushState(null, "", actionConfig.navigation_path);
+      window.dispatchEvent(new CustomEvent("location-changed", { detail: { replace: false } }));
+      return;
+    }
+    if (action === "url" && actionConfig.url_path) {
+      window.open(actionConfig.url_path);
+      return;
+    }
+    if (action === "call-service" || action === "perform-action") {
+      // HA a renomme call-service -> perform-action et service/service_data
+      // -> perform_action/data au fil des versions - on accepte les deux
+      // formes plutot que de parier sur une seule.
+      const service = actionConfig.perform_action || actionConfig.service;
+      if (service) {
+        const [svcDomain, svcName] = service.split(".");
+        this._hass.callService(
+          svcDomain,
+          svcName,
+          actionConfig.data || actionConfig.service_data || {},
+          actionConfig.target
+        );
+      }
+      return;
+    }
+    // "more-info" et tout le reste (repli) : boite de dialogue native.
+    this.dispatchEvent(
+      new CustomEvent("hass-more-info", { detail: { entityId }, bubbles: true, composed: true })
+    );
+  }
+
   _render() {
     if (!this._config || !this._hass) return;
     const c = this._config;
@@ -5994,14 +6045,17 @@ class AlexInputCard extends HTMLElement {
 
         return `
           <div style="display:flex;align-items:center;gap:12px;padding:${rowSpacing}px 2px;${border}">
-            <div style="width:${rowIconBox}px;height:${rowIconBox}px;border-radius:${rowIconRadius}px;
-                        background:rgba(var(--rgb-primary-text-color,0,0,0),0.06);
-                        display:flex;align-items:center;justify-content:center;flex:0 0 auto;">
-              <ha-icon icon="${entIcon}" style="--mdc-icon-size:${entityIconSize}px;color:${entIconColor};"></ha-icon>
-            </div>
-            <div style="flex:1;min-width:0;">
-              <div style="font-size:${entityNameSize}px;font-weight:600;color:${secondaryColor};
-                          overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(name)}</div>
+            <div class="ac-row-tap" data-entity="${escapeHtml(entityId)}"
+                style="display:flex;align-items:center;gap:12px;flex:1;min-width:0;cursor:pointer;">
+              <div style="width:${rowIconBox}px;height:${rowIconBox}px;border-radius:${rowIconRadius}px;
+                          background:rgba(var(--rgb-primary-text-color,0,0,0),0.06);
+                          display:flex;align-items:center;justify-content:center;flex:0 0 auto;">
+                <ha-icon icon="${entIcon}" style="--mdc-icon-size:${entityIconSize}px;color:${entIconColor};"></ha-icon>
+              </div>
+              <div style="flex:1;min-width:0;">
+                <div style="font-size:${entityNameSize}px;font-weight:600;color:${secondaryColor};
+                            overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(name)}</div>
+              </div>
             </div>
             <div style="flex:0 0 auto;display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px;max-width:60%;">
               ${chips}
@@ -6050,6 +6104,16 @@ class AlexInputCard extends HTMLElement {
     this.querySelectorAll(".ac-toggle").forEach((el) => {
       el.addEventListener("click", () => {
         this._toggleEntity(el.getAttribute("data-entity"));
+      });
+    });
+    this.querySelectorAll(".ac-row-tap").forEach((el) => {
+      el.addEventListener("click", () => {
+        const entityId = el.getAttribute("data-entity");
+        const entry = (this._config.entities || []).find(
+          (x) => (typeof x === "string" ? x : x.entity) === entityId
+        );
+        const tapAction = entry && typeof entry === "object" ? entry.tap_action : null;
+        this._handleTapAction(entityId, tapAction);
       });
     });
 
@@ -6128,7 +6192,8 @@ class AlexInputCardEditor extends AlexListEditor {
       "input_datetime : heure (ou date) + boutons −/+ (pas réglable dans le détail de l'entité). " +
       "input_button/script : bouton (icône et texte personnalisables dans le détail). " +
       "switch/automation/input_boolean : interrupteur on/off. " +
-      "Autre domaine : lecture seule.";
+      "Autre domaine : lecture seule. " +
+      "Zone icône/nom de chaque ligne : action au tap configurable (more-info par défaut).";
     this.appendChild(note);
 
     const entities = cfg.entities || [];
@@ -6324,6 +6389,13 @@ class AlexInputCardEditor extends AlexListEditor {
       labels.button_icon = "Icône du bouton (vide = icône par défaut du domaine)";
       labels.button_text = "Texte du bouton (vide = icône seule)";
     }
+
+    // Universel, quel que soit le domaine - la zone icone+nom de la ligne
+    // (separee du controle a droite, qui garde sa propre interaction) tape
+    // cette action. more-info par defaut si rien n'est choisi.
+    fields.push({ name: "tap_action", selector: { ui_action: {} } });
+    data.tap_action = e.tap_action || { action: "more-info" };
+    labels.tap_action = "Action au tap sur la ligne (icône/nom)";
 
     this.appendChild(this._mixed(fields, data, labels, merge));
   }
