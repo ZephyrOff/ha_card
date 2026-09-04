@@ -20,6 +20,7 @@ Collection de cartes Lovelace custom pour Home Assistant, distribuée en **plugi
 | `custom:alex-toggle-card`       | oui        | Liste d'entités basculables avec interrupteur cliquable par ligne. |
 | `custom:alex-select-label-card` | oui        | Groupe de checkbox par label HA (appartenance multiple, non exclusive). |
 | `custom:alex-switch-card`       | oui        | Bascule un `input_select` entre ses options, une puce par valeur. |
+| `custom:alex-input-card`        | oui        | Comme Switch Card, mais pour plusieurs types d'entrée (`input_select`/`select`, `input_number`/`number`, `input_datetime`) — le contrôle affiché s'adapte au domaine. |
 | `custom:alex-tabs-card`         | oui        | Carte à onglets : monte n'importe quelle carte par onglet, navigation par puces/interrupteur/onglets. |
 | `custom:alex-clock-card`        | oui        | Horloge et date, alignables, avec la personnalisation du package. |
 | `custom:alex-media-player-card` | oui        | Contrôle média (pochette, lecture, volume) avec bascule entre lecteurs actifs. |
@@ -490,6 +491,53 @@ entities:
       une pastille contrastée (fond clair + légère ombre), les options inactives
       restent transparentes et laissent voir le rail — capsule entièrement arrondie,
       pas des boutons carrés collés les uns aux autres.
+
+### Alex Input Card
+
+Même gabarit visuel et même mécanisme qu'Alex Switch Card (dont elle est directement
+issue par duplication du bloc — Switch Card reste intacte à côté, carte séparée le
+temps de valider le nouveau comportement), généralisée à plusieurs types d'entrée
+plutôt que seulement `input_select`. Le contrôle affiché par ligne dépend du **domaine**
+de l'entité, détecté automatiquement — rien à configurer pour choisir le rendu :
+
+- **`input_select` / `select`** → puces d'options (comportement d'origine de Switch
+  Card, inchangé — mêmes styles `separate`/`switch`, mêmes couleurs/tailles).
+- **`input_number` / `number`** → chiffre courant + boutons `−`/`+`, pas du `step` de
+  l'entité (ou 1 par défaut), borné à `min`/`max`, arrondi au même nombre de décimales
+  que le pas pour éviter les artefacts de virgule flottante (`0.1 + 0.2 =
+  0.30000000000000004`).
+- **`input_datetime`** → affiche l'heure (`HH:MM`) si l'entité en gère une, sinon la
+  date ; boutons `−`/`+` qui avancent/reculent de 15 min (heure) ou 1 jour (date
+  seule). Appelle `input_datetime.set_datetime` avec uniquement les champs que
+  l'entité gère réellement (`date`/`time`).
+- **Autre domaine** → état affiché en lecture seule, aucun bouton — repli silencieux
+  plutôt qu'une ligne cassée.
+
+```yaml
+type: custom:alex-input-card
+name: Réglages
+icon: mdi:tune-variant
+entities:
+  - entity: input_select.light_mode_salon
+    name: Mode salon
+  - entity: input_number.salon_luminosite
+    name: Luminosité salon
+  - entity: input_datetime.reveil
+    name: Réveil
+```
+
+- **`entities`** : mêmes champs qu'Alex Switch Card (entité, nom, icône, couleur
+  d'icône optionnels par ligne) — le picker d'ajout et le champ entité du détail
+  n'ont **pas** de restriction de domaine ici (contrairement à Switch Card, limitée à
+  `input_select`), c'est justement l'objet de cette carte.
+- Le rail `−`/`+` (modes `input_number` et `input_datetime`) reprend toujours le
+  style « switch » en pilule, quel que soit `chip_style` — un `−`/`+` n'a pas de
+  notion de « plusieurs choix indépendants » à afficher côte à côte, donc pas de
+  variante `separate` pour ces deux modes. `chip_style` ne s'applique qu'aux lignes
+  `input_select`/`select`.
+- Personnalisation : identique à Alex Switch Card (mêmes sous-sections Carte /
+  En-tête / Entité / **Contrôle** — renommée par rapport à « Switch » pour rester
+  cohérente avec le fait que cette carte ne gère plus seulement des switches).
 
 ### Alex Tabs Card
 

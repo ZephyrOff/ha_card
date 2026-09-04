@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.48.3";
+const ALEX_CARDS_VERSION = "0.49.0";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -5576,6 +5576,629 @@ window.customCards.push({
   type: "alex-switch-card",
   name: "Alex Switch Card",
   description: "Bascule un input_select entre ses options, une puce par valeur possible.",
+  preview: false,
+  documentationURL: "https://github.com/<user>/alex-cards",
+});
+
+/* =========================================================================
+ * === alex-input-card =======================================================
+ * Meme gabarit visuel/mecanisme qu'alex-switch-card (dont elle est
+ * directement issue), mais generalisee a plusieurs types d'entite plutot
+ * que seulement input_select - le controle affiche par ligne depend du
+ * DOMAINE de l'entite, detecte automatiquement :
+ *   - input_select / select -> puces d'options (comportement d'origine,
+ *     inchange - meme style "separate"/"switch", memes couleurs/tailles)
+ *   - input_number / number -> chiffre courant + boutons −/+ (pas de
+ *     champ, pas de curseur : uniquement le pas-a-pas demande)
+ *   - input_datetime -> heure (ou date si l'entite n'a pas d'heure) +
+ *     boutons −/+ (15 min de pas si heure, 1 jour si date seule)
+ *   - autre domaine -> etat affiche en lecture seule, aucun controle
+ *     (repli silencieux plutot qu'une ligne cassee)
+ * alex-switch-card reste tel quel a cote, non modifiee - carte separee
+ * volontairement, le temps de valider le nouveau comportement.
+ * ========================================================================= */
+
+function inputCardDomainOf(entityId) {
+  return entityId && entityId.indexOf(".") > -1 ? entityId.split(".")[0] : "";
+}
+
+function inputCardKindOf(domain) {
+  if (domain === "input_select" || domain === "select") return "options";
+  if (domain === "input_number" || domain === "number") return "stepper";
+  if (domain === "input_datetime") return "datetime";
+  return "unsupported";
+}
+
+// Arrondit au meme nombre de decimales que le pas, pour eviter les
+// artefacts classiques de virgule flottante (0.1 + 0.2 = 0.30000000000000004).
+function inputCardRoundToStep(value, step) {
+  const stepStr = String(step);
+  const dot = stepStr.indexOf(".");
+  const decimals = dot === -1 ? 0 : stepStr.length - dot - 1;
+  const factor = Math.pow(10, decimals);
+  return Math.round(value * factor) / factor;
+}
+
+function inputCardParseDatetime(stateObj) {
+  const attrs = (stateObj && stateObj.attributes) || {};
+  const raw = (stateObj && stateObj.state) || "";
+  const dateMatch = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  const timeMatch = raw.match(/(\d{2}):(\d{2}):(\d{2})/);
+  const now = new Date();
+  return {
+    hasDate: !!attrs.has_date,
+    hasTime: !!attrs.has_time,
+    year: dateMatch ? parseInt(dateMatch[1], 10) : now.getFullYear(),
+    month: dateMatch ? parseInt(dateMatch[2], 10) : now.getMonth() + 1,
+    day: dateMatch ? parseInt(dateMatch[3], 10) : now.getDate(),
+    hour: timeMatch ? parseInt(timeMatch[1], 10) : 0,
+    minute: timeMatch ? parseInt(timeMatch[2], 10) : 0,
+    second: timeMatch ? parseInt(timeMatch[3], 10) : 0,
+  };
+}
+
+function inputCardShiftDatetime(parsed, deltaMinutes, deltaDays) {
+  const d = new Date(parsed.year, parsed.month - 1, parsed.day, parsed.hour, parsed.minute, parsed.second);
+  if (deltaMinutes) d.setMinutes(d.getMinutes() + deltaMinutes);
+  if (deltaDays) d.setDate(d.getDate() + deltaDays);
+  return {
+    year: d.getFullYear(),
+    month: d.getMonth() + 1,
+    day: d.getDate(),
+    hour: d.getHours(),
+    minute: d.getMinutes(),
+    second: d.getSeconds(),
+  };
+}
+
+function inputCardPad(n, width) {
+  return String(n).padStart(width || 2, "0");
+}
+
+function inputCardFormatDatetime(parsed) {
+  if (parsed.hasTime) return `${inputCardPad(parsed.hour)}:${inputCardPad(parsed.minute)}`;
+  if (parsed.hasDate) return `${parsed.year}-${inputCardPad(parsed.month)}-${inputCardPad(parsed.day)}`;
+  return "—";
+}
+
+class AlexInputCard extends HTMLElement {
+  static getConfigElement() {
+    return document.createElement("alex-input-card-editor");
+  }
+  static getStubConfig() {
+    return { name: "Réglages", icon: "mdi:tune-variant", entities: [] };
+  }
+
+  setConfig(config) {
+    if (!config) throw new Error("Configuration invalide");
+    this._config = config;
+    this._built = false;
+    this._lastSig = null;
+  }
+
+  set hass(hass) {
+    this._hass = hass;
+    this._render();
+  }
+
+  getCardSize() {
+    return 1 + ((this._config && this._config.entities) || []).length;
+  }
+
+  _selectOption(entityId, value) {
+    if (!this._hass) return;
+    const domain = inputCardDomainOf(entityId) === "select" ? "select" : "input_select";
+    this._hass.callService(domain, "select_option", { entity_id: entityId, option: value });
+  }
+
+  _stepNumber(entityId, dir, stepOverride) {
+    if (!this._hass) return;
+    const stateObj = this._hass.states[entityId];
+    if (!stateObj) return;
+    const attrs = stateObj.attributes || {};
+    const step = stepOverride != null ? stepOverride : attrs.step != null ? attrs.step : 1;
+    const min = attrs.min != null ? attrs.min : -Infinity;
+    const max = attrs.max != null ? attrs.max : Infinity;
+    const current = parseFloat(stateObj.state);
+    const base = Number.isNaN(current) ? 0 : current;
+    const next = Math.max(min, Math.min(max, inputCardRoundToStep(base + dir * step, step)));
+    const domain = inputCardDomainOf(entityId) === "number" ? "number" : "input_number";
+    this._hass.callService(domain, "set_value", { entity_id: entityId, value: next });
+  }
+
+  _stepDatetime(entityId, dir) {
+    if (!this._hass) return;
+    const stateObj = this._hass.states[entityId];
+    if (!stateObj) return;
+    const parsed = inputCardParseDatetime(stateObj);
+    const shifted = parsed.hasTime
+      ? inputCardShiftDatetime(parsed, dir * 15, 0)
+      : inputCardShiftDatetime(parsed, 0, dir * 1);
+    const data = { entity_id: entityId };
+    if (parsed.hasDate) data.date = `${shifted.year}-${inputCardPad(shifted.month)}-${inputCardPad(shifted.day)}`;
+    if (parsed.hasTime) data.time = `${inputCardPad(shifted.hour)}:${inputCardPad(shifted.minute)}:${inputCardPad(shifted.second)}`;
+    this._hass.callService("input_datetime", "set_datetime", data);
+  }
+
+  _render() {
+    if (!this._config || !this._hass) return;
+    const c = this._config;
+    const hass = this._hass;
+    const entities = c.entities || [];
+
+    const sig = [
+      c.name,
+      c.icon,
+      c.entity_icon,
+      JSON.stringify(c.icon_color || null),
+      JSON.stringify(c.background || null),
+      JSON.stringify(c.primary_color || null),
+      JSON.stringify(c.secondary_color || null),
+      c.row_spacing,
+      c.name_size,
+      c.icon_size,
+      c.entity_name_size,
+      c.entity_icon_size,
+      c.chip_style,
+      c.chip_size,
+      JSON.stringify(c.active_bg || null),
+      JSON.stringify(c.active_text || null),
+      JSON.stringify(c.inactive_bg || null),
+      JSON.stringify(c.inactive_text || null),
+      entities.map((e) => `${e.entity}|${e.name}|${e.icon}|${JSON.stringify(e.color || null)}`).join(";"),
+      entities
+        .map((e) => {
+          const st = hass.states[e.entity];
+          if (!st) return "";
+          const a = st.attributes || {};
+          return [
+            st.state,
+            JSON.stringify(a.options || null),
+            a.min,
+            a.max,
+            a.step,
+            a.unit_of_measurement,
+            a.has_date,
+            a.has_time,
+          ].join(":");
+        })
+        .join(";"),
+    ].join("~");
+    if (this._built && sig === this._lastSig) return;
+    this._lastSig = sig;
+
+    const iconColor = colorOr(c.icon_color, "#8b7ae6");
+    const badgeRgb = Array.isArray(c.icon_color) ? c.icon_color : [139, 122, 230];
+    const badgeBg = `rgba(${badgeRgb[0]}, ${badgeRgb[1]}, ${badgeRgb[2]}, 0.16)`;
+    const cardBg = colorOr(c.background, "var(--ha-card-background, var(--card-background-color))");
+    const primaryColor = colorOr(c.primary_color, "var(--primary-text-color)");
+    const secondaryColor = colorOr(c.secondary_color, "var(--primary-text-color)");
+    const rowIcon = c.entity_icon || c.icon || "mdi:tune-variant";
+    const rowSpacing = c.row_spacing != null ? c.row_spacing : 12;
+    const nameSize = c.name_size != null ? c.name_size : 17;
+    const iconSize = c.icon_size != null ? c.icon_size : 20;
+    const entityNameSize = c.entity_name_size != null ? c.entity_name_size : 14;
+    const entityIconSize = c.entity_icon_size != null ? c.entity_icon_size : 16;
+    const rowIconBox = Math.round(entityIconSize * 2);
+    const rowIconRadius = Math.round(rowIconBox * 0.28);
+    const badgeBox = Math.round(iconSize * 2);
+    const badgeRadius = Math.round(badgeBox * 0.3);
+    const chipStyle = c.chip_style === "switch" ? "switch" : "separate";
+    const activeBg = colorOr(
+      c.active_bg,
+      chipStyle === "switch" ? "var(--card-background-color)" : "var(--primary-color)"
+    );
+    const activeText = colorOr(
+      c.active_text,
+      chipStyle === "switch" ? "var(--primary-color)" : "var(--text-primary-color)"
+    );
+    const inactiveBg = colorOr(
+      c.inactive_bg,
+      chipStyle === "switch" ? "rgba(var(--rgb-primary-color, 3, 169, 244), 0.18)" : "transparent"
+    );
+    const inactiveText = colorOr(
+      c.inactive_text,
+      chipStyle === "switch" ? "var(--text-primary-color)" : "var(--secondary-text-color)"
+    );
+    const chipSize = c.chip_size != null ? c.chip_size : 12;
+    const chipPadV = Math.max(2, Math.round(chipSize * 0.42));
+    const chipPadHSeparate = Math.max(4, Math.round(chipSize * 0.83));
+    const chipPadHSwitch = Math.max(6, Math.round(chipSize * 1.17));
+    const chipRadiusSeparate = Math.max(4, Math.round(chipSize * 0.67));
+    const trackPad = Math.max(2, Math.round(chipSize * 0.25));
+    const trackGap = Math.max(1, Math.round(chipSize * 0.17));
+    const stepBtnSize = chipSize + 16;
+
+    // Rail en pilule reutilise pour les modes "stepper" et "datetime" -
+    // memes couleurs/rayons que le rail du mode "switch" des options, mais
+    // toujours ce style (pas de variante "separate" : un −/+ n'a pas de
+    // notion de "plusieurs choix independants" a afficher cote a cote).
+    const stepRail = (entityId, valueLabel, onMinus, onPlus) => `
+      <div style="display:inline-flex;align-items:center;gap:${trackGap}px;padding:${trackPad}px;
+                  border-radius:999px;background:${inactiveBg};">
+        <button class="ac-step" data-entity="${escapeHtml(entityId)}" data-dir="-1" data-kind="${onMinus}"
+          style="border:none;background:${activeBg};color:${activeText};
+                 width:${stepBtnSize}px;height:${stepBtnSize}px;border-radius:999px;cursor:pointer;
+                 font-size:${chipSize + 4}px;font-weight:700;line-height:1;
+                 display:flex;align-items:center;justify-content:center;font-family:inherit;">−</button>
+        <span style="font-size:${chipSize + 1}px;font-weight:600;color:${inactiveText};
+                     padding:0 ${chipPadHSeparate}px;white-space:nowrap;">${escapeHtml(valueLabel)}</span>
+        <button class="ac-step" data-entity="${escapeHtml(entityId)}" data-dir="1" data-kind="${onPlus}"
+          style="border:none;background:${activeBg};color:${activeText};
+                 width:${stepBtnSize}px;height:${stepBtnSize}px;border-radius:999px;cursor:pointer;
+                 font-size:${chipSize + 4}px;font-weight:700;line-height:1;
+                 display:flex;align-items:center;justify-content:center;font-family:inherit;">+</button>
+      </div>`;
+
+    const rowsHtml = entities
+      .map((entry, i) => {
+        const e = typeof entry === "string" ? { entity: entry } : entry || {};
+        const entityId = e.entity;
+        const stateObj = hass.states[entityId];
+        const name =
+          e.name || (stateObj && stateObj.attributes && stateObj.attributes.friendly_name) || entityId;
+        const entIcon = e.icon || rowIcon;
+        const entIconColor = colorOr(e.color, iconColor);
+        const border = i < entities.length - 1 ? "border-bottom:1px solid var(--divider-color);" : "";
+        const domain = inputCardDomainOf(entityId);
+        const kind = inputCardKindOf(domain);
+
+        let chips;
+        if (kind === "options") {
+          const currentValue = stateObj ? stateObj.state : undefined;
+          const rowOptions = (stateObj && stateObj.attributes && stateObj.attributes.options) || [];
+          chips =
+            chipStyle === "switch"
+              ? `<div style="display:inline-flex;align-items:center;gap:${trackGap}px;padding:${trackPad}px;
+                            border-radius:999px;background:${inactiveBg};">
+                  ${rowOptions
+                    .map((value) => {
+                      const active = currentValue === value;
+                      return `
+                        <button class="ac-chip" data-entity="${escapeHtml(entityId)}" data-value="${escapeHtml(value)}"
+                          style="border:none;background:${active ? activeBg : "transparent"};
+                                 color:${active ? activeText : inactiveText};
+                                 font-size:${chipSize}px;font-weight:${active ? "600" : "400"};
+                                 padding:${chipPadV}px ${chipPadHSwitch}px;
+                                 border-radius:999px;cursor:pointer;font-family:inherit;white-space:nowrap;
+                                 box-shadow:${active ? "0 1px 3px rgba(0,0,0,0.18)" : "none"};
+                                 transition:background .15s,color .15s,box-shadow .15s;">
+                          ${escapeHtml(value)}
+                        </button>`;
+                    })
+                    .join("")}
+                </div>`
+              : rowOptions
+                  .map((value) => {
+                    const active = currentValue === value;
+                    const chipBg = active ? activeBg : inactiveBg;
+                    const chipBorder = active ? activeBg : "var(--divider-color)";
+                    const chipText = active ? activeText : inactiveText;
+                    return `
+                      <button class="ac-chip" data-entity="${escapeHtml(entityId)}" data-value="${escapeHtml(value)}"
+                        style="border:1px solid ${chipBorder};background:${chipBg};color:${chipText};
+                               font-size:${chipSize}px;font-weight:${active ? "600" : "400"};
+                               padding:${chipPadV}px ${chipPadHSeparate}px;
+                               border-radius:${chipRadiusSeparate}px;cursor:pointer;font-family:inherit;white-space:nowrap;
+                               transition:background .15s,border-color .15s,color .15s;">
+                        ${escapeHtml(value)}
+                      </button>`;
+                  })
+                  .join("");
+        } else if (kind === "stepper") {
+          const attrs = (stateObj && stateObj.attributes) || {};
+          const raw = stateObj ? parseFloat(stateObj.state) : NaN;
+          const unit = attrs.unit_of_measurement || "";
+          const label = Number.isNaN(raw) ? "—" : `${raw}${unit ? " " + unit : ""}`;
+          chips = stepRail(entityId, label, "number", "number");
+        } else if (kind === "datetime") {
+          const parsed = inputCardParseDatetime(stateObj || {});
+          chips = stepRail(entityId, inputCardFormatDatetime(parsed), "datetime", "datetime");
+        } else {
+          chips = `<span style="font-size:${chipSize}px;color:${inactiveText};">${
+            stateObj ? escapeHtml(stateObj.state) : "—"
+          }</span>`;
+        }
+
+        return `
+          <div style="display:flex;align-items:center;gap:12px;padding:${rowSpacing}px 2px;${border}">
+            <div style="width:${rowIconBox}px;height:${rowIconBox}px;border-radius:${rowIconRadius}px;
+                        background:rgba(var(--rgb-primary-text-color,0,0,0),0.06);
+                        display:flex;align-items:center;justify-content:center;flex:0 0 auto;">
+              <ha-icon icon="${entIcon}" style="--mdc-icon-size:${entityIconSize}px;color:${entIconColor};"></ha-icon>
+            </div>
+            <div style="flex:1;min-width:0;">
+              <div style="font-size:${entityNameSize}px;font-weight:600;color:${secondaryColor};
+                          overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(name)}</div>
+            </div>
+            <div style="flex:0 0 auto;display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px;max-width:60%;">
+              ${chips}
+            </div>
+          </div>`;
+      })
+      .join("");
+
+    this.innerHTML = `
+      <ha-card style="border-radius:20px;box-shadow:none;
+                      background:${cardBg};
+                      padding:16px 18px;">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px;">
+          <div style="width:${badgeBox}px;height:${badgeBox}px;border-radius:${badgeRadius}px;background:${badgeBg};
+                      display:flex;align-items:center;justify-content:center;flex:0 0 auto;">
+            <ha-icon icon="${c.icon || "mdi:tune-variant"}" style="--mdc-icon-size:${iconSize}px;color:${iconColor};"></ha-icon>
+          </div>
+          <div style="flex:1;min-width:0;font-size:${nameSize}px;font-weight:700;color:${primaryColor};
+                      overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(c.name || "")}</div>
+        </div>
+        <div>${rowsHtml}</div>
+      </ha-card>`;
+
+    this.querySelectorAll(".ac-chip").forEach((el) => {
+      el.addEventListener("click", () => {
+        this._selectOption(el.getAttribute("data-entity"), el.getAttribute("data-value"));
+      });
+    });
+    this.querySelectorAll(".ac-step").forEach((el) => {
+      el.addEventListener("click", () => {
+        const entityId = el.getAttribute("data-entity");
+        const dir = Number(el.getAttribute("data-dir"));
+        const kind = el.getAttribute("data-kind");
+        if (kind === "number") this._stepNumber(entityId, dir);
+        else if (kind === "datetime") this._stepDatetime(entityId, dir);
+      });
+    });
+
+    this._built = true;
+  }
+}
+customElements.define("alex-input-card", AlexInputCard);
+
+class AlexInputCardEditor extends AlexListEditor {
+  static getStubConfig() {
+    return AlexInputCard.getStubConfig();
+  }
+
+  _normalize() {
+    if (!Array.isArray(this._config.entities)) this._config.entities = [];
+    this._config.entities = this._config.entities.map((e) =>
+      typeof e === "string" ? { entity: e } : e
+    );
+  }
+
+  _validPath() {
+    const p = this._path || [];
+    if (p.length >= 2) {
+      if (p[0] === "entity" && !this._config.entities[p[1]]) return [];
+    }
+    return p;
+  }
+
+  // Pas de restriction de domaine ici (contrairement a alex-switch-card,
+  // limitee a input_select) : c'est justement le but de cette carte.
+  _addEntityRow(onPick) {
+    return this._form(
+      [{ name: "entity", selector: { entity: {} } }],
+      {},
+      { entity: "Ajouter une entité" },
+      (v) => {
+        if (v && v.entity) onPick(v.entity);
+      }
+    );
+  }
+
+  _render() {
+    this._forms = [];
+    this._selectors = [];
+    this.innerHTML = "";
+    const p = this._validPath();
+    if (p.length === 0) this._renderRoot();
+    else this._renderEntity(p[1]);
+    if (this._hass) {
+      this._forms.forEach((f) => (f.hass = this._hass));
+      this._selectors.forEach((s) => (s.hass = this._hass));
+    }
+  }
+
+  _renderRoot() {
+    const cfg = this._config;
+
+    this.appendChild(this._sectionTitle("En-tête"));
+    this.appendChild(
+      this._form(
+        [
+          { name: "name", selector: { text: {} } },
+          { name: "icon", selector: { icon: {} } },
+        ],
+        { name: cfg.name, icon: cfg.icon },
+        { name: "Nom", icon: "Icône" },
+        (v) => this._update((c) => Object.assign(c, v))
+      )
+    );
+
+    this.appendChild(this._sectionTitle("Entités"));
+    const note = document.createElement("div");
+    note.style.cssText = "font-size:12px;color:var(--secondary-text-color);margin:0 2px 8px;line-height:1.5;";
+    note.textContent =
+      "input_select/select : puces d'options. input_number/number : chiffre + boutons −/+. " +
+      "input_datetime : heure (ou date) + boutons −/+. Autre domaine : lecture seule.";
+    this.appendChild(note);
+
+    const entities = cfg.entities || [];
+    entities.forEach((e, j) => {
+      const st = this._hass && this._hass.states[e.entity];
+      const friendly = e.name || (st && st.attributes && st.attributes.friendly_name);
+      this.appendChild(
+        this._row(
+          e.icon || cfg.entity_icon || cfg.icon || "mdi:tune-variant",
+          friendly || e.entity || "(sans entité)",
+          friendly ? e.entity : "",
+          () => {
+            this._path = ["entity", j];
+            this._render();
+          },
+          () => {
+            this._update((c) => c.entities.splice(j, 1));
+            this._render();
+          },
+          j > 0 ? () => this._moveItem((c) => c.entities, j, -1) : null,
+          j < entities.length - 1 ? () => this._moveItem((c) => c.entities, j, 1) : null
+        )
+      );
+    });
+    this.appendChild(
+      this._addEntityRow((entityId) => {
+        let idx;
+        this._update((c) => {
+          c.entities = c.entities || [];
+          c.entities.push({ entity: entityId });
+          idx = c.entities.length - 1;
+        });
+        this._path = ["entity", idx];
+        this._render();
+      })
+    );
+
+    this.appendChild(
+      this._panel(
+        "Customisation",
+        "mdi:palette",
+        this._mixed(
+          [
+            {
+              type: "expandable",
+              title: "Carte",
+              icon: "mdi:card-outline",
+              schema: [
+                { name: "row_spacing", selector: { number: { min: 0, max: 40, step: 1, mode: "box" } } },
+                { name: "icon_color", selector: { color_rgb: {} } },
+                { name: "background", selector: { color_rgb: {} } },
+              ],
+            },
+            {
+              type: "expandable",
+              title: "En-tête",
+              icon: "mdi:format-header-1",
+              schema: [
+                { name: "primary_color", selector: { color_rgb: {} } },
+                { name: "name_size", selector: { number: { min: 10, max: 32, step: 1, mode: "box" } } },
+                { name: "icon_size", selector: { number: { min: 12, max: 40, step: 1, mode: "box" } } },
+              ],
+            },
+            {
+              type: "expandable",
+              title: "Entité",
+              icon: "mdi:format-list-bulleted",
+              schema: [
+                { name: "entity_icon", selector: { icon: {} } },
+                { name: "secondary_color", selector: { color_rgb: {} } },
+                {
+                  name: "entity_name_size",
+                  selector: { number: { min: 10, max: 28, step: 1, mode: "box" } },
+                },
+                {
+                  name: "entity_icon_size",
+                  selector: { number: { min: 10, max: 32, step: 1, mode: "box" } },
+                },
+              ],
+            },
+            {
+              type: "expandable",
+              title: "Contrôle",
+              icon: "mdi:toggle-switch-outline",
+              schema: [
+                {
+                  name: "chip_style",
+                  selector: { select: { mode: "dropdown", options: SWITCH_STYLE_OPTIONS } },
+                },
+                { name: "chip_size", selector: { number: { min: 8, max: 24, step: 1, mode: "box" } } },
+                { name: "active_text", selector: { color_rgb: {} } },
+                { name: "active_bg", selector: { color_rgb: {} } },
+                { name: "inactive_text", selector: { color_rgb: {} } },
+                { name: "inactive_bg", selector: { color_rgb: {} } },
+              ],
+            },
+          ],
+          {
+            row_spacing: cfg.row_spacing != null ? cfg.row_spacing : 12,
+            icon_color: cfg.icon_color,
+            background: cfg.background,
+            primary_color: cfg.primary_color,
+            name_size: cfg.name_size != null ? cfg.name_size : 17,
+            icon_size: cfg.icon_size != null ? cfg.icon_size : 20,
+            entity_icon: cfg.entity_icon,
+            secondary_color: cfg.secondary_color,
+            entity_name_size: cfg.entity_name_size != null ? cfg.entity_name_size : 14,
+            entity_icon_size: cfg.entity_icon_size != null ? cfg.entity_icon_size : 16,
+            chip_style: cfg.chip_style === "switch" ? "switch" : "separate",
+            chip_size: cfg.chip_size != null ? cfg.chip_size : 12,
+            active_text: cfg.active_text,
+            active_bg: cfg.active_bg,
+            inactive_text: cfg.inactive_text,
+            inactive_bg: cfg.inactive_bg,
+          },
+          {
+            row_spacing: "Écartement entre les entités (px)",
+            icon_color: "Couleur du badge",
+            background: "Fond de la carte",
+            primary_color: "Couleur du nom de la carte",
+            name_size: "Taille du nom de la carte (px)",
+            icon_size: "Taille de l'icône du badge (px)",
+            entity_icon: "Icône des lignes (vide = icône du badge)",
+            secondary_color: "Couleur des noms d'entité",
+            entity_name_size: "Taille des noms d'entité (px)",
+            entity_icon_size: "Taille des icônes d'entité (px)",
+            chip_style: "Style des puces d'options (input_select/select uniquement)",
+            chip_size: "Taille du contrôle (px)",
+            active_text: "Couleur du texte actif",
+            active_bg: "Fond actif",
+            inactive_text: "Couleur du texte inactif",
+            inactive_bg: "Fond inactif",
+          },
+          (v) => this._update((c) => Object.assign(c, v))
+        )
+      )
+    );
+  }
+
+  _renderEntity(i) {
+    const cfg = this._config;
+    const e = cfg.entities[i] || {};
+    const merge = (v) => this._update((c) => (c.entities[i] = { ...c.entities[i], ...v }));
+
+    this.appendChild(
+      this._backHeader(e.name || e.entity || "Entité", () => {
+        this._path = [];
+        this._render();
+      })
+    );
+
+    this.appendChild(
+      this._mixed(
+        [
+          { name: "entity", selector: { entity: {} } },
+          { name: "name", selector: { text: {} } },
+          { name: "icon", selector: { icon: {} } },
+          { name: "color", selector: { color_rgb: {} } },
+        ],
+        { entity: e.entity, name: e.name, icon: e.icon, color: e.color },
+        {
+          entity: "Entité",
+          name: "Nom (vide = nom convivial)",
+          icon: "Icône (vide = icône du badge)",
+          color: "Couleur de l'icône",
+        },
+        merge
+      )
+    );
+  }
+}
+customElements.define("alex-input-card-editor", AlexInputCardEditor);
+
+window.customCards.push({
+  type: "alex-input-card",
+  name: "Alex Input Card",
+  description:
+    "Pilote input_select/select, input_number/number et input_datetime dans une même carte — le contrôle affiché s'adapte au type d'entité.",
   preview: false,
   documentationURL: "https://github.com/<user>/alex-cards",
 });
