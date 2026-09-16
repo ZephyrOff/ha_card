@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.49.5";
+const ALEX_CARDS_VERSION = "0.50.0";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -9860,7 +9860,7 @@ class AlexInputColorCard extends HTMLElement {
             "ha-card {\n  background: none !important;\n  box-shadow: none !important;\n" +
             "  border: none !important;\n  padding: 0 !important;\n}\n",
           "mushroom-number-value-control$": {
-            "mushroom-slider$": ".slider {\n  height: 22px !important;\n}\n",
+            "mushroom-slider$": ".slider {\n  height: 30px !important;\n}\n",
           },
         },
       },
@@ -9961,7 +9961,7 @@ class AlexInputColorCard extends HTMLElement {
           // (orange ou blanc) sans le recouvrir completement.
           "mushroom-number-value-control$": {
             "mushroom-slider$":
-              ".slider {\n  height: 22px !important;\n" +
+              ".slider {\n  height: 30px !important;\n" +
               "  background: linear-gradient(90deg, #ff7a00 0%, #ffffff 100%) !important;\n" +
               "  background-color: transparent !important;\n" +
               "  --main-color: rgba(90, 90, 90, 0.55) !important;\n}\n",
@@ -9978,20 +9978,39 @@ class AlexInputColorCard extends HTMLElement {
   }
 
   /* -----------------------------------------------------------------------
-   * Row
+   * Carte de groupe (maquette validée : fond teinté par la couleur du
+   * groupe, en-tête icône + nom + pastille, sliders pleine largeur en
+   * dessous avec un libellé au-dessus de chacun)
    * --------------------------------------------------------------------- */
 
-  async _createRow(group) {
+  async _createGroupCard(group) {
 
-    const row =
+    const card =
       document.createElement("div");
 
-    row.className =
-      "alex-light-row";
+    card.className =
+      "alex-input-color-group";
+
+    // Fond teinte, derive de la couleur RGB actuelle du groupe -- identite
+    // visuelle immediate par groupe sans avoir a lire le nom. Repli neutre
+    // (blanc, opacite tres faible donc quasi invisible) si aucune entite
+    // couleur n'est configuree ou pas encore definie -- pas de traitement
+    // special necessaire, _color() renvoie deja "#ffffff" dans ce cas.
+    const hex = this._color(group.color);
+    const rgbTint = hexToRgbObj(hex);
+    card.style.setProperty(
+      "--aicg-tint",
+      `rgba(${rgbTint.r}, ${rgbTint.g}, ${rgbTint.b}, var(--aic-tint-opacity, 0.14))`
+    );
 
     /*
-     * Icône
+     * En-tête : icône + nom + pastille couleur
      */
+
+    const header =
+      document.createElement("div");
+
+    header.className = "aicg-header";
 
     const icon =
       document.createElement("ha-icon");
@@ -10000,53 +10019,54 @@ class AlexInputColorCard extends HTMLElement {
       group.icon ||
       "mdi:lightbulb-outline";
 
-    icon.className =
-      "group-icon";
-
-    /*
-     * Nom
-     */
+    icon.className = "aicg-icon";
 
     const name =
       document.createElement("div");
 
-    name.className =
-      "group-name";
+    name.className = "aicg-name";
 
     name.textContent =
       group.name || "";
 
-    row.appendChild(icon);
-    row.appendChild(name);
+    header.appendChild(icon);
+    header.appendChild(name);
+
+    this._createColorButton(group, header);
+
+    card.appendChild(header);
 
     /*
-     * Brightness
+     * Luminosité (pleine largeur, libellé au-dessus)
      */
 
-    await this._createBrightness(
-      group,
-      row
-    );
+    if (group.brightness) {
+      const wrap = document.createElement("div");
+      wrap.className = "aicg-control";
+      const label = document.createElement("div");
+      label.className = "aicg-control-label";
+      label.textContent = "Luminosité";
+      wrap.appendChild(label);
+      await this._createBrightness(group, wrap);
+      card.appendChild(wrap);
+    }
 
     /*
-     * Couleur RGB
+     * Température (pleine largeur, libellé au-dessus)
      */
 
-    this._createColorButton(
-      group,
-      row
-    );
+    if (group.white) {
+      const wrap = document.createElement("div");
+      wrap.className = "aicg-control";
+      const label = document.createElement("div");
+      label.className = "aicg-control-label";
+      label.textContent = "Température";
+      wrap.appendChild(label);
+      await this._createWhiteControl(group, wrap);
+      card.appendChild(wrap);
+    }
 
-    /*
-     * Blanc / Kelvin
-     */
-
-    await this._createWhiteControl(
-      group,
-      row
-    );
-
-    return row;
+    return card;
   }
 
   /* -----------------------------------------------------------------------
@@ -10088,7 +10108,7 @@ class AlexInputColorCard extends HTMLElement {
        */
       card.style.setProperty(
         "--aic-row-gap",
-        `${c.row_spacing != null ? c.row_spacing : 4}px`
+        `${c.row_spacing != null ? c.row_spacing : 10}px`
       );
       card.style.setProperty(
         "--aic-icon-color",
@@ -10108,6 +10128,21 @@ class AlexInputColorCard extends HTMLElement {
       );
       const badgeRgb = Array.isArray(c.icon_color) ? c.icon_color : [139, 122, 230];
       card.style.setProperty("--aic-badge-bg", rgba(badgeRgb, 0.16));
+
+      card.style.setProperty("--aic-name-size", `${c.name_size != null ? c.name_size : 17}px`);
+      card.style.setProperty("--aic-icon-size", `${c.icon_size != null ? c.icon_size : 20}px`);
+      card.style.setProperty(
+        "--aic-group-name-size",
+        `${c.group_name_size != null ? c.group_name_size : 14}px`
+      );
+      card.style.setProperty(
+        "--aic-group-icon-size",
+        `${c.group_icon_size != null ? c.group_icon_size : 17}px`
+      );
+      card.style.setProperty(
+        "--aic-tint-opacity",
+        `${c.tint_opacity != null ? c.tint_opacity / 100 : 0.14}`
+      );
 
       const container =
         document.createElement("div");
@@ -10146,19 +10181,10 @@ class AlexInputColorCard extends HTMLElement {
 
         const group = groups[index];
 
-        const row =
-          await this._createRow(group);
+        const groupCard =
+          await this._createGroupCard(group);
 
-        if (
-          index <
-          groups.length - 1
-        ) {
-          row.classList.add(
-            "has-divider"
-          );
-        }
-
-        container.appendChild(row);
+        container.appendChild(groupCard);
       }
 
       card.appendChild(container);
@@ -10231,12 +10257,12 @@ class AlexInputColorCard extends HTMLElement {
       }
 
       .alex-input-color-badge ha-icon {
-        --mdc-icon-size: 20px;
+        --mdc-icon-size: var(--aic-icon-size, 20px);
         color: var(--aic-icon-color);
       }
 
       .alex-input-color-title {
-        font-size: 17px;
+        font-size: var(--aic-name-size, 17px);
         font-weight: 700;
         color: var(--aic-title-color);
 
@@ -10249,51 +10275,58 @@ class AlexInputColorCard extends HTMLElement {
         padding: 7px 12px;
         display: flex;
         flex-direction: column;
-        gap: var(--aic-row-gap, 4px);
+        gap: var(--aic-row-gap, 10px);
       }
 
-      .alex-light-row {
-        min-height: 43px;
+      .alex-input-color-group {
+        border-radius: var(--aicg-radius, 14px);
+        background: var(--aicg-tint);
+        padding: 12px 14px;
+      }
 
+      .aicg-header {
         display: flex;
         align-items: center;
-
-        gap: 8px;
-
-        position: relative;
+        gap: 10px;
+        margin-bottom: 10px;
       }
 
-      .alex-light-row.has-divider {
-        border-bottom:
-          1px solid
-          color-mix(
-            in srgb,
-            var(--divider-color) 30%,
-            transparent
-          );
-      }
+      .aicg-icon {
+        width: var(--aicg-icon-box, 22px);
+        flex: 0 0 var(--aicg-icon-box, 22px);
 
-      .group-icon {
-        width: 22px;
-        flex: 0 0 22px;
-
-        --mdc-icon-size: 17px;
+        --mdc-icon-size: var(--aic-group-icon-size, 17px);
 
         color: var(--aic-icon-color);
       }
 
-      .group-name {
-        width: 68px;
-        flex: 0 0 68px;
+      .aicg-name {
+        flex: 1 1 auto;
+        min-width: 0;
 
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
 
-        font-size: 13px;
+        font-size: var(--aic-group-name-size, 14px);
         font-weight: 500;
 
         color: var(--aic-name-color);
+      }
+
+      .aicg-control {
+        margin-top: 8px;
+      }
+
+      .aicg-header + .aicg-control {
+        margin-top: 0;
+      }
+
+      .aicg-control-label {
+        font-size: 11px;
+        color: var(--aic-name-color);
+        opacity: 0.75;
+        margin-bottom: 4px;
       }
 
       /* ---------------------------------------------------------------
@@ -10301,9 +10334,7 @@ class AlexInputColorCard extends HTMLElement {
        * ------------------------------------------------------------- */
 
       .brightness-control {
-        flex: 1 1 100px;
-
-        min-width: 70px;
+        width: 100%;
 
         display: flex;
         align-items: center;
@@ -10318,22 +10349,22 @@ class AlexInputColorCard extends HTMLElement {
        * ------------------------------------------------------------- */
 
       .color-button {
-        width: 24px;
-        height: 24px;
+        width: var(--aicg-swatch-size, 30px);
+        height: var(--aicg-swatch-size, 30px);
 
-        flex: 0 0 24px;
+        flex: 0 0 var(--aicg-swatch-size, 30px);
 
         padding: 0;
 
-        border-radius: 5px;
+        border-radius: 50%;
 
         border:
-          1px solid
-          rgba(0,0,0,.20);
+          2px solid
+          var(--aic-bg);
 
         box-shadow:
-          inset 0 0 0 1px
-          rgba(255,255,255,.12);
+          0 0 0 1px
+          rgba(0,0,0,.18);
 
         cursor: pointer;
 
@@ -10357,12 +10388,12 @@ class AlexInputColorCard extends HTMLElement {
 
       .color-button::-webkit-color-swatch {
         border: none;
-        border-radius: 4px;
+        border-radius: 50%;
       }
 
       .color-button::-moz-color-swatch {
         border: none;
-        border-radius: 4px;
+        border-radius: 50%;
       }
 
       .color-button:hover {
@@ -10389,9 +10420,7 @@ class AlexInputColorCard extends HTMLElement {
        * ------------------------------------------------------------- */
 
       .white-control {
-        flex: 1.1 1 130px;
-
-        min-width: 120px;
+        width: 100%;
 
         display: flex;
         align-items: center;
@@ -10531,28 +10560,47 @@ class AlexInputColorCardEditor extends AlexListEditor {
               type: "expandable",
               title: "En-tête",
               icon: "mdi:format-header-1",
-              schema: [{ name: "primary_color", selector: { color_rgb: {} } }],
+              schema: [
+                { name: "primary_color", selector: { color_rgb: {} } },
+                { name: "name_size", selector: { number: { min: 10, max: 32, step: 1, mode: "box" } } },
+                { name: "icon_size", selector: { number: { min: 12, max: 40, step: 1, mode: "box" } } },
+              ],
             },
             {
               type: "expandable",
               title: "Groupes",
               icon: "mdi:format-list-bulleted",
-              schema: [{ name: "secondary_color", selector: { color_rgb: {} } }],
+              schema: [
+                { name: "secondary_color", selector: { color_rgb: {} } },
+                { name: "group_name_size", selector: { number: { min: 10, max: 24, step: 1, mode: "box" } } },
+                { name: "group_icon_size", selector: { number: { min: 10, max: 28, step: 1, mode: "box" } } },
+                { name: "tint_opacity", selector: { number: { min: 0, max: 60, step: 1, mode: "box" } } },
+              ],
             },
           ],
           {
-            row_spacing: c.row_spacing != null ? c.row_spacing : 4,
+            row_spacing: c.row_spacing != null ? c.row_spacing : 10,
             icon_color: c.icon_color,
             background: c.background,
             primary_color: c.primary_color,
+            name_size: c.name_size != null ? c.name_size : 17,
+            icon_size: c.icon_size != null ? c.icon_size : 20,
             secondary_color: c.secondary_color,
+            group_name_size: c.group_name_size != null ? c.group_name_size : 14,
+            group_icon_size: c.group_icon_size != null ? c.group_icon_size : 17,
+            tint_opacity: c.tint_opacity != null ? c.tint_opacity : 14,
           },
           {
-            row_spacing: "Écartement entre les lignes (px)",
+            row_spacing: "Écartement entre les cartes de groupe (px)",
             icon_color: "Couleur du badge",
             background: "Fond de la carte",
             primary_color: "Couleur du nom de la carte",
+            name_size: "Taille du nom de la carte (px)",
+            icon_size: "Taille de l'icône du badge (px)",
             secondary_color: "Couleur du texte des groupes",
+            group_name_size: "Taille des noms de groupe (px)",
+            group_icon_size: "Taille des icônes de groupe (px)",
+            tint_opacity: "Intensité du fond teinté par groupe (%)",
           },
           (v) => this._update((cfg) => Object.assign(cfg, v))
         )

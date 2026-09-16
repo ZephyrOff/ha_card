@@ -28,7 +28,7 @@ Collection de cartes Lovelace custom pour Home Assistant, distribuée en **plugi
 | `custom:alex-gradient-card`     | oui        | Réglage des segments de couleur des lampes Gradient Philips Hue (Zigbee2MQTT). |
 | `custom:alex-gradient-popup-card` | oui      | Liste de bandeaux LED — roue chromatique à points multiples pour composer le dégradé de chacun, façon éditeur Philips Hue. |
 | `custom:alex-gradient-scene-card` | oui      | Liste et applique les scènes enregistrées via l'intégration Alex Gradient Studio. |
-| `custom:alex-input-color`       | oui        | Réglage compact de luminosité/couleur RGB/température de blanc par groupes. |
+| `custom:alex-input-color`       | oui        | Réglage de luminosité/couleur RGB/température de blanc, une carte teintée par groupe. |
 
 Toutes les cartes apparaissent dans le sélecteur « Ajouter une carte » avec un éditeur
 visuel. La `alex-light-card` a un éditeur type « chips » (liste + crayon pour éditer chaque
@@ -1005,8 +1005,8 @@ couleur du nom, couleur des noms de scène.
 
 ### Alex Input Color
 
-Réglage compact de luminosité, couleur RGB et température de blanc, organisé en
-groupes (ex. « Matin », « Soir »...) — chaque groupe pilote un jeu d'entités
+Réglage de luminosité, couleur RGB et température de blanc, organisé en groupes
+(ex. « Matin », « Soir »...) — chaque groupe pilote un jeu d'entités
 `input_number`/`input_text` de son choix, pas nécessairement les attributs natifs
 d'une entité `light`.
 
@@ -1014,7 +1014,7 @@ d'une entité `light`.
 type: custom:alex-input-color
 name: Ambiances
 icon: mdi:palette
-row_spacing: 6
+row_spacing: 10
 groups:
   - name: Matin
     icon: mdi:weather-sunset-up
@@ -1023,19 +1023,28 @@ groups:
     white: input_number.matin_white
 ```
 
-- **En-tête optionnel** (icône + nom de la carte, à l'image d'Alex Sensor Card) —
-  n'apparaît que si `name` ou `icon` est renseigné au niveau de la carte.
-- **Sélecteur de couleur RGB** : `<input type="color">` natif — un clic ouvre
-  directement le sélecteur du système, sans étape intermédiaire.
-- **Luminosité et température de blanc** : chacune embarque une vraie
-  `custom:mushroom-number-card` (icône/nom masqués, valeur affichée via
-  `secondary_info: state`, hauteur du curseur réduite à 22px) plutôt qu'un
-  contrôle fait maison — la plage (min/max/step) vient entièrement de la
-  configuration de l'entité `input_number` ciblée, **pas** d'un réglage de
-  cette carte (mushroom-number-card ne permet pas de surcharger min/max
-  depuis sa propre config). Pense à régler la bonne plage sur chaque aide
+- **Une carte par groupe**, plutôt qu'une ligne compacte partagée : chaque groupe a
+  son propre bloc arrondi, avec un **fond teinté dérivé de sa couleur RGB
+  actuelle** (dégradé de conception validé via des maquettes avant le code — voir
+  la conversation) — identité visuelle immédiate par groupe sans avoir à lire le
+  nom. Repli neutre (quasi invisible) si le groupe n'a pas d'entité `color`
+  configurée. Intensité de cette teinte réglable (`tint_opacity`, panneau
+  Customisation).
+- **En-tête de groupe** : icône + nom, puis la pastille de couleur RGB — devenue
+  une pastille **ronde** et plus grande (30px, contre un petit carré de 24px
+  auparavant), un clic ouvre directement le sélecteur natif du système.
+- **Luminosité et température de blanc** : chacune sur sa propre ligne, **pleine
+  largeur**, avec un libellé au-dessus (« Luminosité » / « Température ») — plus
+  besoin de deviner quel curseur fait quoi à la simple vue d'une icône. Chacune
+  embarque toujours une vraie `custom:mushroom-number-card` (icône/nom masqués,
+  valeur affichée via `secondary_info: state`) plutôt qu'un contrôle fait maison —
+  curseur remonté à 30px de hauteur (contre 22px) pour un rendu plus « pilule »,
+  cohérent avec la nouvelle pastille de couleur. La plage (min/max/step) vient
+  entièrement de la configuration de l'entité `input_number` ciblée, **pas** d'un
+  réglage de cette carte (mushroom-number-card ne permet pas de surcharger
+  min/max depuis sa propre config). Pense à régler la bonne plage sur chaque aide
   `input_number` dans Réglages → Appareils et services → Aides.
-- Le curseur de température de blanc affiche en fond un **dégradé
+- Le curseur de température de blanc affiche toujours en fond un **dégradé
   orange → blanc** (orange = chaud/kelvin bas, blanc = froid/kelvin haut,
   saturation renforcée pour se rapprocher du rendu natif HA), pour repérer en
   un coup d'œil de quel côté on se rapproche — appliqué via `card_mod` avec
@@ -1063,9 +1072,10 @@ groups:
   la maison) — nécessaire pour que le sélecteur de couleur natif ne se ferme
   pas tout seul en cours de sélection.
 - Personnalisation, regroupée en sous-sections dans le panneau Customisation :
-  **Carte** (écartement entre les lignes en px, couleur du badge — aussi utilisée pour
-  les icônes de chaque groupe —, fond de la carte), **En-tête** (couleur du nom de la
-  carte), **Groupes** (couleur du texte des groupes).
+  **Carte** (écartement entre les cartes de groupe en px, couleur du badge, fond
+  de la carte), **En-tête** (couleur et taille du nom de la carte, taille de
+  l'icône du badge), **Groupes** (couleur, taille du nom et de l'icône de
+  chaque groupe, intensité du fond teinté).
 
 ## Ajouter une nouvelle carte
 
