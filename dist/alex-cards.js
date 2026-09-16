@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.50.0";
+const ALEX_CARDS_VERSION = "0.50.1";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -9851,7 +9851,7 @@ class AlexInputColorCard extends HTMLElement {
       entity: group.brightness,
       icon_type: "none",
       primary_info: "none",
-      secondary_info: "state",
+      secondary_info: "none",
       display_mode: "slider",
       fill_container: true,
       card_mod: {
@@ -9869,6 +9869,19 @@ class AlexInputColorCard extends HTMLElement {
     card.hass = this._hass;
 
     wrapper.appendChild(card);
+
+    // secondary_info desactive juste au-dessus (mushroom l'affichait sur sa
+    // propre ligne au-dessus de la barre, pas dedans -- pas de position
+    // "dans la barre" native) : la valeur est affichee nous-memes,
+    // superposee a l'interieur, la ou la maquette validee la montrait.
+    const stateObj = this._state(group.brightness);
+    const unit = stateObj?.attributes?.unit_of_measurement || "";
+    const valueLabel = document.createElement("span");
+    valueLabel.className = "aicg-control-value";
+    valueLabel.textContent = stateObj
+      ? `${stateObj.state}${unit ? " " + unit : ""}`
+      : "";
+    wrapper.appendChild(valueLabel);
 
     row.appendChild(wrapper);
   }
@@ -9939,7 +9952,7 @@ class AlexInputColorCard extends HTMLElement {
       entity: group.white,
       icon_type: "none",
       primary_info: "none",
-      secondary_info: "state",
+      secondary_info: "none",
       display_mode: "slider",
       fill_container: true,
       card_mod: {
@@ -9973,6 +9986,18 @@ class AlexInputColorCard extends HTMLElement {
     card.hass = this._hass;
 
     wrapper.appendChild(card);
+
+    // Meme principe que _createBrightness : secondary_info desactive cote
+    // mushroom (voir plus haut), valeur affichee nous-memes, superposee a
+    // l'interieur de la barre. Suffixe "K" toujours ajoute ici (contrairement
+    // a _createBrightness) : ce champ represente specifiquement une
+    // temperature en Kelvin par construction de cette carte, pas une valeur
+    // generique dont l'unite viendrait de l'entite.
+    const stateObj = this._state(group.white);
+    const valueLabel = document.createElement("span");
+    valueLabel.className = "aicg-control-value";
+    valueLabel.textContent = stateObj ? `${stateObj.state}K` : "";
+    wrapper.appendChild(valueLabel);
 
     row.appendChild(wrapper);
   }
@@ -10335,6 +10360,7 @@ class AlexInputColorCard extends HTMLElement {
 
       .brightness-control {
         width: 100%;
+        position: relative;
 
         display: flex;
         align-items: center;
@@ -10421,6 +10447,7 @@ class AlexInputColorCard extends HTMLElement {
 
       .white-control {
         width: 100%;
+        position: relative;
 
         display: flex;
         align-items: center;
@@ -10428,6 +10455,24 @@ class AlexInputColorCard extends HTMLElement {
 
       .white-control > * {
         width: 100%;
+      }
+
+      .aicg-control-value {
+        position: absolute;
+        top: 50%;
+        right: 10px;
+        transform: translateY(-50%);
+
+        font-size: 12px;
+        font-weight: 600;
+        color: #1a1a1a;
+
+        background: rgba(255, 255, 255, 0.85);
+        padding: 3px 9px;
+        border-radius: 999px;
+
+        pointer-events: none;
+        white-space: nowrap;
       }
 
     `;

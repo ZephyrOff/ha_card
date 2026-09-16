@@ -1036,14 +1036,20 @@ groups:
 - **Luminosité et température de blanc** : chacune sur sa propre ligne, **pleine
   largeur**, avec un libellé au-dessus (« Luminosité » / « Température ») — plus
   besoin de deviner quel curseur fait quoi à la simple vue d'une icône. Chacune
-  embarque toujours une vraie `custom:mushroom-number-card` (icône/nom masqués,
-  valeur affichée via `secondary_info: state`) plutôt qu'un contrôle fait maison —
-  curseur remonté à 30px de hauteur (contre 22px) pour un rendu plus « pilule »,
-  cohérent avec la nouvelle pastille de couleur. La plage (min/max/step) vient
-  entièrement de la configuration de l'entité `input_number` ciblée, **pas** d'un
-  réglage de cette carte (mushroom-number-card ne permet pas de surcharger
-  min/max depuis sa propre config). Pense à régler la bonne plage sur chaque aide
-  `input_number` dans Réglages → Appareils et services → Aides.
+  embarque toujours une vraie `custom:mushroom-number-card` (icône/nom masqués)
+  plutôt qu'un contrôle fait maison — curseur remonté à 30px de hauteur (contre
+  22px) pour un rendu plus « pilule », cohérent avec la nouvelle pastille de
+  couleur. La valeur (`secondary_info` désactivé côté mushroom, qui ne
+  l'affichait que sur sa propre ligne au-dessus de la barre, pas dedans) est
+  maintenant affichée par la carte elle-même, en superposition à l'intérieur de
+  la barre — un badge quasi opaque (fond blanc à 85 %, texte sombre) plutôt que
+  du texte flottant directement dessus, pour rester lisible quelle que soit la
+  couleur en dessous (remplissage plein, dégradé orange/blanc, portion non
+  remplie). La plage (min/max/step) vient entièrement de la configuration de
+  l'entité `input_number` ciblée, **pas** d'un réglage de cette carte
+  (mushroom-number-card ne permet pas de surcharger min/max depuis sa propre
+  config). Pense à régler la bonne plage sur chaque aide `input_number` dans
+  Réglages → Appareils et services → Aides.
 - Le curseur de température de blanc affiche toujours en fond un **dégradé
   orange → blanc** (orange = chaud/kelvin bas, blanc = froid/kelvin haut,
   saturation renforcée pour se rapprocher du rendu natif HA), pour repérer en
