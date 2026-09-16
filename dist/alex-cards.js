@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.50.2";
+const ALEX_CARDS_VERSION = "0.50.3";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -9858,7 +9858,8 @@ class AlexInputColorCard extends HTMLElement {
         style: {
           ".":
             "ha-card {\n  background: none !important;\n  box-shadow: none !important;\n" +
-            "  border: none !important;\n  padding: 0 !important;\n}\n",
+            "  border: none !important;\n  padding: 0 !important;\n  margin: 0 !important;\n}\n" +
+            ":host {\n  margin: 0 !important;\n}\n",
           "mushroom-number-value-control$": {
             "mushroom-slider$": ".slider {\n  height: 30px !important;\n}\n",
           },
@@ -9959,7 +9960,8 @@ class AlexInputColorCard extends HTMLElement {
         style: {
           ".":
             "ha-card {\n  background: none !important;\n  box-shadow: none !important;\n" +
-            "  border: none !important;\n  padding: 0 !important;\n}\n",
+            "  border: none !important;\n  padding: 0 !important;\n  margin: 0 !important;\n}\n" +
+            ":host {\n  margin: 0 !important;\n}\n",
           // Degrade orange (chaud, kelvin bas) -> blanc (froid, kelvin haut) --
           // sature davantage pour se rapprocher du rendu natif HA. Cible
           // directement `background` (pas la variable --bg-color) : si le CSS
@@ -10340,7 +10342,7 @@ class AlexInputColorCard extends HTMLElement {
       }
 
       .aicg-control {
-        margin-top: 8px;
+        margin-top: 4px;
       }
 
       .aicg-header + .aicg-control {
@@ -10460,7 +10462,7 @@ class AlexInputColorCard extends HTMLElement {
       .aicg-control-value {
         position: absolute;
         top: 50%;
-        right: 10px;
+        right: 16px;
         transform: translateY(-50%);
 
         /* Ecrase le width:100% herite de ".brightness-control > *" /
@@ -10477,7 +10479,7 @@ class AlexInputColorCard extends HTMLElement {
         color: #1a1a1a;
 
         background: rgba(255, 255, 255, 0.85);
-        padding: 3px 9px;
+        padding: 2px 8px;
         border-radius: 999px;
 
         pointer-events: none;
