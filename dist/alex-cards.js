@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.50.1";
+const ALEX_CARDS_VERSION = "0.50.2";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -10462,6 +10462,15 @@ class AlexInputColorCard extends HTMLElement {
         top: 50%;
         right: 10px;
         transform: translateY(-50%);
+
+        /* Ecrase le width:100% herite de ".brightness-control > *" /
+           ".white-control > *" (regle voisine ci-dessus, pensee pour que la
+           carte mushroom remplisse la largeur disponible) -- sans ca, ce
+           badge s'etirait sur toute la largeur de la barre : le texte se
+           retrouvait aligne a gauche (largeur pleine + text-align par
+           defaut) et son fond, lui aussi etire, devenait invisible en tant
+           que pastille distincte. */
+        width: auto;
 
         font-size: 12px;
         font-weight: 600;
