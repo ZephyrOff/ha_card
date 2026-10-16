@@ -6,7 +6,7 @@
  * (classe + éditeur + customElements.define + window.customCards.push).
  */
 
-const ALEX_CARDS_VERSION = "0.50.3";
+const ALEX_CARDS_VERSION = "0.50.4";
 
 console.info(
   `%c ALEX-CARDS %c v${ALEX_CARDS_VERSION} `,
@@ -186,8 +186,8 @@ class RoomHeaderCard extends HTMLElement {
         <div style="display:flex;align-items:center;gap:8px;">
           <ha-icon icon="mdi:thermometer" style="--mdc-icon-size:20px;color:#e8a13a;"></ha-icon>
           <div style="display:flex;flex-direction:column;line-height:1.1;">
-            <span style="font-size:18px;font-weight:700;color:#1c1c1e;">${t}°</span>
-            <span style="font-size:10px;letter-spacing:.5px;color:#8a8a8e;">TEMPÉRATURE</span>
+            <span style="font-size:18px;font-weight:700;color:var(--alex-room-title-color, #1c1c1e);">${t}°</span>
+            <span style="font-size:10px;letter-spacing:.5px;color:var(--alex-room-sub-color, #8a8a8e);">TEMPÉRATURE</span>
           </div>
         </div>`);
     }
@@ -197,8 +197,8 @@ class RoomHeaderCard extends HTMLElement {
         <div style="display:flex;align-items:center;gap:8px;">
           <ha-icon icon="mdi:water" style="--mdc-icon-size:20px;color:#4a7fb5;"></ha-icon>
           <div style="display:flex;flex-direction:column;line-height:1.1;">
-            <span style="font-size:18px;font-weight:700;color:#1c1c1e;">${e}%</span>
-            <span style="font-size:10px;letter-spacing:.5px;color:#8a8a8e;">HUMIDITÉ</span>
+            <span style="font-size:18px;font-weight:700;color:var(--alex-room-title-color, #1c1c1e);">${e}%</span>
+            <span style="font-size:10px;letter-spacing:.5px;color:var(--alex-room-sub-color, #8a8a8e);">HUMIDITÉ</span>
           </div>
         </div>`);
     }
@@ -220,16 +220,16 @@ class RoomHeaderCard extends HTMLElement {
       : "";
 
     this.innerHTML = `
-      <ha-card style="border-radius:28px;box-shadow:none;background:rgba(255,255,255,0.55);">
+      <ha-card style="border-radius:28px;box-shadow:none;background:var(--alex-room-bg, rgba(255,255,255,0.55));">
         <div style="display:grid;grid-template-columns:min-content auto 1fr min-content;
                     align-items:center;gap:16px;padding:14px 24px;">
           <div style="width:44px;height:44px;border-radius:14px;background:rgba(0,0,0,0.06);
                       display:flex;align-items:center;justify-content:center;">
-            <ha-icon icon="${c.icon || "mdi:home"}" style="--mdc-icon-size:24px;color:#5b6b7a;"></ha-icon>
+            <ha-icon icon="${c.icon || "mdi:home"}" style="--mdc-icon-size:24px;color:var(--alex-room-icon-color, #5b6b7a);"></ha-icon>
           </div>
           <div style="display:flex;flex-direction:column;line-height:1.15;">
-            <span style="font-size:26px;font-weight:700;color:#1c1c1e;">${c.name || ""}</span>
-            <span style="font-size:13px;color:#8a8a8e;">${c.secondary || ""}</span>
+            <span style="font-size:26px;font-weight:700;color:var(--alex-room-title-color, #1c1c1e);">${c.name || ""}</span>
+            <span style="font-size:13px;color:var(--alex-room-sub-color, #8a8a8e);">${c.secondary || ""}</span>
           </div>
           <div></div>
           ${stats}
@@ -290,6 +290,14 @@ window.customCards.push({
 function rgba(rgb, alpha, fallback) {
   const [r, g, b] = Array.isArray(rgb) ? rgb : fallback;
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+// Pastille translucide derrière une icône : si l'utilisateur a choisi une
+// couleur via le picker ([r,g,b]) on garde le rgba historique, sinon on teinte
+// la variable de thème (--alex-*) avec repli sur l'ancienne valeur par défaut.
+function badgeTint(iconColor, themeVar, fallbackHex) {
+  if (Array.isArray(iconColor)) return rgba(iconColor, 0.16);
+  return `color-mix(in srgb, var(${themeVar}, ${fallbackHex}) 16%, transparent)`;
 }
 
 // Échappe le texte injecté en innerHTML (noms/entités saisis par l'utilisateur).
@@ -2545,9 +2553,9 @@ const TPL_CURRENT_TEMP = "const w = states['@@ENTITY@@'];\n\nreturn w && w.attri
 const TPL_CURRENT_CONDITION = "const w = states['@@ENTITY@@'];\n\nif (!w) return '';\n\nconst conditions = {\n  sunny: 'Ensoleill\u00e9',\n  'clear-night': 'Nuit claire',\n  partlycloudy: 'Partiellement nuageux',\n  cloudy: 'Nuageux',\n  rainy: 'Pluie',\n  pouring: 'Forte pluie',\n  snowy: 'Neige',\n  'snowy-rainy': 'Neige et pluie',\n  fog: 'Brouillard',\n  windy: 'Venteux',\n  'windy-variant': 'Venteux'\n};\n\nreturn conditions[w.state] || w.state;";
 const TPL_CURRENT_RANGE = "const w = states['@@ENTITY@@'];\n\nif (!w) return '';\n\nconst fc = (@@FORECAST_JSON@@)[0];\n\nif (fc && fc.temperature !== undefined) {\n  const max = Math.round(fc.temperature);\n  const min = fc.templow !== undefined ? Math.round(fc.templow) : max - 6;\n  return `\u2191 ${max}\u00b0   \u2193 ${min}\u00b0`;\n}\n\nif (w.attributes.temperature === undefined) return '';\n\nconst t = Number(w.attributes.temperature);\nreturn `\u2191 ${Math.round(t + 2)}\u00b0   \u2193 ${Math.round(t - 6)}\u00b0`;";
 const TPL_CURRENT_ICON = "const w = states['@@ENTITY@@'];\n\nif (!w)\n  return 'mdi:weather-cloudy';\n\nconst icons = {\n  sunny: 'mdi:weather-sunny',\n  'clear-night': 'mdi:weather-night',\n  partlycloudy: 'mdi:weather-partly-cloudy',\n  cloudy: 'mdi:weather-cloudy',\n  rainy: 'mdi:weather-rainy',\n  pouring: 'mdi:weather-pouring',\n  snowy: 'mdi:weather-snowy',\n  'snowy-rainy': 'mdi:weather-snowy-rainy',\n  fog: 'mdi:weather-fog',\n  windy: 'mdi:weather-windy',\n  'windy-variant': 'mdi:weather-windy-variant'\n};\n\nreturn icons[w.state] || 'mdi:weather-cloudy';";
-const TPL_FORECAST_CLASSIC = "const raw = @@FORECAST_JSON@@;\n\nif (!raw.length) {\n  return '<div style=\"display:flex;align-items:center;justify-content:center;height:100%;color:rgba(255,255,255,.4);font-size:13px;text-align:center;padding:0 12px;\">Pr\u00e9visions indisponibles pour cette entit\u00e9</div>';\n}\n\nconst DAY_NAMES = ['Di.', 'Lu.', 'Ma.', 'Me.', 'Je.', 'Ve.', 'Sa.'];\nconst EMOJI = {\n  sunny: '\u2600\ufe0f', 'clear-night': '\ud83c\udf19', partlycloudy: '\u26c5', cloudy: '\u2601\ufe0f',\n  rainy: '\ud83c\udf27\ufe0f', pouring: '\ud83c\udf27\ufe0f', snowy: '\u2744\ufe0f', 'snowy-rainy': '\ud83c\udf28\ufe0f',\n  fog: '\ud83c\udf2b\ufe0f', windy: '\ud83d\udca8', 'windy-variant': '\ud83d\udca8',\n  exceptional: '\u26a0\ufe0f', hail: '\ud83c\udf28\ufe0f', lightning: '\u26c8\ufe0f', 'lightning-rainy': '\u26c8\ufe0f'\n};\n\nconst data = raw.slice(0, @@DAYS@@).map(f => {\n  const d = new Date(f.datetime);\n  const max = f.temperature !== undefined ? Math.round(f.temperature) : null;\n  const min = f.templow !== undefined\n    ? Math.round(f.templow)\n    : (max !== null ? max - 5 : null);\n\n  return {\n    day: DAY_NAMES[d.getDay()],\n    date: String(d.getDate()).padStart(2, '0'),\n    icon: EMOJI[f.condition] || '\u2601\ufe0f',\n    max: max !== null ? max : '--',\n    min: min !== null ? min : '--',\n    rain: (f.precipitation !== undefined ? f.precipitation : 0).toFixed(1)\n  };\n});\n\nconst nums = key => data.map(x => x[key]).filter(v => typeof v === 'number');\nconst mins = nums('min');\nconst maxs = nums('max');\nconst globalMin = mins.length ? Math.min(...mins) : 0;\nconst globalMax = maxs.length ? Math.max(...maxs) : 1;\nconst range = (globalMax - globalMin) || 1;\n\nreturn `\n  <div class=\"forecast\">\n    ${data.map(item => {\n\n      const top = typeof item.max === 'number'\n        ? ((globalMax - item.max) / range) * 100\n        : 0;\n\n      const bottom = typeof item.min === 'number'\n        ? ((globalMax - item.min) / range) * 100\n        : 100;\n\n      const height = bottom - top;\n\n      return `\n        <div class=\"day\">\n\n          <div class=\"day-name\">\n            ${item.day}\n          </div>\n\n          <div class=\"date\">\n            ${item.date}\n          </div>\n\n          <div class=\"weather-icon\">\n            ${item.icon}\n          </div>\n\n          <div class=\"temperature\">\n            ${item.max}\u00b0\n          </div>\n\n          <div class=\"range\">\n            <div class=\"range-bg\"></div>\n\n            <div\n              class=\"range-value\"\n              style=\"\n                top:${top}%;\n                height:${height}%;\n              \"\n            ></div>\n          </div>\n\n          <div class=\"low\">\n            ${item.min}\u00b0\n          </div>\n\n          <div class=\"rain\">\n            ${item.rain}\n          </div>\n\n        </div>\n      `;\n    }).join('')}\n  </div>\n`;";
-const TPL_FORECAST_BARS = "const raw = @@FORECAST_JSON@@;\n\nif (!raw.length) {\n  return '<div style=\"display:flex;align-items:center;justify-content:center;height:100%;color:rgba(255,255,255,.4);font-size:13px;text-align:center;padding:0 12px;\">Pr\u00e9visions indisponibles pour cette entit\u00e9</div>';\n}\n\nconst DAY_NAMES = ['Dim.', 'Lun.', 'Mar.', 'Mer.', 'Jeu.', 'Ven.', 'Sam.'];\nconst ICONS = {\n  sunny: 'mdi:weather-sunny', 'clear-night': 'mdi:weather-night',\n  partlycloudy: 'mdi:weather-partly-cloudy', cloudy: 'mdi:weather-cloudy',\n  rainy: 'mdi:weather-rainy', pouring: 'mdi:weather-pouring',\n  snowy: 'mdi:weather-snowy', 'snowy-rainy': 'mdi:weather-snowy-rainy',\n  fog: 'mdi:weather-fog', windy: 'mdi:weather-windy',\n  'windy-variant': 'mdi:weather-windy-variant',\n  exceptional: 'mdi:alert', hail: 'mdi:weather-hail',\n  lightning: 'mdi:weather-lightning', 'lightning-rainy': 'mdi:weather-lightning-rainy'\n};\n\nconst data = raw.slice(0, @@DAYS@@).map((f, i) => {\n  const d = new Date(f.datetime);\n  const max = f.temperature !== undefined ? Math.round(f.temperature) : 0;\n  const min = f.templow !== undefined ? Math.round(f.templow) : max - 5;\n\n  return {\n    day: DAY_NAMES[d.getDay()],\n    icon: ICONS[f.condition] || 'mdi:weather-cloudy',\n    min,\n    max,\n    current: i === 0\n  };\n});\n\n/*\n * \u00c9chelle thermique : -10\u00b0C = 0%, 55\u00b0C = 100%\n */\nconst minTemp = -10;\nconst maxTemp = 55;\n\nconst getPosition = temp => {\n  const position = ((temp - minTemp) / (maxTemp - minTemp)) * 100;\n  return Math.max(0, Math.min(100, position));\n};\n\nreturn `\n  <div class=\"daily\">\n\n    ${data.map(item => {\n\n      const minPosition = getPosition(item.min);\n      const maxPosition = getPosition(item.max);\n      const rangeWidth = maxPosition - minPosition;\n\n      return `\n        <div class=\"row\">\n\n          <div class=\"day\">\n            ${item.day}\n          </div>\n\n          <div class=\"icon\">\n            <ha-icon\n              icon=\"${item.icon}\"\n              style=\"\n                --mdc-icon-size:22px;\n              \"\n            ></ha-icon>\n          </div>\n\n          <div class=\"bar\">\n\n            <div\n              class=\"range\"\n              style=\"\n                left:${minPosition}%;\n                width:${rangeWidth}%;\n              \"\n            ></div>\n\n            <div\n              class=\"point ${item.current ? 'current' : ''}\"\n              style=\"\n                left:${minPosition}%;\n              \"\n            ></div>\n\n          </div>\n\n          <div class=\"temps\">\n            <span class=\"max\">\n              ${item.max}\u00b0\n            </span>\n\n            <span class=\"min\">\n              ${item.min}\u00b0\n            </span>\n          </div>\n\n        </div>\n      `;\n\n    }).join('')}\n\n  </div>\n`;";
-const TPL_FORECAST_CHART = "const raw = @@FORECAST_JSON@@;\n\nif (!raw.length) {\n  return '<div style=\"display:flex;align-items:center;justify-content:center;height:100%;color:rgba(255,255,255,.4);font-size:13px;text-align:center;padding:0 12px;\">Pr\u00e9visions indisponibles pour cette entit\u00e9</div>';\n}\n\nconst DAY_NAMES = ['Di', 'Lu', 'Ma', 'Me', 'Je', 'Ve', 'Sa'];\nconst EMOJI = {\n  sunny: '\u2600\ufe0f', 'clear-night': '\ud83c\udf19', partlycloudy: '\ud83c\udf24\ufe0f', cloudy: '\u2601\ufe0f',\n  rainy: '\ud83c\udf27\ufe0f', pouring: '\ud83c\udf27\ufe0f', snowy: '\u2744\ufe0f', 'snowy-rainy': '\ud83c\udf28\ufe0f',\n  fog: '\ud83c\udf2b\ufe0f', windy: '\ud83d\udca8', 'windy-variant': '\ud83d\udca8',\n  exceptional: '\u26a0\ufe0f', hail: '\ud83c\udf28\ufe0f', lightning: '\u26c8\ufe0f', 'lightning-rainy': '\u26c8\ufe0f'\n};\n\nconst data = raw.slice(0, @@DAYS@@).map(f => {\n  const d = new Date(f.datetime);\n  const max = f.temperature !== undefined ? Math.round(f.temperature) : 0;\n  const min = f.templow !== undefined ? Math.round(f.templow) : max - 5;\n\n  return {\n    day: DAY_NAMES[d.getDay()],\n    icon: EMOJI[f.condition] || '\u2601\ufe0f',\n    max,\n    min,\n    rain: f.precipitation !== undefined ? f.precipitation : 0\n  };\n});\n\n/*\n * ==========================\n * DIMENSIONS\n * ==========================\n */\n\nconst width = 500;\nconst height = 225;\n\nconst left = 35;\nconst right = 465;\n\nconst graphTop = 78;\nconst graphBottom = 154;\n\nconst rainBottom = 203;\nconst rainMaxHeight = 22;\n\n/*\n * ==========================\n * ECHELLE TEMPERATURE\n * ==========================\n */\n\nconst temperatures = [\n  ...data.map(item => item.max),\n  ...data.map(item => item.min)\n];\n\nconst dataMin = Math.min(...temperatures);\nconst dataMax = Math.max(...temperatures);\n\nconst minTemp = dataMin - 2;\nconst maxTemp = dataMax + 2;\n\nconst y = temp => {\n\n  const ratio =\n    (maxTemp - temp) /\n    (maxTemp - minTemp);\n\n  return graphTop +\n    ratio *\n    (graphBottom - graphTop);\n};\n\n/*\n * ==========================\n * POSITIONS\n * ==========================\n */\n\nconst step =\n  data.length > 1\n    ? (right - left) / (data.length - 1)\n    : 0;\n\nconst x = i =>\n  data.length > 1 ? left + i * step : (left + right) / 2;\n\n/*\n * ==========================\n * COURBES DE BEZIER\n * ==========================\n */\n\nconst createSmoothPath = values => {\n\n  if (values.length === 0)\n    return '';\n\n  let path =\n    `M ${x(0)} ${y(values[0])}`;\n\n  for (let i = 0; i < values.length - 1; i++) {\n\n    const x1 = x(i);\n    const y1 = y(values[i]);\n\n    const x2 = x(i + 1);\n    const y2 = y(values[i + 1]);\n\n    const controlOffset =\n      (x2 - x1) * 0.35;\n\n    path += `\n      C\n      ${x1 + controlOffset} ${y1},\n      ${x2 - controlOffset} ${y2},\n      ${x2} ${y2}\n    `;\n  }\n\n  return path;\n};\n\nconst maxPath =\n  createSmoothPath(\n    data.map(item => item.max)\n  );\n\nconst minPath =\n  createSmoothPath(\n    data.map(item => item.min)\n  );\n\n/*\n * ==========================\n * JOURS + ICONES\n * ==========================\n */\n\nconst days = data.map((item, i) => `\n  <text\n    x=\"${x(i)}\"\n    y=\"18\"\n    text-anchor=\"middle\"\n    font-size=\"15\"\n    font-weight=\"400\"\n    fill=\"rgba(255,255,255,.82)\"\n  >\n    ${item.day}\n  </text>\n\n  <text\n    x=\"${x(i)}\"\n    y=\"52\"\n    text-anchor=\"middle\"\n    font-size=\"27\"\n  >\n    ${item.icon}\n  </text>\n`).join('');\n\n/*\n * ==========================\n * TEMPERATURE MAX (couleur primaire)\n * ==========================\n */\n\nconst maxLabels = data.map((item, i) => `\n  <text\n    x=\"${x(i)}\"\n    y=\"${y(item.max) - 9}\"\n    text-anchor=\"middle\"\n    font-size=\"14\"\n    font-weight=\"500\"\n    fill=\"@@PRIMARY@@\"\n  >\n    ${item.max}\u00b0\n  </text>\n`).join('');\n\n/*\n * ==========================\n * TEMPERATURE MIN (couleur secondaire)\n * ==========================\n */\n\nconst minLabels = data.map((item, i) => `\n  <text\n    x=\"${x(i)}\"\n    y=\"${y(item.min) + 16}\"\n    text-anchor=\"middle\"\n    font-size=\"11\"\n    font-weight=\"400\"\n    fill=\"@@SECONDARY@@\"\n  >\n    ${item.min}\u00b0\n  </text>\n`).join('');\n\n/*\n * ==========================\n * POINTS\n * ==========================\n */\n\nconst maxCircles = data.map((item, i) => `\n  <circle\n    cx=\"${x(i)}\"\n    cy=\"${y(item.max)}\"\n    r=\"4\"\n    fill=\"@@PRIMARY@@\"\n    stroke=\"@@BG@@\"\n    stroke-width=\"2\"\n  />\n`).join('');\n\nconst minCircles = data.map((item, i) => `\n  <circle\n    cx=\"${x(i)}\"\n    cy=\"${y(item.min)}\"\n    r=\"4\"\n    fill=\"@@SECONDARY@@\"\n    stroke=\"@@BG@@\"\n    stroke-width=\"2\"\n  />\n`).join('');\n\n/*\n * ==========================\n * PLUIE\n * ==========================\n */\n\nconst maxRain =\n  Math.max(\n    ...data.map(item => item.rain),\n    1\n  );\n\nconst rain = data.map((item, i) => {\n\n  if (item.rain <= 0) {\n    return `\n      <text\n        x=\"${x(i)}\"\n        y=\"${rainBottom + 10}\"\n        text-anchor=\"middle\"\n        font-size=\"10\"\n        fill=\"rgba(255,255,255,.20)\"\n      >\n        \u2014\n      </text>\n    `;\n  }\n\n  const barHeight =\n    (item.rain / maxRain) *\n    rainMaxHeight;\n\n  return `\n    <rect\n      x=\"${x(i) - 8}\"\n      y=\"${rainBottom - barHeight}\"\n      width=\"16\"\n      height=\"${barHeight}\"\n      rx=\"4\"\n      fill=\"rgba(57,124,168,.60)\"\n    />\n\n    <text\n      x=\"${x(i)}\"\n      y=\"${rainBottom + 10}\"\n      text-anchor=\"middle\"\n      font-size=\"10\"\n      fill=\"rgba(100,160,200,.78)\"\n    >\n      ${item.rain}\n    </text>\n  `;\n}).join('');\n\n/*\n * ==========================\n * SVG\n * ==========================\n */\n\nreturn `\n  <svg\n    xmlns=\"http://www.w3.org/2000/svg\"\n    viewBox=\"0 0 ${width} ${height}\"\n    preserveAspectRatio=\"none\"\n    style=\"\n      display:block;\n      width:100%;\n      height:100%;\n    \"\n  >\n\n    ${days}\n\n    <line x1=\"${left}\" x2=\"${right}\" y1=\"95\" y2=\"95\" stroke=\"rgba(255,255,255,.035)\" stroke-width=\"1\" />\n    <line x1=\"${left}\" x2=\"${right}\" y1=\"125\" y2=\"125\" stroke=\"rgba(255,255,255,.035)\" stroke-width=\"1\" />\n    <line x1=\"${left}\" x2=\"${right}\" y1=\"154\" y2=\"154\" stroke=\"rgba(255,255,255,.035)\" stroke-width=\"1\" />\n\n    <path d=\"${maxPath}\" fill=\"none\" stroke=\"@@PRIMARY@@\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\" />\n    <path d=\"${minPath}\" fill=\"none\" stroke=\"@@SECONDARY@@\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\" />\n\n    ${maxCircles}\n    ${minCircles}\n\n    ${maxLabels}\n    ${minLabels}\n\n    ${rain}\n\n  </svg>\n`;";
+const TPL_FORECAST_CLASSIC = "const raw = @@FORECAST_JSON@@;\n\nif (!raw.length) {\n  return '<div style=\"display:flex;align-items:center;justify-content:center;height:100%;color:var(--alex-chart-dim-color, rgba(255,255,255,.4));font-size:13px;text-align:center;padding:0 12px;\">Pr\u00e9visions indisponibles pour cette entit\u00e9</div>';\n}\n\nconst DAY_NAMES = ['Di.', 'Lu.', 'Ma.', 'Me.', 'Je.', 'Ve.', 'Sa.'];\nconst EMOJI = {\n  sunny: '\u2600\ufe0f', 'clear-night': '\ud83c\udf19', partlycloudy: '\u26c5', cloudy: '\u2601\ufe0f',\n  rainy: '\ud83c\udf27\ufe0f', pouring: '\ud83c\udf27\ufe0f', snowy: '\u2744\ufe0f', 'snowy-rainy': '\ud83c\udf28\ufe0f',\n  fog: '\ud83c\udf2b\ufe0f', windy: '\ud83d\udca8', 'windy-variant': '\ud83d\udca8',\n  exceptional: '\u26a0\ufe0f', hail: '\ud83c\udf28\ufe0f', lightning: '\u26c8\ufe0f', 'lightning-rainy': '\u26c8\ufe0f'\n};\n\nconst data = raw.slice(0, @@DAYS@@).map(f => {\n  const d = new Date(f.datetime);\n  const max = f.temperature !== undefined ? Math.round(f.temperature) : null;\n  const min = f.templow !== undefined\n    ? Math.round(f.templow)\n    : (max !== null ? max - 5 : null);\n\n  return {\n    day: DAY_NAMES[d.getDay()],\n    date: String(d.getDate()).padStart(2, '0'),\n    icon: EMOJI[f.condition] || '\u2601\ufe0f',\n    max: max !== null ? max : '--',\n    min: min !== null ? min : '--',\n    rain: (f.precipitation !== undefined ? f.precipitation : 0).toFixed(1)\n  };\n});\n\nconst nums = key => data.map(x => x[key]).filter(v => typeof v === 'number');\nconst mins = nums('min');\nconst maxs = nums('max');\nconst globalMin = mins.length ? Math.min(...mins) : 0;\nconst globalMax = maxs.length ? Math.max(...maxs) : 1;\nconst range = (globalMax - globalMin) || 1;\n\nreturn `\n  <div class=\"forecast\">\n    ${data.map(item => {\n\n      const top = typeof item.max === 'number'\n        ? ((globalMax - item.max) / range) * 100\n        : 0;\n\n      const bottom = typeof item.min === 'number'\n        ? ((globalMax - item.min) / range) * 100\n        : 100;\n\n      const height = bottom - top;\n\n      return `\n        <div class=\"day\">\n\n          <div class=\"day-name\">\n            ${item.day}\n          </div>\n\n          <div class=\"date\">\n            ${item.date}\n          </div>\n\n          <div class=\"weather-icon\">\n            ${item.icon}\n          </div>\n\n          <div class=\"temperature\">\n            ${item.max}\u00b0\n          </div>\n\n          <div class=\"range\">\n            <div class=\"range-bg\"></div>\n\n            <div\n              class=\"range-value\"\n              style=\"\n                top:${top}%;\n                height:${height}%;\n              \"\n            ></div>\n          </div>\n\n          <div class=\"low\">\n            ${item.min}\u00b0\n          </div>\n\n          <div class=\"rain\">\n            ${item.rain}\n          </div>\n\n        </div>\n      `;\n    }).join('')}\n  </div>\n`;";
+const TPL_FORECAST_BARS = "const raw = @@FORECAST_JSON@@;\n\nif (!raw.length) {\n  return '<div style=\"display:flex;align-items:center;justify-content:center;height:100%;color:var(--alex-chart-dim-color, rgba(255,255,255,.4));font-size:13px;text-align:center;padding:0 12px;\">Pr\u00e9visions indisponibles pour cette entit\u00e9</div>';\n}\n\nconst DAY_NAMES = ['Dim.', 'Lun.', 'Mar.', 'Mer.', 'Jeu.', 'Ven.', 'Sam.'];\nconst ICONS = {\n  sunny: 'mdi:weather-sunny', 'clear-night': 'mdi:weather-night',\n  partlycloudy: 'mdi:weather-partly-cloudy', cloudy: 'mdi:weather-cloudy',\n  rainy: 'mdi:weather-rainy', pouring: 'mdi:weather-pouring',\n  snowy: 'mdi:weather-snowy', 'snowy-rainy': 'mdi:weather-snowy-rainy',\n  fog: 'mdi:weather-fog', windy: 'mdi:weather-windy',\n  'windy-variant': 'mdi:weather-windy-variant',\n  exceptional: 'mdi:alert', hail: 'mdi:weather-hail',\n  lightning: 'mdi:weather-lightning', 'lightning-rainy': 'mdi:weather-lightning-rainy'\n};\n\nconst data = raw.slice(0, @@DAYS@@).map((f, i) => {\n  const d = new Date(f.datetime);\n  const max = f.temperature !== undefined ? Math.round(f.temperature) : 0;\n  const min = f.templow !== undefined ? Math.round(f.templow) : max - 5;\n\n  return {\n    day: DAY_NAMES[d.getDay()],\n    icon: ICONS[f.condition] || 'mdi:weather-cloudy',\n    min,\n    max,\n    current: i === 0\n  };\n});\n\n/*\n * \u00c9chelle thermique : -10\u00b0C = 0%, 55\u00b0C = 100%\n */\nconst minTemp = -10;\nconst maxTemp = 55;\n\nconst getPosition = temp => {\n  const position = ((temp - minTemp) / (maxTemp - minTemp)) * 100;\n  return Math.max(0, Math.min(100, position));\n};\n\nreturn `\n  <div class=\"daily\">\n\n    ${data.map(item => {\n\n      const minPosition = getPosition(item.min);\n      const maxPosition = getPosition(item.max);\n      const rangeWidth = maxPosition - minPosition;\n\n      return `\n        <div class=\"row\">\n\n          <div class=\"day\">\n            ${item.day}\n          </div>\n\n          <div class=\"icon\">\n            <ha-icon\n              icon=\"${item.icon}\"\n              style=\"\n                --mdc-icon-size:22px;\n              \"\n            ></ha-icon>\n          </div>\n\n          <div class=\"bar\">\n\n            <div\n              class=\"range\"\n              style=\"\n                left:${minPosition}%;\n                width:${rangeWidth}%;\n              \"\n            ></div>\n\n            <div\n              class=\"point ${item.current ? 'current' : ''}\"\n              style=\"\n                left:${minPosition}%;\n              \"\n            ></div>\n\n          </div>\n\n          <div class=\"temps\">\n            <span class=\"max\">\n              ${item.max}\u00b0\n            </span>\n\n            <span class=\"min\">\n              ${item.min}\u00b0\n            </span>\n          </div>\n\n        </div>\n      `;\n\n    }).join('')}\n\n  </div>\n`;";
+const TPL_FORECAST_CHART = "const raw = @@FORECAST_JSON@@;\n\nif (!raw.length) {\n  return '<div style=\"display:flex;align-items:center;justify-content:center;height:100%;color:var(--alex-chart-dim-color, rgba(255,255,255,.4));font-size:13px;text-align:center;padding:0 12px;\">Pr\u00e9visions indisponibles pour cette entit\u00e9</div>';\n}\n\nconst DAY_NAMES = ['Di', 'Lu', 'Ma', 'Me', 'Je', 'Ve', 'Sa'];\nconst EMOJI = {\n  sunny: '\u2600\ufe0f', 'clear-night': '\ud83c\udf19', partlycloudy: '\ud83c\udf24\ufe0f', cloudy: '\u2601\ufe0f',\n  rainy: '\ud83c\udf27\ufe0f', pouring: '\ud83c\udf27\ufe0f', snowy: '\u2744\ufe0f', 'snowy-rainy': '\ud83c\udf28\ufe0f',\n  fog: '\ud83c\udf2b\ufe0f', windy: '\ud83d\udca8', 'windy-variant': '\ud83d\udca8',\n  exceptional: '\u26a0\ufe0f', hail: '\ud83c\udf28\ufe0f', lightning: '\u26c8\ufe0f', 'lightning-rainy': '\u26c8\ufe0f'\n};\n\nconst data = raw.slice(0, @@DAYS@@).map(f => {\n  const d = new Date(f.datetime);\n  const max = f.temperature !== undefined ? Math.round(f.temperature) : 0;\n  const min = f.templow !== undefined ? Math.round(f.templow) : max - 5;\n\n  return {\n    day: DAY_NAMES[d.getDay()],\n    icon: EMOJI[f.condition] || '\u2601\ufe0f',\n    max,\n    min,\n    rain: f.precipitation !== undefined ? f.precipitation : 0\n  };\n});\n\n/*\n * ==========================\n * DIMENSIONS\n * ==========================\n */\n\nconst width = 500;\nconst height = 225;\n\nconst left = 35;\nconst right = 465;\n\nconst graphTop = 78;\nconst graphBottom = 154;\n\nconst rainBottom = 203;\nconst rainMaxHeight = 22;\n\n/*\n * ==========================\n * ECHELLE TEMPERATURE\n * ==========================\n */\n\nconst temperatures = [\n  ...data.map(item => item.max),\n  ...data.map(item => item.min)\n];\n\nconst dataMin = Math.min(...temperatures);\nconst dataMax = Math.max(...temperatures);\n\nconst minTemp = dataMin - 2;\nconst maxTemp = dataMax + 2;\n\nconst y = temp => {\n\n  const ratio =\n    (maxTemp - temp) /\n    (maxTemp - minTemp);\n\n  return graphTop +\n    ratio *\n    (graphBottom - graphTop);\n};\n\n/*\n * ==========================\n * POSITIONS\n * ==========================\n */\n\nconst step =\n  data.length > 1\n    ? (right - left) / (data.length - 1)\n    : 0;\n\nconst x = i =>\n  data.length > 1 ? left + i * step : (left + right) / 2;\n\n/*\n * ==========================\n * COURBES DE BEZIER\n * ==========================\n */\n\nconst createSmoothPath = values => {\n\n  if (values.length === 0)\n    return '';\n\n  let path =\n    `M ${x(0)} ${y(values[0])}`;\n\n  for (let i = 0; i < values.length - 1; i++) {\n\n    const x1 = x(i);\n    const y1 = y(values[i]);\n\n    const x2 = x(i + 1);\n    const y2 = y(values[i + 1]);\n\n    const controlOffset =\n      (x2 - x1) * 0.35;\n\n    path += `\n      C\n      ${x1 + controlOffset} ${y1},\n      ${x2 - controlOffset} ${y2},\n      ${x2} ${y2}\n    `;\n  }\n\n  return path;\n};\n\nconst maxPath =\n  createSmoothPath(\n    data.map(item => item.max)\n  );\n\nconst minPath =\n  createSmoothPath(\n    data.map(item => item.min)\n  );\n\n/*\n * ==========================\n * JOURS + ICONES\n * ==========================\n */\n\nconst days = data.map((item, i) => `\n  <text\n    x=\"${x(i)}\"\n    y=\"18\"\n    text-anchor=\"middle\"\n    font-size=\"15\"\n    font-weight=\"400\"\n    fill=\"var(--alex-chart-label-color, rgba(255,255,255,.82))\"\n  >\n    ${item.day}\n  </text>\n\n  <text\n    x=\"${x(i)}\"\n    y=\"52\"\n    text-anchor=\"middle\"\n    font-size=\"27\"\n  >\n    ${item.icon}\n  </text>\n`).join('');\n\n/*\n * ==========================\n * TEMPERATURE MAX (couleur primaire)\n * ==========================\n */\n\nconst maxLabels = data.map((item, i) => `\n  <text\n    x=\"${x(i)}\"\n    y=\"${y(item.max) - 9}\"\n    text-anchor=\"middle\"\n    font-size=\"14\"\n    font-weight=\"500\"\n    fill=\"@@PRIMARY@@\"\n  >\n    ${item.max}\u00b0\n  </text>\n`).join('');\n\n/*\n * ==========================\n * TEMPERATURE MIN (couleur secondaire)\n * ==========================\n */\n\nconst minLabels = data.map((item, i) => `\n  <text\n    x=\"${x(i)}\"\n    y=\"${y(item.min) + 16}\"\n    text-anchor=\"middle\"\n    font-size=\"11\"\n    font-weight=\"400\"\n    fill=\"@@SECONDARY@@\"\n  >\n    ${item.min}\u00b0\n  </text>\n`).join('');\n\n/*\n * ==========================\n * POINTS\n * ==========================\n */\n\nconst maxCircles = data.map((item, i) => `\n  <circle\n    cx=\"${x(i)}\"\n    cy=\"${y(item.max)}\"\n    r=\"4\"\n    fill=\"@@PRIMARY@@\"\n    stroke=\"@@BG@@\"\n    stroke-width=\"2\"\n  />\n`).join('');\n\nconst minCircles = data.map((item, i) => `\n  <circle\n    cx=\"${x(i)}\"\n    cy=\"${y(item.min)}\"\n    r=\"4\"\n    fill=\"@@SECONDARY@@\"\n    stroke=\"@@BG@@\"\n    stroke-width=\"2\"\n  />\n`).join('');\n\n/*\n * ==========================\n * PLUIE\n * ==========================\n */\n\nconst maxRain =\n  Math.max(\n    ...data.map(item => item.rain),\n    1\n  );\n\nconst rain = data.map((item, i) => {\n\n  if (item.rain <= 0) {\n    return `\n      <text\n        x=\"${x(i)}\"\n        y=\"${rainBottom + 10}\"\n        text-anchor=\"middle\"\n        font-size=\"10\"\n        fill=\"var(--alex-chart-dim-color, rgba(255,255,255,.20))\"\n      >\n        \u2014\n      </text>\n    `;\n  }\n\n  const barHeight =\n    (item.rain / maxRain) *\n    rainMaxHeight;\n\n  return `\n    <rect\n      x=\"${x(i) - 8}\"\n      y=\"${rainBottom - barHeight}\"\n      width=\"16\"\n      height=\"${barHeight}\"\n      rx=\"4\"\n      fill=\"rgba(57,124,168,.60)\"\n    />\n\n    <text\n      x=\"${x(i)}\"\n      y=\"${rainBottom + 10}\"\n      text-anchor=\"middle\"\n      font-size=\"10\"\n      fill=\"rgba(100,160,200,.78)\"\n    >\n      ${item.rain}\n    </text>\n  `;\n}).join('');\n\n/*\n * ==========================\n * SVG\n * ==========================\n */\n\nreturn `\n  <svg\n    xmlns=\"http://www.w3.org/2000/svg\"\n    viewBox=\"0 0 ${width} ${height}\"\n    preserveAspectRatio=\"none\"\n    style=\"\n      display:block;\n      width:100%;\n      height:100%;\n    \"\n  >\n\n    ${days}\n\n    <line x1=\"${left}\" x2=\"${right}\" y1=\"95\" y2=\"95\" stroke=\"var(--alex-chart-grid-color, rgba(255,255,255,.035))\" stroke-width=\"1\" />\n    <line x1=\"${left}\" x2=\"${right}\" y1=\"125\" y2=\"125\" stroke=\"var(--alex-chart-grid-color, rgba(255,255,255,.035))\" stroke-width=\"1\" />\n    <line x1=\"${left}\" x2=\"${right}\" y1=\"154\" y2=\"154\" stroke=\"var(--alex-chart-grid-color, rgba(255,255,255,.035))\" stroke-width=\"1\" />\n\n    <path d=\"${maxPath}\" fill=\"none\" stroke=\"@@PRIMARY@@\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\" />\n    <path d=\"${minPath}\" fill=\"none\" stroke=\"@@SECONDARY@@\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\" />\n\n    ${maxCircles}\n    ${minCircles}\n\n    ${maxLabels}\n    ${minLabels}\n\n    ${rain}\n\n  </svg>\n`;";
 /* =========================================================================
  * === weather-card ========================================================
  * Empile un ou plusieurs "composants" meteo (actuelle + 3 styles de
@@ -3022,8 +3030,8 @@ class WeatherCard extends AlexWrapperCard {
         template: TPL_FORECAST_CHART,
         extraStyles: null,
         defaultBg: "var(--ha-card-background, var(--card-background-color))",
-        defaultPrimary: "#18a6d5",
-        defaultSecondary: "#e8a52c",
+        defaultPrimary: "var(--alex-chart-max-color, #18a6d5)",
+        defaultSecondary: "var(--alex-chart-min-color, #e8a52c)",
         height: "245px",
         padding: "9px 12px",
       },
@@ -3448,9 +3456,8 @@ class SensorCard extends HTMLElement {
     if (this._built && sig === this._lastSig) return;
     this._lastSig = sig;
 
-    const iconColor = colorOr(c.icon_color, "#e6a34a");
-    const badgeRgb = Array.isArray(c.icon_color) ? c.icon_color : [230, 163, 74];
-    const badgeBg = `rgba(${badgeRgb[0]}, ${badgeRgb[1]}, ${badgeRgb[2]}, 0.16)`;
+    const iconColor = colorOr(c.icon_color, "var(--alex-warm-color, #e6a34a)");
+    const badgeBg = badgeTint(c.icon_color, "--alex-warm-color", "#e6a34a");
     const cardBg = colorOr(c.background, "var(--ha-card-background, var(--card-background-color))");
     const primaryColor = colorOr(c.primary_color, "var(--primary-text-color)");
     const secondaryColor = colorOr(c.secondary_color, "var(--primary-text-color)");
@@ -3906,9 +3913,8 @@ class EntityCard extends HTMLElement {
     if (this._built && sig === this._lastSig) return;
     this._lastSig = sig;
 
-    const iconColor = colorOr(c.icon_color, "#e6a34a");
-    const badgeRgb = Array.isArray(c.icon_color) ? c.icon_color : [230, 163, 74];
-    const badgeBg = `rgba(${badgeRgb[0]}, ${badgeRgb[1]}, ${badgeRgb[2]}, 0.16)`;
+    const iconColor = colorOr(c.icon_color, "var(--alex-warm-color, #e6a34a)");
+    const badgeBg = badgeTint(c.icon_color, "--alex-warm-color", "#e6a34a");
     const cardBg = colorOr(c.background, "var(--ha-card-background, var(--card-background-color))");
     const primaryColor = colorOr(c.primary_color, "var(--primary-text-color)");
     const secondaryColor = colorOr(c.secondary_color, "var(--primary-text-color)");
@@ -4262,13 +4268,12 @@ class ToggleCard extends HTMLElement {
     if (this._built && sig === this._lastSig) return;
     this._lastSig = sig;
 
-    const iconColor = colorOr(c.icon_color, "#8b7ae6");
-    const badgeRgb = Array.isArray(c.icon_color) ? c.icon_color : [139, 122, 230];
-    const badgeBg = `rgba(${badgeRgb[0]}, ${badgeRgb[1]}, ${badgeRgb[2]}, 0.16)`;
+    const iconColor = colorOr(c.icon_color, "var(--alex-accent-color, #8b7ae6)");
+    const badgeBg = badgeTint(c.icon_color, "--alex-accent-color", "#8b7ae6");
     const cardBg = colorOr(c.background, "var(--ha-card-background, var(--card-background-color))");
     const primaryColor = colorOr(c.primary_color, "var(--primary-text-color)");
     const secondaryColor = colorOr(c.secondary_color, "var(--primary-text-color)");
-    const onColor = colorOr(c.on_color, "#f4a935");
+    const onColor = colorOr(c.on_color, "var(--alex-on-color, #f4a935)");
     const offColor = colorOr(c.off_color, "rgba(var(--rgb-primary-text-color,0,0,0),0.18)");
     const rowIcon = c.entity_icon || c.icon || "mdi:toggle-switch-outline";
     const rowSpacing = c.row_spacing != null ? c.row_spacing : 12;
@@ -4730,9 +4735,8 @@ class SelectLabelCard extends HTMLElement {
     if (this._built && sig === this._lastSig) return;
     this._lastSig = sig;
 
-    const iconColor = colorOr(c.icon_color, "#8b7ae6");
-    const badgeRgb = Array.isArray(c.icon_color) ? c.icon_color : [139, 122, 230];
-    const badgeBg = `rgba(${badgeRgb[0]}, ${badgeRgb[1]}, ${badgeRgb[2]}, 0.16)`;
+    const iconColor = colorOr(c.icon_color, "var(--alex-accent-color, #8b7ae6)");
+    const badgeBg = badgeTint(c.icon_color, "--alex-accent-color", "#8b7ae6");
     const cardBg = colorOr(c.background, "var(--ha-card-background, var(--card-background-color))");
     const primaryColor = colorOr(c.primary_color, "var(--primary-text-color)");
     const secondaryColor = colorOr(c.secondary_color, "var(--primary-text-color)");
@@ -5219,9 +5223,8 @@ class SwitchCard extends HTMLElement {
     if (this._built && sig === this._lastSig) return;
     this._lastSig = sig;
 
-    const iconColor = colorOr(c.icon_color, "#8b7ae6");
-    const badgeRgb = Array.isArray(c.icon_color) ? c.icon_color : [139, 122, 230];
-    const badgeBg = `rgba(${badgeRgb[0]}, ${badgeRgb[1]}, ${badgeRgb[2]}, 0.16)`;
+    const iconColor = colorOr(c.icon_color, "var(--alex-accent-color, #8b7ae6)");
+    const badgeBg = badgeTint(c.icon_color, "--alex-accent-color", "#8b7ae6");
     const cardBg = colorOr(c.background, "var(--ha-card-background, var(--card-background-color))");
     const primaryColor = colorOr(c.primary_color, "var(--primary-text-color)");
     const secondaryColor = colorOr(c.secondary_color, "var(--primary-text-color)");
@@ -5250,7 +5253,7 @@ class SwitchCard extends HTMLElement {
     );
     const inactiveText = colorOr(
       c.inactive_text,
-      chipStyle === "switch" ? "var(--text-primary-color)" : "var(--secondary-text-color)"
+      chipStyle === "switch" ? "var(--primary-text-color)" : "var(--secondary-text-color)"
     );
     // Taille globale du switch : un seul curseur fait varier texte, padding,
     // rayons et espacement ensemble, plutôt que de regler chaque dimension
@@ -5877,9 +5880,8 @@ class AlexInputCard extends HTMLElement {
     if (this._built && sig === this._lastSig) return;
     this._lastSig = sig;
 
-    const iconColor = colorOr(c.icon_color, "#8b7ae6");
-    const badgeRgb = Array.isArray(c.icon_color) ? c.icon_color : [139, 122, 230];
-    const badgeBg = `rgba(${badgeRgb[0]}, ${badgeRgb[1]}, ${badgeRgb[2]}, 0.16)`;
+    const iconColor = colorOr(c.icon_color, "var(--alex-accent-color, #8b7ae6)");
+    const badgeBg = badgeTint(c.icon_color, "--alex-accent-color", "#8b7ae6");
     const cardBg = colorOr(c.background, "var(--ha-card-background, var(--card-background-color))");
     const primaryColor = colorOr(c.primary_color, "var(--primary-text-color)");
     const secondaryColor = colorOr(c.secondary_color, "var(--primary-text-color)");
@@ -5908,7 +5910,7 @@ class AlexInputCard extends HTMLElement {
     );
     const inactiveText = colorOr(
       c.inactive_text,
-      chipStyle === "switch" ? "var(--text-primary-color)" : "var(--secondary-text-color)"
+      chipStyle === "switch" ? "var(--primary-text-color)" : "var(--secondary-text-color)"
     );
     const chipSize = c.chip_size != null ? c.chip_size : 12;
     const chipPadV = Math.max(2, Math.round(chipSize * 0.42));
@@ -6896,9 +6898,8 @@ class AlexTabsCard extends HTMLElement {
     }
     this._lastSig = sig;
 
-    const iconColor = colorOr(c.icon_color, "#8b7ae6");
-    const badgeRgb = Array.isArray(c.icon_color) ? c.icon_color : [139, 122, 230];
-    const badgeBg = `rgba(${badgeRgb[0]}, ${badgeRgb[1]}, ${badgeRgb[2]}, 0.16)`;
+    const iconColor = colorOr(c.icon_color, "var(--alex-accent-color, #8b7ae6)");
+    const badgeBg = badgeTint(c.icon_color, "--alex-accent-color", "#8b7ae6");
     const transparent = !!c.transparent;
     // Mode transparent : aucun fond/ombre/bordure/rayon (border-radius reste
     // sans effet visuel sans fond ni bordure, mis a 0 quand meme par clarte),
@@ -6935,7 +6936,7 @@ class AlexTabsCard extends HTMLElement {
     );
     const inactiveText = colorOr(
       c.inactive_text,
-      barStyle === "switch" ? "var(--text-primary-color)" : "var(--secondary-text-color)"
+      barStyle === "switch" ? "var(--primary-text-color)" : "var(--secondary-text-color)"
     );
 
     // Meme principe de curseur unique que sur alex-switch-card.
@@ -7912,7 +7913,7 @@ class MediaPlayerCard extends HTMLElement {
     const bottomBg = bottomBgOverride || "rgba(var(--rgb-primary-text-color,0,0,0),0.05)";
     const primaryColor = colorOr(c.primary_color, "var(--primary-text-color)");
     const secondaryColor = colorOr(c.secondary_color, "var(--secondary-text-color)");
-    const accentColor = colorOr(c.accent_color, "#ffffff");
+    const accentColor = colorOr(c.accent_color, "var(--alex-media-accent-color, #ffffff)");
     const label = c.now_playing_label != null ? c.now_playing_label : "À l'écoute";
 
     const artHtml = picture
@@ -7937,7 +7938,7 @@ class MediaPlayerCard extends HTMLElement {
             .map((e) => {
               const isSel = e === selected;
               const bg = isSel ? accentColor : "rgba(var(--rgb-primary-text-color,0,0,0),0.10)";
-              const col = isSel ? "#000" : secondaryColor;
+              const col = isSel ? "var(--alex-on-accent-color, #000)" : secondaryColor;
               return `
                 <div class="ac-mp-tab" data-entity="${escapeHtml(e)}"
                     style="padding:6px 14px;border-radius:999px;background:${bg};cursor:pointer;
@@ -8283,7 +8284,7 @@ class ServerCard extends HTMLElement {
     const cardBg = colorOr(c.background, "var(--ha-card-background, var(--card-background-color))");
     const primaryColor = colorOr(c.primary_color, "var(--primary-text-color)");
     const secondaryColor = colorOr(c.secondary_color, "var(--secondary-text-color)");
-    const onlineColor = colorOr(c.online_color, "#72c58a");
+    const onlineColor = colorOr(c.online_color, "var(--alex-online-color, #72c58a)");
     const offlineColor = colorOr(c.offline_color, "var(--secondary-text-color)");
     const title = c.name != null ? c.name : "Serveurs";
 
@@ -8693,10 +8694,9 @@ class GradientCard extends HTMLElement {
     const cardBg = colorOr(c.background, "var(--ha-card-background, var(--card-background-color))");
     const primaryColor = colorOr(c.primary_color, "var(--primary-text-color)");
     const secondaryColor = colorOr(c.secondary_color, "var(--secondary-text-color)");
-    const accentColor = colorOr(c.accent_color, "#8b7ae6");
+    const accentColor = colorOr(c.accent_color, "var(--alex-accent-color, #8b7ae6)");
     const iconColor = colorOr(c.icon_color, accentColor);
-    const badgeRgb = Array.isArray(c.icon_color) ? c.icon_color : [139, 122, 230];
-    const badgeBg = `rgba(${badgeRgb[0]}, ${badgeRgb[1]}, ${badgeRgb[2]}, 0.16)`;
+    const badgeBg = badgeTint(c.icon_color, "--alex-accent-color", "#8b7ae6");
 
     // Repartition equilibree sur plusieurs lignes (plutot qu'un flex-wrap
     // qui remplit une ligne au maximum et laisse un reliquat difforme sur
@@ -8779,7 +8779,7 @@ class GradientCard extends HTMLElement {
                 ${pointControlsHtml}
               </div>
               <div class="ac-gradient-apply" style="text-align:center;padding:10px;border-radius:12px;
-                          background:${accentColor};color:#000;font-size:14px;font-weight:600;cursor:pointer;">
+                          background:${accentColor};color:var(--alex-on-accent-color, #000);font-size:14px;font-weight:600;cursor:pointer;">
                 Appliquer le dégradé
               </div>`
         }
@@ -9040,7 +9040,7 @@ class GradientPopupCard extends HTMLElement {
     if (!this._dialogEl || !this._dialogStrip || !this._dialogStrip.entity) return;
     const stateObj = this._hass.states[this._dialogStrip.entity];
     const isOn = !!stateObj && stateObj.state === "on";
-    const accentColor = colorOr(this._config.icon_color, "#8b7ae6");
+    const accentColor = colorOr(this._config.icon_color, "var(--alex-accent-color, #8b7ae6)");
     const powerEl = this._dialogEl.querySelector(".gp-power");
     if (!powerEl) return;
     powerEl.style.background = isOn ? accentColor : "rgba(var(--rgb-primary-text-color,0,0,0),0.18)";
@@ -9135,7 +9135,7 @@ class GradientPopupCard extends HTMLElement {
         ? Math.round(stateObj.attributes.brightness / 2.54)
         : 70;
     const isOn = !!stateObj && stateObj.state === "on";
-    const accentColor = colorOr(this._config.icon_color, "#8b7ae6");
+    const accentColor = colorOr(this._config.icon_color, "var(--alex-accent-color, #8b7ae6)");
 
     const state = {
       points: [
@@ -9404,9 +9404,8 @@ class GradientPopupCard extends HTMLElement {
     if (this._built && sig === this._lastSig) return;
     this._lastSig = sig;
 
-    const iconColor = colorOr(c.icon_color, "#8b7ae6");
-    const badgeRgb = Array.isArray(c.icon_color) ? c.icon_color : [139, 122, 230];
-    const badgeBg = `rgba(${badgeRgb[0]}, ${badgeRgb[1]}, ${badgeRgb[2]}, 0.16)`;
+    const iconColor = colorOr(c.icon_color, "var(--alex-accent-color, #8b7ae6)");
+    const badgeBg = badgeTint(c.icon_color, "--alex-accent-color", "#8b7ae6");
     const cardBg = colorOr(c.background, "var(--ha-card-background, var(--card-background-color))");
     const primaryColor = colorOr(c.primary_color, "var(--primary-text-color)");
     const secondaryColor = colorOr(c.secondary_color, "var(--primary-text-color)");
@@ -10153,8 +10152,7 @@ class AlexInputColorCard extends HTMLElement {
         "--aic-title-color",
         colorOr(c.primary_color, "var(--primary-text-color)")
       );
-      const badgeRgb = Array.isArray(c.icon_color) ? c.icon_color : [139, 122, 230];
-      card.style.setProperty("--aic-badge-bg", rgba(badgeRgb, 0.16));
+      card.style.setProperty("--aic-badge-bg", badgeTint(c.icon_color, "--alex-accent-color", "#8b7ae6"));
 
       card.style.setProperty("--aic-name-size", `${c.name_size != null ? c.name_size : 17}px`);
       card.style.setProperty("--aic-icon-size", `${c.icon_size != null ? c.icon_size : 20}px`);
@@ -10943,9 +10941,8 @@ class GradientSceneCard extends HTMLElement {
     const cardBg = colorOr(c.background, "var(--ha-card-background, var(--card-background-color))");
     const primaryColor = colorOr(c.primary_color, "var(--primary-text-color)");
     const secondaryColor = colorOr(c.secondary_color, "var(--secondary-text-color)");
-    const iconColor = colorOr(c.icon_color, "#8b7ae6");
-    const badgeRgb = Array.isArray(c.icon_color) ? c.icon_color : [139, 122, 230];
-    const badgeBg = `rgba(${badgeRgb[0]}, ${badgeRgb[1]}, ${badgeRgb[2]}, 0.16)`;
+    const iconColor = colorOr(c.icon_color, "var(--alex-accent-color, #8b7ae6)");
+    const badgeBg = badgeTint(c.icon_color, "--alex-accent-color", "#8b7ae6");
     const missingConfig = !c.entity;
 
     const rowsHtml = names
